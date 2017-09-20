@@ -1,10 +1,11 @@
 # PaaS-TA Container Release
 
 ## Deploy
-paasta-container를 설치하는 절차는 아래와 같습니다.
 
-1. bosh create release --force --name paasta-container --version 2.0
-2. bosh upload release
+### paasta-container를 설치하는 절차는 아래와 같습니다.
+
+### 1. bosh create release --force --name paasta-container --version 2.0
+### 2. bosh upload release
 
 ### bosh releases 명령어로 아래와 같이 release 정보를 확인할 수 있다.
 
@@ -16,8 +17,9 @@ paasta-container를 설치하는 절차는 아래와 같습니다.
 +--------------------------+----------+-------------+
 ```
 
-3. bosh deployment "paasta container deployment 파일 이름"
-4. bosh -n deploy
+### 3. bosh deployment "paasta container deployment 파일 이름"
+
+### 4. bosh -n deploy
 
 ### bosh vms paasta-container 명령어로 배포된 서비스들을 확인할 수 있다.
 
