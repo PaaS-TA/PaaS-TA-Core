@@ -7,16 +7,21 @@ paasta-container를 설치하는 절차는 아래와 같습니다. <br>
 2. bosh upload release <br>
 
 ### bosh releases 명령어로 아래와 같이 release 정보를 확인할 수 있다.
+
+```
 +--------------------------+----------+-------------+ <br>
 | Name                     | Versions | Commit Hash | <br>
 +--------------------------+----------+-------------+ <br>
 | paasta-container         | 2.0*     | b857e171    | <br>
 +--------------------------+----------+-------------+ <br>
+```
 
 3. bosh deployment "paasta container deployment 파일 이름" <br>
 4. bosh -n deploy <br>
 
 ### bosh vms paasta-container 명령어로 배포된 서비스들을 확인할 수 있다. <br>
+
+```
 +-----------------------------------------------------------+---------+-----+------------------+---------+ <br>
 | VM                                                        | State   | AZ  | VM Type          | IPs     | <br>
 +-----------------------------------------------------------+---------+-----+------------------+---------+ <br>
@@ -28,3 +33,4 @@ paasta-container를 설치하는 절차는 아래와 같습니다. <br>
 | database_z1/0 (2dcc0aae-b176-49cd-ac88-52641e35a543)      | running | n/a | database_z1      | x.x.x.x | <br>
 | route_emitter_z1/0 (e4e4eafd-5d9d-4b3a-b0f6-3c0c451a2e38) | running | n/a | route_emitter_z1 | x.x.x.x | <br>
 +-----------------------------------------------------------+---------+-----+------------------+---------+ <br>
+```
