@@ -1,0 +1,38 @@
+syntax = "proto3";
+
+package plumbing;
+
+service Doppler {
+  rpc Subscribe(SubscriptionRequest) returns (stream Response) {}
+  rpc ContainerMetrics(ContainerMetricsRequest) returns (ContainerMetricsResponse) {}
+  rpc RecentLogs(RecentLogsRequest) returns (RecentLogsResponse) {}
+}
+
+message SubscriptionRequest {
+  string shardID = 1;
+  Filter filter = 2;
+}
+
+message Filter{
+  string appID = 1;
+}
+
+message Response {
+  bytes payload = 1;
+}
+
+message ContainerMetricsRequest {
+  string appID = 1;
+}
+
+message ContainerMetricsResponse {
+  repeated bytes payload = 1;
+}
+
+message RecentLogsRequest {
+  string appID = 1;
+}
+
+message RecentLogsResponse {
+  repeated bytes payload = 1;
+}

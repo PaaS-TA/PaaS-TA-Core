@@ -1,0 +1,4 @@
+check process iptables_agent
+  with pidfile /var/vcap/sys/run/iptables_agent/iptables_agent.pid
+  start program "/var/vcap/jobs/iptables_agent/bin/iptables_agent_ctl start" with timeout 60 seconds
+  stop program "/var/vcap/jobs/iptables_agent/bin/iptables_agent_ctl stop"

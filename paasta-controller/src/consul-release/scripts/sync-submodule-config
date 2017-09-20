@@ -1,0 +1,10 @@
+#!/bin/bash
+
+set -eu
+
+gosub list \
+  -a confab/... \
+  -a github.com/hashicorp/consul \
+  -t confab/... \
+  -t acceptance-tests/... \
+  | xargs gosub sync

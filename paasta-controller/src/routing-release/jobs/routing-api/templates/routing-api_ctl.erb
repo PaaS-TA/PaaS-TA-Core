@@ -1,0 +1,73 @@
+#!/bin/bash -e
+
+RUN_DIR=/var/vcap/sys/run/routing-api
+LOG_DIR=/var/vcap/sys/log/routing-api
+PIDFILE=$RUN_DIR/routing-api.pid
+
+source /var/vcap/packages/routing_utils/pid_utils.sh
+source /var/vcap/packages/routing_utils/syslog_utils.sh
+
+<%
+  def discover_external_ip
+    networks = spec.networks.marshal_dump
+    _, network = networks.find do |_name, network_spec|
+      network_spec.default
+    end
+    if !network
+      _, network = networks.first
+    end
+    if !network
+      raise "Could not determine IP via network spec: #{networks}"
+    end
+    network.ip
+  end
+  my_ip = discover_external_ip
+%>
+
+function setup_environment() {
+  mkdir -p "${RUN_DIR}"
+}
+
+case $1 in
+
+  start)
+
+    setup_environment
+    pid_guard $PIDFILE "routing-api"
+
+    tee_output_to_sys_log "${LOG_DIR}" "routing_api"
+
+    set +e
+    host <%= p("dns_health_check_host") %>
+    if [[ "0" != "$?" ]]; then
+      echo "DNS is not up"
+      exit 1
+    fi
+    set -e
+
+    echo $$ > $PIDFILE
+
+    # Allowed number of open file descriptors
+    # ulimit -n 100000
+
+    routing_port=3000
+    exec /var/vcap/packages/routing-api/bin/routing-api \
+         -config /var/vcap/jobs/routing-api/config/routing-api.yml \
+         -port $routing_port \
+         -logLevel=<%= p("routing_api.log_level") %> \
+         -ip <%= my_ip %> \
+         <% if p("routing_api.auth_disabled") == true %> -devMode <% end %> \
+
+    ;;
+
+  stop)
+    kill_and_wait $PIDFILE
+
+    ;;
+
+  *)
+    echo "Usage: routing-api_ctl {start|stop}"
+
+    ;;
+
+esac

@@ -1,0 +1,98 @@
+---
+name: acceptance-tests
+templates:
+  test.sh.erb: bin/run
+
+packages:
+ - acceptance-tests
+ - consul
+ - golang1.7
+
+properties:
+  consul.acceptance_tests.bosh.target:
+   description: "Location of the BOSH Director to target when deploying consul"
+   default: "192.168.50.4"
+
+  consul.acceptance_tests.bosh.username:
+   description: "BOSH Director username"
+   default: "admin"
+
+  consul.acceptance_tests.bosh.password:
+   description: "BOSH Director password"
+   default: "admin"
+
+  consul.acceptance_tests.bosh.director_ca_cert:
+   description: "BOSH Director CA Cert"
+   default: ""
+
+  consul.acceptance_tests.bosh.errand.default_persistent_disk_type:
+   description: "Default persistent disk type used by consul servers"
+   default: "1GB"
+
+  consul.acceptance_tests.bosh.errand.default_vm_type:
+   description: "Default vm type for all VMs"
+   default: "m3.medium"
+
+  consul.acceptance_tests.aws.subnets:
+   description: "Subnet ID for AWS deployments"
+   default: ""
+
+  consul.acceptance_tests.aws.cloud_config_subnets:
+   description: "Subnet ID for AWS deployments utilizing the Cloud Config"
+   default: ""
+
+  consul.acceptance_tests.aws.access_key_id:
+   description: "Key ID for AWS deployments"
+   default: ""
+
+  consul.acceptance_tests.aws.secret_access_key:
+   description: "Secret Access Key for AWS deployments"
+   default: ""
+
+  consul.acceptance_tests.aws.default_key_name:
+   description: "Default Key Name for AWS deployments"
+   default: "bosh"
+
+  consul.acceptance_tests.aws.default_security_groups:
+   description: "Security groups for AWS deployments"
+   default: []
+
+  consul.acceptance_tests.aws.region:
+   description: "Region for AWS deployments"
+   default: "us-west-2"
+
+  consul.acceptance_tests.registry.host:
+   description: "Host for the BOSH registry"
+   default: "127.0.0.1"
+
+  consul.acceptance_tests.registry.port:
+   description: "Port for the BOSH registry"
+   default: 25777
+
+  consul.acceptance_tests.registry.username:
+   description: "Username for the BOSH registry"
+   default: "admin"
+
+  consul.acceptance_tests.registry.password:
+   description: "Password for the BOSH registry"
+   default: "password"
+
+  consul.acceptance_tests.parallel_nodes:
+   description: "Number of parallel nodes to use for tests"
+   default: 1
+
+  consul.acceptance_tests.consul_release_version:
+   description: "The default consul-release version number to deploy"
+   default: latest
+
+  consul.acceptance_tests.latest_consul_release_version:
+   description: "The latest bosh.io consul-release version number to deploy"
+   default: latest
+
+  consul.acceptance_tests.enable_turbulence_tests:
+   description: "Run tests in turbulence package"
+   default: false
+
+  consul.acceptance_tests.windows_clients:
+   description: "Run consats with windows clients"
+   default: false

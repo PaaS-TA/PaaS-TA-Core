@@ -1,0 +1,5 @@
+---
+2.2.0_RELEASE: https://java-buildpack.cloudfoundry.org/tomcat-access-logging-support/tomcat-access-logging-support-2.2.0_RELEASE.jar
+2.3.0_RELEASE: https://java-buildpack.cloudfoundry.org/tomcat-access-logging-support/tomcat-access-logging-support-2.3.0_RELEASE.jar
+2.4.0_RELEASE: https://java-buildpack.cloudfoundry.org/tomcat-access-logging-support/tomcat-access-logging-support-2.4.0_RELEASE.jar
+2.5.0_RELEASE: https://java-buildpack.cloudfoundry.org/tomcat-access-logging-support/tomcat-access-logging-support-2.5.0_RELEASE.jar

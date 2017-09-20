@@ -1,0 +1,374 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!--
+    Cloud Foundry
+    Copyright (c) [2009-2014] Pivotal Software, Inc. All Rights Reserved.
+
+    This product is licensed to you under the Apache License, Version 2.0 (the "License").
+    You may not use this product except in compliance with the License.
+
+    This product includes a number of subcomponents with
+    separate copyright notices and license terms. Your use of these
+    subcomponents is subject to the terms and conditions of the
+    subcomponent's license, as noted in the LICENSE file.
+
+-->
+
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:security="http://www.springframework.org/schema/security"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-4.0.xsd
+              http://www.springframework.org/schema/security http://www.springframework.org/schema/security/spring-security-4.1.xsd">
+
+
+
+        <!-- Register authentication manager with SAML provider -->
+        <security:authentication-manager id="samlAuthenticationManager">
+            <security:authentication-provider ref="samlAuthenticationProvider" />
+        </security:authentication-manager>
+
+        <bean id="samlSecurityContextPersistenceFilter" class="org.springframework.security.web.context.SecurityContextPersistenceFilter"/>
+
+        <bean id="samlFilter" class="org.springframework.security.web.FilterChainProxy">
+            <security:filter-chain-map request-matcher="ant">
+                <security:filter-chain pattern="/saml/login/**" filters="samlEntryPoint" />
+                <security:filter-chain pattern="/saml/logout/**" filters="samlLogoutFilter" />
+                <security:filter-chain pattern="/saml/metadata/**" filters="metadataDisplayFilter" />
+                <security:filter-chain pattern="/saml/idp/metadata/**" filters="idpMetadataDisplayFilter" />
+                <security:filter-chain pattern="/saml/SSO/**" filters="samlSecurityContextPersistenceFilter,samlWebSSOProcessingFilter" />
+                <security:filter-chain pattern="/saml/SingleLogout/**" filters="samlLogoutProcessingFilter" />
+                <security:filter-chain pattern="/saml/discovery/**" filters="samlIDPDiscovery" />
+                <!--<security:filter-chain pattern="/oauth/authorize/**" filters="exceptionTranslationFilter" />-->
+            </security:filter-chain-map>
+        </bean>
+
+        <!-- Logger for SAML messages and events -->
+        <bean id="samlLogger" class="org.springframework.security.saml.log.SAMLDefaultLogger" />
+
+        <!--<bean id="samlLoginServerKeyManagerFactory" class="org.cloudfoundry.identity.uaa.provider.saml.SamlKeyManagerFactory -->
+        <!--<constructor-arg type="java.lang.String" value="#{'${login.serviceProviderKey:' + @defaultSamlKey + '}'}" />-->
+            <!--<constructor-arg type="java.lang.String" value="${login.serviceProviderKeyPassword:password}" />-->
+            <!--<constructor-arg type="java.lang.String" value="#{'${login.serviceProviderCertificate:' + @defaultSamlCert + '}'}" />-->
+        <!--</bean>-->
+
+        <bean id="defaultSamlCert" class="java.lang.String">
+            <constructor-arg>
+                <value>
+<![CDATA[-----BEGIN CERTIFICATE-----
+MIIDSTCCArKgAwIBAgIBADANBgkqhkiG9w0BAQQFADB8MQswCQYDVQQGEwJhdzEO
+MAwGA1UECBMFYXJ1YmExDjAMBgNVBAoTBWFydWJhMQ4wDAYDVQQHEwVhcnViYTEO
+MAwGA1UECxMFYXJ1YmExDjAMBgNVBAMTBWFydWJhMR0wGwYJKoZIhvcNAQkBFg5h
+cnViYUBhcnViYS5hcjAeFw0xNTExMjAyMjI2MjdaFw0xNjExMTkyMjI2MjdaMHwx
+CzAJBgNVBAYTAmF3MQ4wDAYDVQQIEwVhcnViYTEOMAwGA1UEChMFYXJ1YmExDjAM
+BgNVBAcTBWFydWJhMQ4wDAYDVQQLEwVhcnViYTEOMAwGA1UEAxMFYXJ1YmExHTAb
+BgkqhkiG9w0BCQEWDmFydWJhQGFydWJhLmFyMIGfMA0GCSqGSIb3DQEBAQUAA4GN
+ADCBiQKBgQDHtC5gUXxBKpEqZTLkNvFwNGnNIkggNOwOQVNbpO0WVHIivig5L39W
+qS9u0hnA+O7MCA/KlrAR4bXaeVVhwfUPYBKIpaaTWFQR5cTR1UFZJL/OF9vAfpOw
+znoD66DDCnQVpbCjtDYWX+x6imxn8HCYxhMol6ZnTbSsFW6VZjFMjQIDAQABo4Ha
+MIHXMB0GA1UdDgQWBBTx0lDzjH/iOBnOSQaSEWQLx1syGDCBpwYDVR0jBIGfMIGc
+gBTx0lDzjH/iOBnOSQaSEWQLx1syGKGBgKR+MHwxCzAJBgNVBAYTAmF3MQ4wDAYD
+VQQIEwVhcnViYTEOMAwGA1UEChMFYXJ1YmExDjAMBgNVBAcTBWFydWJhMQ4wDAYD
+VQQLEwVhcnViYTEOMAwGA1UEAxMFYXJ1YmExHTAbBgkqhkiG9w0BCQEWDmFydWJh
+QGFydWJhLmFyggEAMAwGA1UdEwQFMAMBAf8wDQYJKoZIhvcNAQEEBQADgYEAYvBJ
+0HOZbbHClXmGUjGs+GS+xC1FO/am2suCSYqNB9dyMXfOWiJ1+TLJk+o/YZt8vuxC
+KdcZYgl4l/L6PxJ982SRhc83ZW2dkAZI4M0/Ud3oePe84k8jm3A7EvH5wi5hvCkK
+RpuRBwn3Ei+jCRouxTbzKPsuCVB+1sNyxMTXzf0=
+-----END CERTIFICATE-----]]>
+                </value>
+            </constructor-arg>
+        </bean>
+
+        <bean id="defaultSamlKey" class="java.lang.String">
+            <constructor-arg>
+                <value>
+<![CDATA[-----BEGIN RSA PRIVATE KEY-----
+MIICXQIBAAKBgQDHtC5gUXxBKpEqZTLkNvFwNGnNIkggNOwOQVNbpO0WVHIivig5
+L39WqS9u0hnA+O7MCA/KlrAR4bXaeVVhwfUPYBKIpaaTWFQR5cTR1UFZJL/OF9vA
+fpOwznoD66DDCnQVpbCjtDYWX+x6imxn8HCYxhMol6ZnTbSsFW6VZjFMjQIDAQAB
+AoGAVOj2Yvuigi6wJD99AO2fgF64sYCm/BKkX3dFEw0vxTPIh58kiRP554Xt5ges
+7ZCqL9QpqrChUikO4kJ+nB8Uq2AvaZHbpCEUmbip06IlgdA440o0r0CPo1mgNxGu
+lhiWRN43Lruzfh9qKPhleg2dvyFGQxy5Gk6KW/t8IS4x4r0CQQD/dceBA+Ndj3Xp
+ubHfxqNz4GTOxndc/AXAowPGpge2zpgIc7f50t8OHhG6XhsfJ0wyQEEvodDhZPYX
+kKBnXNHzAkEAyCA76vAwuxqAd3MObhiebniAU3SnPf2u4fdL1EOm92dyFs1JxyyL
+gu/DsjPjx6tRtn4YAalxCzmAMXFSb1qHfwJBAM3qx3z0gGKbUEWtPHcP7BNsrnWK
+vw6By7VC8bk/ffpaP2yYspS66Le9fzbFwoDzMVVUO/dELVZyBnhqSRHoXQcCQQCe
+A2WL8S5o7Vn19rC0GVgu3ZJlUrwiZEVLQdlrticFPXaFrn3Md82ICww3jmURaKHS
+N+l4lnMda79eSp3OMmq9AkA0p79BvYsLshUJJnvbk76pCjR28PK4dV1gSDUEqQMB
+qy45ptdwJLqLJCeNoR0JUcDNIRhOCuOPND7pcMtX6hI/
+-----END RSA PRIVATE KEY-----]]>
+                </value>
+            </constructor-arg>
+        </bean>
+
+        <!-- Entry point to initialize authentication, default values taken from
+            properties file -->
+        <bean id="samlEntryPoint" class="org.cloudfoundry.identity.uaa.provider.saml.LoginSamlEntryPoint">
+            <property name="defaultProfileOptions">
+                <bean class="org.springframework.security.saml.websso.WebSSOProfileOptions">
+                    <property name="includeScoping" value="false" />
+                    <property name="nameID" value="${login.saml.nameID:urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified}" />
+                    <property name="assertionConsumerIndex" value="${login.saml.assertionConsumerIndex:0}" />
+                </bean>
+            </property>
+            <property name="providerDefinitionList" ref="metaDataProviders"/>
+            <property name="contextProvider" ref="basicContextProvider" />
+            <property name="metadata" ref="metadata" />
+        </bean>
+
+        <bean id="exceptionTranslationFilter" class="org.springframework.security.web.access.ExceptionTranslationFilter">
+            <constructor-arg ref="samlEntryPoint" />
+        </bean>
+
+        <!-- IDP Discovery Service -->
+        <bean id="samlIDPDiscovery" class="org.cloudfoundry.identity.uaa.provider.saml.LoginSamlDiscovery">
+            <property name="contextProvider" ref="basicContextProvider" />
+            <property name="metadata" ref="metadata"/>
+        </bean>
+
+        <bean id="samlEntityID" class="java.lang.String">
+            <constructor-arg value="${login.entityID:unit-test-sp}"/>
+        </bean>
+
+        <bean id="samlSPAlias" class="java.lang.String">
+            <constructor-arg value="${login.saml.entityIDAlias:${login.entityID:unit-test-sp}}"/>
+        </bean>
+
+        <bean id="extendedMetaData" class="org.springframework.security.saml.metadata.ExtendedMetadata">
+            <property name="idpDiscoveryEnabled" value="true" />
+            <property name="alias" value="#{T(org.cloudfoundry.identity.uaa.util.UaaStringUtils).getHostIfArgIsURL(@samlSPAlias)}" />
+            <property name="signMetadata" value="${login.saml.signMetaData:true}" />
+        </bean>
+
+        <bean id="zoneAwareMetadataGenerator" class="org.cloudfoundry.identity.uaa.provider.saml.ZoneAwareMetadataGenerator">
+            <property name="extendedMetadata" ref="extendedMetaData"/>
+            <property name="requestSigned" value="${login.saml.signRequest:true}" />
+            <property name="wantAssertionSigned" value="${login.saml.wantAssertionSigned:true}" />
+            <property name="entityBaseURL" value="${login.entityBaseURL:http://localhost:8080/uaa}" />
+            <property name="entityId" ref="samlEntityID" />
+        </bean>
+
+        <!-- Filter automatically generates default SP metadata -->
+        <bean id="metadataGeneratorFilter" class="org.springframework.security.saml.metadata.MetadataGeneratorFilter">
+            <constructor-arg ref="zoneAwareMetadataGenerator"/>
+            <property name="manager" ref="metadata" />
+            <property name="displayFilter" ref="metadataDisplayFilter" />
+        </bean>
+
+        <!-- The filter is waiting for connections on URL suffixed with filterSuffix
+            and presents SP metadata there -->
+
+        <bean id="metadataDisplayFilter" class="org.cloudfoundry.identity.uaa.provider.saml.ZoneAwareMetadataDisplayFilter">
+            <constructor-arg name="generator" ref="zoneAwareMetadataGenerator"/>
+            <property name="manager" ref="metadata" />
+            <property name="contextProvider" ref="basicContextProvider" />
+        </bean>
+
+        <!--<bean id="metadata" class="org.springframework.security.saml.metadata.CachingMetadataManager">-->
+            <!--<constructor-arg>-->
+                <!--<bean factory-bean="metaDataProviders" factory-method="getSamlIdentityProviders"/>-->
+            <!--</constructor-arg>-->
+        <!--</bean>-->
+        <bean id="metadata" class="org.cloudfoundry.identity.uaa.provider.saml.NonSnarlMetadataManager"
+              depends-on="idpBootstrap, metaDataProviders, identityZoneHolderInitializer"
+              destroy-method="destroy">
+            <constructor-arg name="providerDao" ref="identityProviderProvisioning"/>
+            <constructor-arg name="zoneDao" ref="identityZoneProvisioning"/>
+            <constructor-arg name="configurator" ref="metaDataProviders"/>
+            <property name="refreshCheckInterval" value="${login.saml.metadataRefreshInterval:120000}"/>
+        </bean>
+
+        <bean name="metadataFetchingHttpClientTimer" class="java.util.Timer">
+            <constructor-arg value="true" />
+        </bean>
+
+        <bean name="httpClientParams" class="org.apache.commons.httpclient.params.HttpClientParams">
+            <property name="connectionManagerTimeout" value="${login.saml.socket.connectionManagerTimeout:10000}" />
+            <property name="soTimeout" value="${login.saml.socket.soTimeout:10000}" />
+        </bean>
+
+        <!-- SAML Authentication Provider responsible for validating of received
+            SAML messages -->
+        <bean id="samlAuthenticationProvider" class="org.cloudfoundry.identity.uaa.provider.saml.LoginSamlAuthenticationProvider">
+            <property name="userDatabase" ref="userDatabase"/>
+            <property name="identityProviderProvisioning" ref="identityProviderProvisioning"/>
+            <property name="externalMembershipManager" ref="externalGroupMembershipManager"/>
+        </bean>
+
+        <bean id="samlLoginFailureHandler" class="org.cloudfoundry.identity.uaa.provider.saml.LoginSAMLAuthenticationFailureHandler" >
+            <property name="defaultFailureUrl" value="/saml_error" />
+        </bean>
+
+        <!-- Provider of default SAML Context -->
+        <bean id="basicContextProvider" class="org.springframework.security.saml.context.SAMLContextProviderImpl" primary="true" />
+
+        <!-- Processing filter for WebSSO profile messages -->
+        <bean id="samlWebSSOProcessingFilter" class="org.springframework.security.saml.SAMLProcessingFilter">
+            <property name="authenticationManager" ref="samlAuthenticationManager" />
+            <property name="authenticationSuccessHandler" ref="accountSavingAuthenticationSuccessHandler" />
+            <property name="authenticationFailureHandler" ref="samlLoginFailureHandler" />
+            <property name="contextProvider" ref="basicContextProvider" />
+            <property name="SAMLProcessor" ref="processor" />
+        </bean>
+
+        <!-- Logout handler terminating local session -->
+        <bean id="samlLogoutHandler" class="org.springframework.security.web.authentication.logout.SecurityContextLogoutHandler">
+            <property name="invalidateHttpSession" value="true" />
+        </bean>
+
+        <bean id="samlWhitelistLogoutHandler" class="org.cloudfoundry.identity.uaa.authentication.SamlRedirectLogoutHandler" >
+            <constructor-arg name="wrappedHandler" ref="logoutHandler"/>
+        </bean>
+
+        <!-- Override default logout processing filter with the one processing SAML
+            messages -->
+        <bean id="samlLogoutFilter" class="org.cloudfoundry.identity.uaa.authentication.UaaSamlLogoutFilter">
+            <constructor-arg ref="logoutHandler" />
+            <constructor-arg ref="samlLogoutHandlers" />
+            <property name="contextProvider" ref="redirectSavingSamlContextProvider" />
+        </bean>
+
+        <!-- Filter processing incoming logout messages -->
+        <!-- First argument determines URL user will be redirected to after successful
+            global logout -->
+        <bean id="samlLogoutProcessingFilter" class="org.springframework.security.saml.SAMLLogoutProcessingFilter">
+            <constructor-arg ref="samlWhitelistLogoutHandler" />
+            <constructor-arg ref="samlLogoutHandlers" />
+            <property name="SAMLProcessor" ref="processor" />
+        </bean>
+
+        <bean id="redirectSavingSamlContextProvider" class="org.cloudfoundry.identity.uaa.authentication.RedirectSavingSamlContextProvider">
+            <constructor-arg name="contextProviderDelegate" ref="basicContextProvider" />
+        </bean>
+
+        <!-- Class loading incoming SAML messages from httpRequest stream -->
+        <bean id="processor" class="org.springframework.security.saml.processor.SAMLProcessorImpl">
+            <constructor-arg>
+                <list>
+                    <ref bean="redirectBinding" />
+                    <ref bean="postBinding" />
+                    <ref bean="artifactBinding" />
+                    <ref bean="soapBinding" />
+                    <ref bean="paosBinding" />
+                </list>
+            </constructor-arg>
+        </bean>
+
+        <bean id="samlMaxAuthenticationAge" class="java.lang.Integer">
+            <constructor-arg value="${login.saml.maxAuthenticationAge:864000}"/>
+        </bean>
+
+        <!-- SAML 2.0 WebSSO Assertion Consumer -->
+        <bean id="webSSOprofileConsumer" class="org.springframework.security.saml.websso.WebSSOProfileConsumerImpl">
+            <property name="maxAuthenticationAge" ref="samlMaxAuthenticationAge" />
+            <property name="metadata" ref="metadata" />
+            <property name="processor" ref="processor" />
+        </bean>
+
+        <!-- SAML 2.0 Holder-of-Key WebSSO Assertion Consumer -->
+        <bean id="hokWebSSOprofileConsumer" class="org.springframework.security.saml.websso.WebSSOProfileConsumerHoKImpl" >
+            <property name="maxAuthenticationAge" ref="samlMaxAuthenticationAge" />
+            <property name="metadata" ref="metadata" />
+            <property name="processor" ref="processor" />
+        </bean>
+
+        <!-- SAML 2.0 Web SSO profile -->
+        <bean id="webSSOprofile" class="org.springframework.security.saml.websso.WebSSOProfileImpl">
+            <property name="metadata" ref="metadata" />
+            <property name="processor" ref="processor" />
+        </bean>
+
+        <!-- SAML 2.0 Holder-of-Key Web SSO profile -->
+        <bean id="hokWebSSOProfile" class="org.springframework.security.saml.websso.WebSSOProfileConsumerHoKImpl" >
+            <property name="maxAuthenticationAge" ref="samlMaxAuthenticationAge" />
+            <property name="metadata" ref="metadata" />
+            <property name="processor" ref="processor" />
+        </bean>
+
+        <!-- SAML 2.0 Logout Profile -->
+        <bean id="basicLogoutProfile" class="org.springframework.security.saml.websso.SingleLogoutProfileImpl">
+            <property name="metadata" ref="metadata" />
+            <property name="processor" ref="processor" />
+        </bean>
+
+        <!-- Bindings, encoders and decoders used for creating and parsing messages -->
+        <bean id="postBinding" class="org.springframework.security.saml.processor.HTTPPostBinding">
+            <constructor-arg ref="parserPool" />
+            <constructor-arg ref="velocityEngine" />
+        </bean>
+
+        <bean id="redirectBinding" class="org.springframework.security.saml.processor.HTTPRedirectDeflateBinding">
+            <constructor-arg ref="parserPool" />
+        </bean>
+
+        <bean id="artifactBinding" class="org.springframework.security.saml.processor.HTTPArtifactBinding">
+            <constructor-arg ref="parserPool" />
+            <constructor-arg ref="velocityEngine" />
+            <constructor-arg>
+                <bean class="org.springframework.security.saml.websso.ArtifactResolutionProfileImpl">
+                    <constructor-arg>
+                        <bean class="org.apache.commons.httpclient.HttpClient" />
+                    </constructor-arg>
+                    <property name="processor">
+                        <bean id="soapProcessor" class="org.springframework.security.saml.processor.SAMLProcessorImpl">
+                            <constructor-arg ref="soapBinding" />
+                        </bean>
+                    </property>
+                    <property name="metadata" ref="metadata" />
+                </bean>
+            </constructor-arg>
+        </bean>
+
+        <bean id="soapBinding" class="org.springframework.security.saml.processor.HTTPSOAP11Binding">
+            <constructor-arg ref="parserPool" />
+        </bean>
+
+        <bean id="paosBinding" class="org.springframework.security.saml.processor.HTTPPAOS11Binding">
+            <constructor-arg ref="parserPool" />
+        </bean>
+
+        <!-- Initialization of OpenSAML library -->
+        <bean class="org.springframework.security.saml.SAMLBootstrap" />
+
+        <!-- Initialization of the velocity engine -->
+        <bean id="velocityEngine" class="org.springframework.security.saml.util.VelocityFactory" factory-method="getEngine" />
+
+        <!-- XML parser pool needed for OpenSAML parsing -->
+        <bean id="parserPool" class="org.opensaml.xml.parse.BasicParserPool" scope="singleton" />
+
+        <bean id="metaDataUrl" class="java.lang.String">
+            <constructor-arg value="${login.idpMetadataURL:null}"/>
+        </bean>
+
+    <bean id="metaDataProviders" class="org.cloudfoundry.identity.uaa.provider.saml.SamlIdentityProviderConfigurator">
+        <property name="clientParams" ref="httpClientParams" />
+        <property name="parserPool" ref="parserPool"/>
+        <property name="identityProviderProvisioning" ref="identityProviderProvisioning"/>
+    </bean>
+
+    <bean id="bootstrapMetaDataProviders" class="org.cloudfoundry.identity.uaa.provider.saml.BootstrapSamlIdentityProviderConfigurator">
+        <property name="identityProviders" value="#{@config['login']==null ? null : @config['login']['saml']==null ? null : @config['login']['saml']['providers']}" />
+        <property name="legacyIdpMetaData" ref="metaDataUrl"/>
+        <property name="legacyIdpIdentityAlias" value="${login.idpEntityAlias:null}"/>
+        <property name="legacyNameId" value="${login.saml.nameID:urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified}" />
+        <property name="legacyAssertionConsumerIndex" value="${login.saml.assertionConsumerIndex:0}" />
+        <property name="legacyMetadataTrustCheck" value="${login.saml.metadataTrustCheck:true}"/>
+        <property name="legacyShowSamlLink" value="${login.showSamlLoginLink:true}"/>
+    </bean>
+
+        <bean id="providerChangeListener" class="org.cloudfoundry.identity.uaa.provider.saml.ProviderChangedListener">
+            <constructor-arg name="configurator" ref="metaDataProviders"/>
+            <constructor-arg name="zoneProvisioning" ref="identityZoneProvisioning"/>
+            <property name="metadataManager" ref="metadata" />
+        </bean>
+
+        <beans profile="fileMetadata">
+            <bean id="metaDataUrl" class="java.lang.String">
+                <constructor-arg value="${login.idpMetadataFile:null}"/>
+            </bean>
+        </beans>
+
+        <beans profile="configMetadata">
+            <bean id="metaDataUrl" class="java.lang.String">
+                <constructor-arg value="${login.idpMetadata:null}"/>
+            </bean>
+        </beans>
+</beans>

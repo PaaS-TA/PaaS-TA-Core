@@ -1,0 +1,34 @@
+---
+name: loggregator-acceptance-tests
+
+description: "The loggregator acceptance tests."
+
+packages:
+  - golang1.7
+  - loggregator-acceptance-tests
+templates:
+  run.erb: bin/run
+  config.json.erb: bin/config.json
+
+consumes:
+- name: trafficcontroller
+  type: trafficcontroller
+
+properties:
+  etcd.machines:
+    description: "IPs pointing to the ETCD cluster"
+  ssl.skip_cert_verify:
+    description: ""
+  metron_agent.dropsonde_incoming_port:
+    description: "port for tests to send metrics to metron"
+  loggregator_endpoint.shared_secret:
+    description: ""
+  loggregator_acceptance_tests.login_required:
+    description: ""
+  loggregator_acceptance_tests.admin_user:
+    description: ""
+  loggregator_acceptance_tests.admin_password:
+    description: ""
+  traffic_controller.disable_access_control:
+    description: "Disable UAA/CC auth in traffic controller.  This **MUST** be set to true in the manifest for LATs to work."
+    default: false

@@ -1,0 +1,28 @@
+---
+name: smoke-tests
+
+description: "The smoke tests errand run a simple check that NATs is accessible and relaying messages properly"
+
+packages:
+  - ruby-2.2.5
+  - nats
+
+templates:
+  run.erb: bin/run
+  config.json.erb: bin/config.json
+  smoke-tests.rb: bin/smoke-tests.rb
+
+consumes:
+- name: nats
+  type: nats
+  optional: true
+
+properties:
+  nats.user:
+    description: "Username for server authentication."
+  nats.password:
+    description: "Password for server authentication."
+  nats.port:
+    description: "The port for the NATS server to listen on."
+  nats.machines:
+    description: "IP of each NATS cluster member."

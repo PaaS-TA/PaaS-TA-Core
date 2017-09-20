@@ -1,0 +1,32 @@
+language: go
+notifications:
+  email:
+  - cf-lamb@pivotallabs.com
+
+before_install:
+- go get github.com/mattn/goveralls
+- go get github.com/onsi/ginkgo/ginkgo
+- go get github.com/coreos/etcd
+
+after_success:
+- 'echo "mode: set" > all.coverprofile'
+- 'find . -name "*.coverprofile" -exec grep -v mode: {} >> all.coverprofile \;'
+- PATH=$HOME/gopath/bin:$PATH goveralls -coverprofile=all.coverprofile -repotoken=$COVERALLS_TOKEN
+
+install:
+- go get -d -v -t ./...
+
+script:
+- PATH=$HOME/gopath/bin:$PATH bin/test
+
+go:
+- 1.5
+- tip
+
+matrix:
+  allow_failures:
+    - go: tip
+
+env:
+  global:
+    secure: V9bjpHgZ0zAHq9KJmPsa13EKqN1mn2N9oEIN2KQlD9JPWj4kR9gZ4JKiiq9ju5U4ZREbXq2VfLkXutvWfqeaczo9Dl2yB/qnkcl77DIbPJyEFXxON07oGkRALJMaK7ROp/+8hG6ZgfOcvc1BF2Kg7S9sRKYun2C2zUc0fSfUAY4=

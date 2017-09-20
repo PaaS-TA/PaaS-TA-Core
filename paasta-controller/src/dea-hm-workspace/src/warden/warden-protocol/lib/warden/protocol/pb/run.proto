@@ -1,0 +1,36 @@
+// Run a job inside a container.
+//
+// This request is equivalent to spawning a job and immediately linking to it.
+//
+// See `Spawn` and `Link` for a description of the request and response.
+//
+// ### Errors
+//
+// * When `handle` does not refer to a container.
+//
+// ### Definition
+//
+
+package warden;
+
+import "resource_limits.proto";
+import "info.proto";
+
+message RunRequest {
+  required string handle = 1;
+
+  required string script = 2;
+  optional bool privileged = 3 [default = false];
+  optional ResourceLimits rlimits = 4;
+
+  optional bool discard_output = 5 [default = false];
+
+  optional string log_tag = 6;
+}
+
+message RunResponse {
+  optional uint32 exit_status = 1;
+  optional string stdout = 2;
+  optional string stderr = 3;
+  optional InfoResponse info = 4;
+}

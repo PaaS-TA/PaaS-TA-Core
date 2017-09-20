@@ -1,0 +1,747 @@
+---
+name: uaa
+
+description: "The UAA is the identity management service for Cloud Foundry. It's primary role is as an OAuth2 provider, issuing tokens for client applications to use when they act on behalf of Cloud Foundry users. It can also authenticate users with their Cloud Foundry credentials, and can act as an SSO service using those credentials (or others). It has endpoints for managing user accounts and for registering OAuth2 clients, as well as various other management functions."
+
+templates:
+  uaa_ctl.erb: bin/uaa_ctl
+  install_crt: bin/install_crt
+  dns_health_check.erb: bin/dns_health_check
+  health_check: bin/health_check
+  install_uaa_crt: bin/install_uaa_crt
+  pre-start: bin/pre-start
+  post-start: bin/post-start
+
+  uaa.yml.erb: config/uaa.yml
+  newrelic.yml.erb: config/newrelic.yml
+  varz.yml: config/varz.yml
+  log4j.properties.erb: config/log4j.properties
+  varz.log4j.properties: config/varz.log4j.properties
+  tomcat.logging.properties: config/tomcat/logging.properties
+  tomcat.server.xml.erb: config/tomcat/server.xml
+  tomcat.context.xml.erb: config/tomcat/context.xml
+  ldap.crt.erb: config/ldap.crt
+  login.yml.erb: config/login.yml
+  messages.properties.erb: config/messages.properties
+  uaa.crt.erb: config/uaa.crt
+
+
+packages:
+  - uaa_utils
+  - uaa
+
+properties:
+  # General server properties
+  uaa.catalina_opts:
+    description: "The options used to configure Tomcat"
+    default: -Xmx768m -XX:MaxMetaspaceSize=256m
+  uaa.port:
+    description: "Port that uaa will accept connections on"
+    default: 8080
+  uaa.url:
+    description: "The base url of the UAA"
+  uaa.zones.internal.hostnames:
+    description: |
+      A list of hostnames that are routed to the UAA, specifically the default zone in the UAA. The UAA will reject any Host headers that it doesn't recognize.
+      By default the UAA recognizes:
+        The hostname from the property uaa.url
+        The hostname from the property login.url
+        localhost (in order to accept health checks)
+      Any hostnames added as a list are additive to the default hostnames allowed.
+    example:
+      - hostname1
+      - hostname2.localhost
+      - hostname3.example.com
+  uaa.proxy_ips_regex:
+    description: |
+      A pipe delimited set of regular expressions of IP addresses that are considered reverse proxies.
+      When a request from these IP addresses come in, the x-forwarded-for and x-forwarded-proto headers will be respected.
+    default: 10\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|169\.254\.\d{1,3}\.\d{1,3}|127\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.1[6-9]{1}\.\d{1,3}\.\d{1,3}|172\.2[0-9]{1}\.\d{1,3}\.\d{1,3}|172\.3[0-1]{1}\.\d{1,3}\.\d{1,3}
+  uaa.proxy.servers:
+    description: "Array of the router IPs acting as the first group of HTTP/TCP backends. These will be added to the proxy_ips_regex as exact matches."
+    default: []
+  uaa.newrelic:
+    description: |
+      To enable newrelic monitoring, the sub element of this property will be placed in
+      a configuration file called newrelic.yml in the jobs config directory.
+      The syntax that must adhere to documentation in https://docs.newrelic.com/docs/agents/java-agent/configuration/java-agent-configuration-config-file
+      The JVM option -javaagent:/path/to/newrelic.jar will be added to Apache Tomcat's startup script
+      The enablement of the NewRelic agent in the UAA is triggered by the property uaa.newrelic.common.license_key
+      The property uaa.newrelic.common.license_key must be set!
+  env.http_proxy:
+    description: "The http_proxy across the VMs used for all requests over http"
+    example: http://test.proxy:8080
+  env.https_proxy:
+    description: "The http_proxy across the VMs used for all requests over https"
+    example: http://test.proxy:8080
+  env.no_proxy:
+    description: "Set No_Proxy across the VMs"
+    example: "localhost,127.0.0.0/8,127.0.1.1"
+  uaa.issuer:
+    description: "The url to use as the issuer URI"
+  uaa.logging_level:
+    description: Set UAA logging level.  (e.g. TRACE, DEBUG, INFO)
+    default: DEBUG
+  uaa.logging_use_rfc3339:
+    description: "Sets the time format for log messages to be yyyy-MM-dd'T'HH:mm:ss.SSSXXX instead of yyyy-MM-dd HH:mm:ss.SSS"
+    default: false
+
+  # SSL
+  login.protocol:
+    description: "Scheme to use for HTTP communication (http/https)"
+    default: https
+  uaa.require_https:
+    description: "Request came in on a secure connection. Expect the load balancer/proxy to set the proper headers (x-forwarded-for, x-forwarded-proto)"
+    default: true
+  uaa.ssl.port:
+    description: If this property Tomcat will listen to this port and expect https traffic. If set to -1, Tomcat will not listen for https traffic.
+    default: 8443
+  uaa.ssl.protocol_header:
+    description: The header to look for to determine if ssl termination was performed by a front end load balancer.
+    default: x-forwarded-proto
+  uaa.sslCertificate:
+    description: "The server's ssl certificate. The default is a self-signed certificate and should always be replaced for production deployments"
+    default: ''
+    example: |
+      -----BEGIN CERTIFICATE-----
+      MIIDAjCCAmugAwIBAgIJAJtrcBsKNfWDMA0GCSqGSIb3DQEBCwUAMIGZMQswCQYD
+      VQQGEwJVUzETMBEGA1UECAwKQ2FsaWZvcm5pYTEWMBQGA1UEBwwNU2FuIEZyYW5j
+      aXNjbzEQMA4GA1UECgwHUGl2b3RhbDERMA8GA1UECwwISWRlbnRpdHkxFjAUBgNV
+      BAMMDU1hcmlzc2EgS29hbGExIDAeBgkqhkiG9w0BCQEWEW1rb2FsYUBwaXZvdGFs
+      LmlvMB4XDTE1MDczMDE5Mzk0NVoXDTI1MDcyOTE5Mzk0NVowgZkxCzAJBgNVBAYT
+      AlVTMRMwEQYDVQQIDApDYWxpZm9ybmlhMRYwFAYDVQQHDA1TYW4gRnJhbmNpc2Nv
+      MRAwDgYDVQQKDAdQaXZvdGFsMREwDwYDVQQLDAhJZGVudGl0eTEWMBQGA1UEAwwN
+      TWFyaXNzYSBLb2FsYTEgMB4GCSqGSIb3DQEJARYRbWtvYWxhQHBpdm90YWwuaW8w
+      gZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAPVOIGvG8MFbkqi+ytdBHVbEGde4
+      jaCphmvGm89/4Ks0r+041VsS55XNYnHsxXTlh1FiB2KcbrDb33pgvuAIYpcAO2I0
+      gqGeRoS2hNsxzcFdkgSZn1umDAeoE4bCATrquN93KMcw/coY5jacUfb9P2CQztkS
+      e2o+QWtIaWYAvI3bAgMBAAGjUDBOMB0GA1UdDgQWBBTkEjA4CEjevAGfnPBciyXC
+      3v4zMzAfBgNVHSMEGDAWgBTkEjA4CEjevAGfnPBciyXC3v4zMzAMBgNVHRMEBTAD
+      AQH/MA0GCSqGSIb3DQEBCwUAA4GBAIEd8U32tkcvwG9qCOfe5raBENHM4ltTuhju
+      zZWIM5Ik1bFf6+rA71HVDD1Z5fRozidhMOl6mrrGShfu6VUjtqzctJeSjaOPIJL+
+      wvrXXcAkCYZ9QKf0sqlUWcIRy90nqrD5sL/rHAjNjxQ3lqIOj7yWOgty4LUzFQNr
+      FHiyd3T6
+      -----END CERTIFICATE-----
+  uaa.sslPrivateKey:
+    description: "The server's ssl private key. Only passphrase-less keys are supported"
+    default: ''
+    example: |
+      -----BEGIN RSA PRIVATE KEY-----
+      MIICXwIBAAKBgQD1TiBrxvDBW5KovsrXQR1WxBnXuI2gqYZrxpvPf+CrNK/tONVb
+      EueVzWJx7MV05YdRYgdinG6w2996YL7gCGKXADtiNIKhnkaEtoTbMc3BXZIEmZ9b
+      pgwHqBOGwgE66rjfdyjHMP3KGOY2nFH2/T9gkM7ZEntqPkFrSGlmALyN2wIDAQAB
+      AoGBAPBvfz+kYt5iz0EuoMqTPBqLY3kZn1fWUbbZmGatxJyKq9UsW5NE2FDwWomn
+      tXJ6d0PBfdOd2LDpEgZ1RSF5lobXn2m2+YeEso7A7yMiBRW8CIrkUn8wVA0s42t+
+      osElfvj73G2ZjCqQm6BLCjtFYnalmZIzfOCB26xRWaf0MJ7hAkEA/XaqnosJfmRp
+      kmvto81LEvjVVlSvpo+6rt66ykywEv9daHWZZBrrwVz3Iu4oXlwPuF8bcO8JMLRf
+      OH98T1+1PQJBAPfCj0r3fRhmBZMWqf2/tbeQPvIQzqSXfYroFgnKIKxVCV8Bkm3q
+      1rP4c0XDHEWYIwvMWBTOmVSZqfSxtwIicPcCQQDCcRqK7damo5lpvmpb0s3ZDBN9
+      WxI1EOYB6NQbBaG9sTGTRUQbS5u4hv0ASvulB7L3md6PUJEYUAcMbKCMs7txAkEA
+      7C8pwHJba0XebJB/bqkxxpKYntPM2fScNi32zFBGg2HxNANgnq3vDNN8t/U+X02f
+      oyCimvs0CgUOknhTmJJSkwJBAPaI298JxTnWncC3Zu7d5QYCJXjU403Aj4LdcVeI
+      6A15MzQdj5Hm82vlmpC4LzXofLjiN4E5ZLluzEw+1TjRE7c=
+      -----END RSA PRIVATE KEY-----
+
+  #Branding/Customization
+  login.branding.company_name:
+    description: This name is used on the UAA Pages and in account management related communication in UAA
+  login.branding.product_logo:
+    description: This is a base64 encoded PNG image which will be used as the logo on all UAA pages like Login, Sign Up etc.
+  login.branding.square_logo:
+    description: This is a base64 encoded PNG image which will be used as the favicon for the UAA pages
+  login.branding.footer_legal_text:
+    description: This text appears on the footer of all UAA pages
+  login.branding.footer_links:
+    description: These links appear on the footer of all UAA pages. You may choose to add multiple urls for things like Support, Terms of Service etc.
+    example:
+      linkDisplayName: linkDisplayUrl
+  login.asset_base_url:
+    description: "Deprecated in favor of branding properties. Base url for static assets, allows custom styling of the login server.  Use '/resources/pivotal' for Pivotal style."
+    default: /resources/oss
+  login.links:
+    description: "A hash of home/passwd/signup URLS (see commented examples below)"
+  login.links.passwd:
+    description: URL for requesting password reset
+    default: '/forgot_password'
+  login.links.signup:
+    description: URL for requesting to signup/register for an account
+    default: '/create_account'
+  login.home_redirect:
+    description: URL for configuring a custom home page
+  login.self_service_links_enabled:
+    description: "Enable self-service account creation and password resets links."
+  login.analytics.code:
+    description: "Google analytics code. If Google Analytics is desired set both login.analytics.code and login.analytics.domain"
+  login.analytics.domain:
+    description: "Google analytics domain. If Google Analytics is desired set both login.analytics.code and login.analytics.domain"
+  login.messages:
+    description: |
+      A nested or flat hash of messages that the login server uses to display UI message
+      This will be flattened into a java.util.Properties file. The example below will lead
+      to four properties, where the key is the concatenated value delimited by dot, for example scope.tokens.read=message
+    example:
+      messages:
+        scope:
+          tokens:
+            read: View details of your approvals you have granted to this and other applications
+            write: Cancel the approvals like this one that you have granted to this and other applications
+      scope.tokens.read: View details of your approvals you have granted to this and other applications
+      scope.tokens.write: Cancel the approvals like this one that you have granted to this and other applications
+  login.logout.redirect.url:
+    description: "The Location of the redirect header following a logout of the the UAA (/logout.do)."
+    default: /login
+  login.logout.redirect.parameter.disable:
+    description: "When set to false, this allows an operator to leverage an open redirect on the UAA (/logout.do?redirect=google.com). No open redirect enabled"
+    default: true
+  login.logout.redirect.parameter.whitelist:
+    description: "A list of URLs. When this list is non null, including empty, and disable=false,
+    logout redirects are allowed, but limited to the whitelist URLs. If a redirect parameter value is not white
+    listed, redirect will be to the default URL."
+  login.prompt.username.text:
+    description: "The text used to prompt for a username during login"
+    default: Email
+  login.prompt.password.text:
+    description: "The text used to prompt for a password during login"
+    default: Password
+  login.idpDiscoveryEnabled:
+    description: "IDP Discovery should be set to true if you have configured more than one identity provider for UAA. The discovery relies on email domain being set for each additional provider. This property will also enable a list of selectable accounts that have signed in via the browser."
+    default: false
+
+  # Email
+  login.notifications.url:
+    description: "The url for the notifications service (configure to use Notifications Service instead of SMTP server)"
+  login.smtp:
+    description: "SMTP server configuration, for password reset emails etc."
+  login.smtp.host:
+    description: "SMTP server host address"
+    default: localhost
+  login.smtp.port:
+    description: "SMTP server port"
+    default: 2525
+  login.smtp.user:
+    description: "SMTP server username"
+  login.smtp.password:
+    description: "SMTP server password"
+  login.smtp.from_address:
+    description: "SMTP from address"
+  login.smtp.auth:
+    description: "If true, authenticate using AUTH command. https://javamail.java.net/nonav/docs/api/com/sun/mail/smtp/package-summary.html"
+    default: false
+  login.smtp.starttls:
+    description: "If true, send STARTTLS command before login to server. https://javamail.java.net/nonav/docs/api/com/sun/mail/smtp/package-summary.html"
+    default: false
+
+  # Clients
+  uaa.clients:
+    description: "List of OAuth2 clients that the UAA will be bootstrapped with"
+    example:
+      login:
+        id: login
+        override: true
+        secret: some-secret
+        authorized-grant-types: authorization_code,client_credentials,refresh_token
+        authorities: test_resource.test_action
+        scope: test_resource.test_action
+        redirect-uri: http://login.example.com
+        autoapprove: true
+        app-launch-url: http://myloginpage.com
+        show-on-homepage: true
+        app-icon: iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAMAAAAoLQ9TAAAAD1BMVEWZttQvMDEoKisqKywAAAApvvoVAAAAGElEQVQYlWNgYUQBLAxMDCiAeXgLoHsfAD03AHOyfqy1AAAAAElFTkSuQmCC
+      app:
+        id: app
+        override: true
+        secret: app-secret
+        authorized-grant-types: authorization_code,client_credentials,refresh_token
+        authorities: test_resource.test_action
+        scope: test_resource.test_action,test_resource.other_action
+        redirect-uri: http://login.example.com
+        autoapprove:
+        - test_resource.test_action
+        - test_resource.other_action
+        app-launch-url: http://myapppage.com
+        show-on-homepage: true
+        app-icon: iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAMAAAAoLQ9TAAAAD1BMVEWZttQvMDEoKisqKywAAAApvvoVAAAAGElEQVQYlWNgYUQBLAxMDCiAeXgLoHsfAD03AHOyfqy1AAAAAElFTkSuQmCC
+  uaa.admin.client_secret:
+    description: "Secret of the admin client - a client named admin with uaa.admin as an authority"
+
+  # Security policies (for the UAA zone)
+  uaa.authentication.policy.lockoutAfterFailures:
+    description: "Number of allowed failures before account is locked"
+    default: 5
+  uaa.authentication.policy.countFailuresWithinSeconds:
+    description: "Number of seconds in which lockoutAfterFailures failures must occur in order for account to be locked"
+    default: 1200
+  uaa.authentication.policy.lockoutPeriodSeconds:
+    description: "Number of seconds to lock out an account when lockoutAfterFailures failures is exceeded"
+    default: 300
+  uaa.password.policy.minLength:
+    description: "Minimum number of characters required for password to be considered valid"
+    default: 0
+  uaa.password.policy.maxLength:
+    description: "Maximum number of characters required for password to be considered valid"
+    default: 255
+  uaa.password.policy.requireUpperCaseCharacter:
+    description: "Minimum number of uppercase characters required for password to be considered valid"
+    default: 0
+  uaa.password.policy.requireLowerCaseCharacter:
+    description: "Minimum number of lowercase characters required for password to be considered valid"
+    default: 0
+  uaa.password.policy.requireDigit:
+    description: "Minimum number of digits required for password to be considered valid"
+    default: 0
+  uaa.password.policy.requireSpecialCharacter:
+    description: "Minimum number of special characters required for password to be considered valid"
+    default: 0
+  uaa.password.policy.expirePasswordInMonths:
+    description: "Number of months after which current password expires"
+    default: 0
+  uaa.disableInternalAuth:
+    description: "Disables internal user authentication"
+    default: false
+  uaa.disableInternalUserManagement:
+    description: "Disables UI and API for internal user management"
+    default: false
+  uaa.user.authorities:
+    description: "Contains a list of the default authorities/scopes assigned to a user"
+    default:
+      - openid
+      - scim.me
+      - cloud_controller.read
+      - cloud_controller.write
+      - cloud_controller_service_permissions.read
+      - password.write
+      - uaa.user
+      - approvals.me
+      - oauth.approvals
+      - notification_preferences.read
+      - notification_preferences.write
+      - profile
+      - roles
+      - user_attributes
+      - uaa.offline_token
+  uaa.jwt.revocable:
+    default: false
+    description: "Set to true if you wish that even JWT tokens become individually revocable and stored in the UAA token storage. This setting applies to the default zone only."
+  uaa.jwt.policy.accessTokenValiditySeconds:
+    default: 43200
+    description: "The access token validity for the default zone if nothing is configured on the client. Will override global validity policies for the default zone only."
+  uaa.jwt.policy.refreshTokenValiditySeconds:
+    default: 2592000
+    description: "The refresh token validity for the default zone if nothing is configured on the client. Will override global validity policies for the default zone only."
+  uaa.jwt.policy.active_key_id:
+    description: "The ID of the JWT signing key to be used when signing tokens."
+    example: "key-1"
+  uaa.jwt.policy.keys:
+    description: "Map of key IDs and signing keys, each defined with a property `signingKey`"
+    example:
+      key-1:
+        signingKey: |
+          -----BEGIN RSA PRIVATE KEY-----
+          MIICXgIBAAKBgQDfTLadf6QgJeS2XXImEHMsa+1O7MmIt44xaL77N2K+J/JGpfV3
+          AnkyB06wFZ02sBLB7hko42LIsVEOyTuUBird/3vlyHFKytG7UEt60Fl88SbAEfsU
+          JN1i1aSUlunPS/NCz+BKwwKFP9Ss3rNImE9Uc2LMvGy153LHFVW2zrjhTwIDAQAB
+          AoGBAJDh21LRcJITRBQ3CUs9PR1DYZPl+tUkE7RnPBMPWpf6ny3LnDp9dllJeHqz
+          a3ACSgleDSEEeCGzOt6XHnrqjYCKa42Z+Opnjx/OOpjyX1NAaswRtnb039jwv4gb
+          RlwT49Y17UAQpISOo7JFadCBoMG0ix8xr4ScY+zCSoG5v0BhAkEA8llNsiWBJF5r
+          LWQ6uimfdU2y1IPlkcGAvjekYDkdkHiRie725Dn4qRiXyABeaqNm2bpnD620Okwr
+          sf7LY+BMdwJBAOvgt/ZGwJrMOe/cHhbujtjBK/1CumJ4n2r5V1zPBFfLNXiKnpJ6
+          J/sRwmjgg4u3Anu1ENF3YsxYabflBnvOP+kCQCQ8VBCp6OhOMcpErT8+j/gTGQUL
+          f5zOiPhoC2zTvWbnkCNGlqXDQTnPUop1+6gILI2rgFNozoTU9MeVaEXTuLsCQQDC
+          AGuNpReYucwVGYet+LuITyjs/krp3qfPhhByhtndk4cBA5H0i4ACodKyC6Zl7Tmf
+          oYaZoYWi6DzbQQUaIsKxAkEA2rXQjQFsfnSm+w/9067ChWg46p4lq5Na2NpcpFgH
+          waZKhM1W0oB8MX78M+0fG3xGUtywTx0D4N7pr1Tk2GTgNw==
+          -----END RSA PRIVATE KEY-----
+  uaa.jwt.signing_key:
+    description: "Deprecated. Use uaa.jwt.policy.keys. The key used to sign the JWT-based OAuth2 tokens"
+  uaa.jwt.verification_key:
+    description: "Deprecated. Use uaa.jwt.policy.keys. The key used to verify JWT-based OAuth2 tokens"
+  uaa.jwt.claims.exclude:
+    description: "List of claims to exclude from the JWT-based OAuth2 tokens"
+    example:
+     - authorities
+  uaa.jwt.refresh.restrict_grant:
+    description: "Disallows refresh-token grant for any client for which the user has not approved the `uaa.offline_token` scope"
+    default: false
+
+  # Global security policies (for all zones)
+  uaa.authentication.policy.global.lockoutAfterFailures:
+    description: "Number of allowed failures before account is locked"
+    default: 5
+  uaa.authentication.policy.global.countFailuresWithinSeconds:
+    description: "Number of seconds in which lockoutAfterFailures failures must occur in order for account to be locked"
+    default: 3600
+  uaa.authentication.policy.global.lockoutPeriodSeconds:
+    description: "Number of seconds to lock out an account when lockoutAfterFailures failures is exceeded"
+    default: 300
+  uaa.password.policy.global.minLength:
+    description: "Minimum number of characters required for password to be considered valid"
+    default: 0
+  uaa.password.policy.global.maxLength:
+    description: "Maximum number of characters required for password to be considered valid"
+    default: 255
+  uaa.password.policy.global.requireUpperCaseCharacter:
+    description: "Minimum number of uppercase characters required for password to be considered valid"
+    default: 0
+  uaa.password.policy.global.requireLowerCaseCharacter:
+    description: "Minimum number of lowercase characters required for password to be considered valid"
+    default: 0
+  uaa.password.policy.global.requireDigit:
+    description: "Minimum number of digits required for password to be considered valid"
+    default: 0
+  uaa.password.policy.global.requireSpecialCharacter:
+    description: "Minimum number of special characters required for password to be considered valid"
+    default: 0
+  uaa.password.policy.global.expirePasswordInMonths:
+    description: "Number of months after which current password expires"
+    default: 0
+  uaa.jwt.policy.global.accessTokenValiditySeconds:
+    default: 43200
+    description: "The global access token validity for all zones if nothing is configured on the client"
+  uaa.jwt.policy.global.refreshTokenValiditySeconds:
+    default: 2592000
+    description: "The global refresh token validity for all zones if nothing is configured on the client"
+
+  # Scim properties
+  uaa.scim.user.override:
+    description: "If true override users defined in uaa.scim.users found in the database."
+    default: true
+  uaa.scim.userids_enabled:
+    description: "Enables the endpoint `/ids/Users` that allows consumers to translate user ids to name"
+    default: true
+  uaa.scim.users:
+    description: |
+      A list of users to be bootstrapped with authorities.
+      Each entry supports the following format:
+        Short OpenStruct:
+          - name: username
+            password: password
+            groups:
+              - group1
+              - group2
+        Long OpenStruct:
+          - name: username
+            password: password
+            groups:
+              - group1
+              - group2
+            firstName: first name
+            lastName: lastName
+            email: email
+            origin: origin-value - most commonly uaa
+    example:
+      - name: marissa
+        password: koala
+        email: marissa@test.org
+        firstName: Marissa
+        lastName: Bloggs
+        groups:
+          - group_name
+        origin: uaa
+  uaa.scim.external_groups:
+    description: |
+      External group mappings. Either formatted as an OpenStruct.
+      As an OpenStruct, the mapping additionally specifies an origin to which the mapping is applied:
+        origin1:
+          external_group1:
+            - internal_group1
+            - internal_group2
+            - internal_group3
+          external_group2:
+            - internal_group2
+            - internal_group4
+        origin2:
+          external_group3:
+            - internal_group3
+            - internal_group4
+            - internal_group5
+  uaa.scim.groups:
+    description: |
+      Contains a hash of group names and their descriptions. These groups will be added to the UAA database for the default zone but not associated with any user.
+      Example:
+        uaa:
+          scim:
+            groups:
+              my-test-group: 'My test group description'
+              another-group: 'Another group description'
+
+  # Database
+  uaadb.address:
+    description: "The UAA database IP address"
+  uaadb.databases:
+    description: "The list of databases used in UAA database including tag/name"
+  uaadb.db_scheme:
+    description: "Database scheme for UAA DB"
+  uaadb.port:
+    description: "The UAA database Port"
+  uaadb.roles:
+    description: "The list of database Roles used in UAA database including tag/name/password"
+  uaa.database.max_connections:
+    description: "The max number of open connections to the DB from a running UAA instance"
+    default: 100
+  uaa.database.max_idle_connections:
+    description: "The max number of open idle connections to the DB from a running UAA instance"
+    default: 10
+  uaa.database.min_idle_connections:
+    description: "The min number of open idle connections to the DB from a running UAA instance"
+    default: 0
+  uaa.database.remove_abandoned:
+    description: "True if connections that are left open longer then abandoned_timeout seconds during a session(time between borrow and return from pool) should be forcibly closed"
+    default: false
+  uaa.database.abandoned_timeout:
+    description: "Timeout in seconds for the longest running queries. Take into DB migrations for this timeout as they may run during a long period of time."
+    default: 300
+  uaa.database.log_abandoned:
+    description: "Should connections that are forcibly closed be logged."
+    default: true
+  uaa.database.case_insensitive:
+    description: "Set to true if you don't want to be using LOWER() SQL functions in search queries/filters, because you know that your DB is case insensitive. If this property is null, then it will be set to true if the UAA DB is MySQL and false otherwise, but even on MySQL you can override it by setting it explicitly to false"
+
+  # LDAP
+  uaa.ldap.enabled:
+    description: "Set to true to enable LDAP"
+    default: false
+  uaa.ldap.profile_type:
+    description: "The file to be used for configuring the LDAP authentication. Options are: 'simple-bind', 'search-and-bind', 'search-and-compare'"
+    default: search-and-bind
+  uaa.ldap.url:
+    description: "The URL to the ldap server, must start with ldap:// or ldaps://. Allows multiple servers to be specified, space separated"
+    example: ldap://localhost:389 ldaps://secure.host:636
+  uaa.ldap.userDNPattern:
+    description: "Used with simple-bind only. A semi-colon separated lists of DN patterns to construct a DN direct from the user ID without performing a search."
+  uaa.ldap.userDNPatternDelimiter:
+    description: "The delimiter character in between user DN patterns for simple-bind authentication"
+    default: ";"
+  uaa.ldap.userDN:
+    description: "Used with search-and-bind and search-and-compare. A valid LDAP ID that has read permissions to perform a search of the LDAP tree for user information. "
+  uaa.ldap.userPassword:
+    description: "Used with search-and-bind and search-and-compare. Password for the LDAP ID that performs a search of the LDAP tree for user information."
+  uaa.ldap.searchBase:
+    description: "Used with search-and-bind and search-and-compare. Define a base where the search starts at."
+    default: ""
+  uaa.ldap.searchFilter:
+    description: "Used with search-and-bind and search-and-compare. Search filter used. Takes one parameter, user ID defined as {0}"
+    default: "cn={0}"
+  uaa.ldap.passwordAttributeName:
+    description: "Used with search-and-compare only. The name of the password attribute in the LDAP directory"
+    default: "userPassword"
+  uaa.ldap.localPasswordCompare:
+    description: "Used with search-and-compare only. Set to true if passwords are retrieved by the search, and should be compared in the login server."
+    default: "true"
+  uaa.ldap.passwordEncoder:
+    description: "Used with search-and-compare only. The encoder used to properly encode user password to match the one in the LDAP directory."
+    default: "org.cloudfoundry.identity.uaa.ldap.DynamicPasswordComparator"
+  uaa.ldap.sslCertificate:
+    description: "Used with ldaps:// URLs. The certificate, if self signed, to be trusted by this connection."
+  uaa.ldap.sslCertificateAlias:
+    description: "Used with ldaps:// URLs. The certificate alias, to be trusted by this connection and stored in the keystore."
+  uaa.ldap.ssl.skipverification:
+    description: "Set to true, and LDAPS connection will not validate the server certificate."
+    default: false
+  uaa.ldap.ssl.tls:
+    description: "If using StartTLS, what mode to enable. Default is none, not enabled. Possible values are none, simple"
+    default: none
+  uaa.ldap.mailAttributeName:
+    description: "The name of the LDAP attribute that contains the users email address"
+    default: mail
+  uaa.ldap.mailSubstitute:
+    description: "Defines an email pattern containing a {0} to generate an email address for an LDAP user during authentication"
+    default: ''
+  uaa.ldap.mailSubstituteOverridesLdap:
+    description: "Set to true if you wish to override an LDAP user email address with a generated one"
+    default: false
+  uaa.ldap.referral:
+    description: |
+      Configures the UAA LDAP referral behavior. The following values are possible:
+      - follow -> Referrals are followed
+      - ignore -> Referrals are ignored and the partial result is returned
+      - throw  -> An error is thrown and the authentication is aborted
+      Reference: http://docs.oracle.com/javase/jndi/tutorial/ldap/referral/jndi.html
+    default: follow
+  uaa.ldap.groups.profile_type:
+    description: "What type of group integration should be used. Values are: 'no-groups', 'groups-as-scopes', 'groups-map-to-scopes'"
+    default: "no-groups"
+  uaa.ldap.groups.searchBase:
+    description: "Search start point for a user group membership search, and sequential nested searches.. You can set this value to 'memberOf' when using Active Directory and skip group search but use the calculated memberOf field on the user records. No nested search will be performed."
+    default: ""
+  uaa.ldap.groups.groupRoleAttribute:
+    description: "Used with groups-as-scopes, defines the attribute that holds the scope name(s)."
+    default: spring.security.ldap.dn
+  uaa.ldap.groups.groupSearchFilter:
+    description: "Search query filter to find the groups a user belongs to, or for a nested search, groups that a group belongs to"
+    default: "member={0}"
+  uaa.ldap.groups.searchSubtree:
+    description: "Boolean value, set to true to search below the search base"
+    default: "true"
+  uaa.ldap.groups.maxSearchDepth:
+    description: "Set to number of levels a nested group search should go. Set to 1 to disable nested groups (default)"
+    default: "1"
+  uaa.ldap.emailDomain:
+    description: "Sets the whitelist of emails domains that the LDAP identity provider handles"
+    example:
+      - whitelist-domain1.org
+      - whitelist-domain2.org
+  uaa.ldap.attributeMappings:
+    description: "Specifies how UAA user attributes map to LDAP attributes. given_name, family_name, and phone_number are UAA user attributes, while other attributes should be included using the prefix `user.attribute`"
+    example:
+      given_name: givenName
+      family_name: sn
+      phone_number: telephoneNumber
+      user.attribute.name-of-attribute-in-uaa-id-token: name-of-attribute-in-ldap-record
+      user.attribute.name-of-other-attribute-in-uaa-id-token: name-of-other-attribute-in-ldap-record
+  uaa.ldap.externalGroupsWhitelist:
+    description: "Whitelist of external groups from LDAP that get added as roles in the ID Token"
+    example:
+      - admin
+      - user
+  uaa.ldap.add_shadow_user_on_login:
+    description: "If set to false, only users pre-populated in the UAA user database will be allowed to authenticate via LDAP. If set to true, any user from LDAP will be allowed to authenticate and an internal user will be created if one does not yet exist."
+    default: true
+
+  # OpenID Connect/OAuth
+
+  login.oauth.providers:
+    description: "Contains a hash of OpenID Connect/Oauth Identity Providers, the key will be used as the origin key for that provider, followed by key/value pairs. Presence of the userInfoUrl will mark it as an OpenID provider instead of OAuth."
+    example:
+      my-oauth-provider:
+        type: oidc1.0
+        authUrl: <URL to the authorize endpoint of the provider>
+        tokenUrl: <URL to the token endpoint of the provider>
+        tokenKey: <Token verification key>
+        tokenKeyUrl: <URL for token verification. Will be used if tokenKey is not specified.>
+        issuer: <optional - if the issuer URL is different than tokenUrl URL>
+        scopes:
+          - openid
+          - <other scope>
+        linkText: My Oauth Provider
+        showLinkText: true
+        addShadowUserOnLogin: true
+        relyingPartyId: <OIDC Client ID>
+        relyingPartySecret: <OIDC Client secret>
+        skipSslValidation: false
+        attributeMappings:
+          given_name: <Attribute holding given name in the OIDC ID Token>
+          family_name: <Attribute holding family name in the OIDC ID Token>
+          user_name: <Attribute holding username in the OIDC ID Token>
+          external_groups:
+            - <attribute holding roles or group memberships in the OIDC id_token>
+            - <other attribute holding roles or group memberships in the OIDC id_token>
+          user:
+            attribute:
+              name-of-attribute-in-uaa-id-token: name-of-attribute-in-provider-token
+              name-of-other-attribute-in-uaa-id-token: name-of-other-attribute-in-provider-token
+
+  # Saml
+  login.saml.entityid:
+    description: |
+      This is used as the SAML Service Provider Entity ID. Each zone has a unique entity ID. Zones other than
+      the default zone will derive their entity ID from this setting by prefexing it with the subdomain.
+    example:
+  login.saml.entity_base_url:
+    description: |
+      The URL for which SAML identity providers will post assertions to.
+      If set it overrides the default.
+      This URL should NOT have the schema (http:// or https:// prefix in it) instead just the hostname.
+      The schema is derived by #{login.protocol} property.
+      The default value is #{uaa.url}.replaceFirst('uaa','login'), typically login.example.com
+      The UAA will display this link in the cf --sso call if there is a SAML provider enabled.
+  login.saml.serviceProviderKey:
+    description: "Private key for the service provider certificate."
+    example: |
+      -----BEGIN RSA PRIVATE KEY-----
+      MIICXgIBAAKBgQDfTLadf6QgJeS2XXImEHMsa+1O7MmIt44xaL77N2K+J/JGpfV3
+      AnkyB06wFZ02sBLB7hko42LIsVEOyTuUBird/3vlyHFKytG7UEt60Fl88SbAEfsU
+      JN1i1aSUlunPS/NCz+BKwwKFP9Ss3rNImE9Uc2LMvGy153LHFVW2zrjhTwIDAQAB
+      AoGBAJDh21LRcJITRBQ3CUs9PR1DYZPl+tUkE7RnPBMPWpf6ny3LnDp9dllJeHqz
+      a3ACSgleDSEEeCGzOt6XHnrqjYCKa42Z+Opnjx/OOpjyX1NAaswRtnb039jwv4gb
+      RlwT49Y17UAQpISOo7JFadCBoMG0ix8xr4ScY+zCSoG5v0BhAkEA8llNsiWBJF5r
+      LWQ6uimfdU2y1IPlkcGAvjekYDkdkHiRie725Dn4qRiXyABeaqNm2bpnD620Okwr
+      sf7LY+BMdwJBAOvgt/ZGwJrMOe/cHhbujtjBK/1CumJ4n2r5V1zPBFfLNXiKnpJ6
+      J/sRwmjgg4u3Anu1ENF3YsxYabflBnvOP+kCQCQ8VBCp6OhOMcpErT8+j/gTGQUL
+      f5zOiPhoC2zTvWbnkCNGlqXDQTnPUop1+6gILI2rgFNozoTU9MeVaEXTuLsCQQDC
+      AGuNpReYucwVGYet+LuITyjs/krp3qfPhhByhtndk4cBA5H0i4ACodKyC6Zl7Tmf
+      oYaZoYWi6DzbQQUaIsKxAkEA2rXQjQFsfnSm+w/9067ChWg46p4lq5Na2NpcpFgH
+      waZKhM1W0oB8MX78M+0fG3xGUtywTx0D4N7pr1Tk2GTgNw==
+      -----END RSA PRIVATE KEY-----
+  login.saml.serviceProviderKeyPassword:
+    description: "Password to protect the service provider private key."
+    example: ""
+  login.saml.serviceProviderCertificate:
+    description: "Service provider certificate."
+    example: |
+      -----BEGIN CERTIFICATE-----
+      MIIEJTCCA46gAwIBAgIJANIqfxWTfhpkMA0GCSqGSIb3DQEBBQUAMIG+MQswCQYD
+      VQQGEwJVUzETMBEGA1UECBMKQ2FsaWZvcm5pYTEWMBQGA1UEBxMNU2FuIEZyYW5j
+      aXNjbzEdMBsGA1UEChMUUGl2b3RhbCBTb2Z0d2FyZSBJbmMxJDAiBgNVBAsTG0Ns
+      b3VkIEZvdW5kcnkgSWRlbnRpdHkgVGVhbTEcMBoGA1UEAxMTaWRlbnRpdHkuY2Yt
+      YXBwLmNvbTEfMB0GCSqGSIb3DQEJARYQbWFyaXNzYUB0ZXN0Lm9yZzAeFw0xNTA1
+      MTQxNzE5MTBaFw0yNTA1MTExNzE5MTBaMIG+MQswCQYDVQQGEwJVUzETMBEGA1UE
+      CBMKQ2FsaWZvcm5pYTEWMBQGA1UEBxMNU2FuIEZyYW5jaXNjbzEdMBsGA1UEChMU
+      UGl2b3RhbCBTb2Z0d2FyZSBJbmMxJDAiBgNVBAsTG0Nsb3VkIEZvdW5kcnkgSWRl
+      bnRpdHkgVGVhbTEcMBoGA1UEAxMTaWRlbnRpdHkuY2YtYXBwLmNvbTEfMB0GCSqG
+      SIb3DQEJARYQbWFyaXNzYUB0ZXN0Lm9yZzCBnzANBgkqhkiG9w0BAQEFAAOBjQAw
+      gYkCgYEA30y2nX+kICXktl1yJhBzLGvtTuzJiLeOMWi++zdivifyRqX1dwJ5MgdO
+      sBWdNrASwe4ZKONiyLFRDsk7lAYq3f975chxSsrRu1BLetBZfPEmwBH7FCTdYtWk
+      lJbpz0vzQs/gSsMChT/UrN6zSJhPVHNizLxstedyxxVVts644U8CAwEAAaOCAScw
+      ggEjMB0GA1UdDgQWBBSvWY/TyHysYGxKvII95wD/CzE1AzCB8wYDVR0jBIHrMIHo
+      gBSvWY/TyHysYGxKvII95wD/CzE1A6GBxKSBwTCBvjELMAkGA1UEBhMCVVMxEzAR
+      BgNVBAgTCkNhbGlmb3JuaWExFjAUBgNVBAcTDVNhbiBGcmFuY2lzY28xHTAbBgNV
+      BAoTFFBpdm90YWwgU29mdHdhcmUgSW5jMSQwIgYDVQQLExtDbG91ZCBGb3VuZHJ5
+      IElkZW50aXR5IFRlYW0xHDAaBgNVBAMTE2lkZW50aXR5LmNmLWFwcC5jb20xHzAd
+      BgkqhkiG9w0BCQEWEG1hcmlzc2FAdGVzdC5vcmeCCQDSKn8Vk34aZDAMBgNVHRME
+      BTADAQH/MA0GCSqGSIb3DQEBBQUAA4GBAL5j1JCN5EoXMOOBSBUL8KeVZFQD3Nfy
+      YkYKBatFEKdBFlAKLBdG+5KzE7sTYesn7EzBISHXFz3DhdK2tg+IF1DeSFVmFl2n
+      iVxQ1sYjo4kCugHBsWo+MpFH9VBLFzsMlP3eIDuVKe8aPXFKYCGhctZEJdQTKlja
+      lshe50nayKrT
+      -----END CERTIFICATE----
+  login.saml.providers:
+    description: "Contains a hash of SAML Identity Providers, the key is the IDP Alias, followed by key/value pairs. To learn more about how to setup a saml identity provider go to https://simplesamlphp.org"
+    example:
+      my-identity-provider:
+        metadataTrustCheck: false
+        idpMetadata: http://my.identityprovider.com/saml2/idp/metadata.php
+        nameID: urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress
+        assertionConsumerIndex: 0
+        signMetaData: false
+        signRequest: false
+        iconUrl: https://my.identityprovider.com/icon.png
+        showSamlLoginLink: true
+        linkText: Log in with My Saml Identity Provider
+        groupMappingMode: AS_SCOPES
+        skipSslValidation: false
+  login.saml.socket.connectionManagerTimeout:
+    description: "Timeout in milliseconds for connection pooling for SAML metadata HTTP requests"
+    default: 10000
+  login.saml.socket.soTimeout:
+    description: "Read timeout in milliseconds for SAML metadata HTTP requests"
+    default: 10000
+  login.saml.signMetaData:
+    description: "Global property to sign Local/SP metadata"
+    default: true
+  login.saml.signRequest:
+    description: "Global property to sign Local/SP requests"
+    default: true
+  login.saml.wantAssertionSigned:
+    description: "Global property to request that external IDPs sign their SAML assertion before sending them to the UAA"
+    default: true
+  login.saml.signatureAlgorithm:
+    description: "Signature hashing algorithm for SAML. Can be SHA1, SHA256, or SHA512."
+    example: SHA256
+  login.url:
+    description: |
+      Set if you have an external login server.
+      The UAA uses this link on by its email service to create links
+      The UAA uses this as a base domain for internal hostnames so that subdomain can be detected
+      This defaults to the uaa.url property, and if not set, to login.<domain>
+    default: ~
+  uaa.servlet.session-cookie:
+    description: |
+      Optional configuration of the UAA session cookie.
+      Defaults are the following key value pairs:
+        secure: <(boolean)this value if set, otherwise require_https>
+        http-only: <(boolean) - default to true. set HttpOnly flag on cookie.
+        max-age: <(int) lifetime in seconds of cookie - default to 30 minutes)
+        name: <(String) name of cookie, default is JSESSIONID>
+        comment: <(String) optional comment in cookie>
+        path: <(String) path for cookie, default is />
+        domain: <(String) domain for cookie, default is incoming request domain>
+    default: ~

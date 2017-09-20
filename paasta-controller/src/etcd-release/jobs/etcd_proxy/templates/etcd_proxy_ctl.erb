@@ -1,0 +1,60 @@
+#!/bin/bash -exu
+
+SCRIPT_NAME=$(basename ${0})
+RUN_DIR=/var/vcap/sys/run/etcd_proxy
+PIDFILE=${RUN_DIR}/etcd_proxy.pid
+WORK_DIR=/var/vcap/store/etcd_proxy
+LOG_DIR=/var/vcap/sys/log/etcd_proxy
+ETCD_COMMON_DIR=/var/vcap/packages/etcd-common
+CERTS_DIR=/var/vcap/jobs/etcd_proxy/certs
+
+function setup() {
+  set +xu
+  source "${ETCD_COMMON_DIR}/utils.sh"
+  set -xu
+
+  mkdir -p ${RUN_DIR}
+
+  exec > >(tee -a >(logger -p user.info -t vcap.${SCRIPT_NAME}.stdout) | awk -W interactive '{ system("echo -n [$(date +\"%Y-%m-%d %H:%M:%S%z\")]"); print " " $0 }' >> ${LOG_DIR}/${SCRIPT_NAME}.log)
+  exec 2> >(tee -a >(logger -p user.error -t vcap.${SCRIPT_NAME}.stderr) | awk -W interactive '{ system("echo -n [$(date +\"%Y-%m-%d %H:%M:%S%z\")]"); print " " $0 }' >> ${LOG_DIR}/${SCRIPT_NAME}.err.log)
+}
+
+function create_cert_files() {
+  echo -n '<%= p("etcd_proxy.etcd.ca_cert") %>' > "${CERTS_DIR}/ca.crt"
+  echo -n '<%= p("etcd_proxy.etcd.client_cert") %>' > "${CERTS_DIR}/client.crt"
+  echo -n '<%= p("etcd_proxy.etcd.client_key") %>' > "${CERTS_DIR}/client.key"
+}
+
+function start_etcd_proxy() {
+  create_cert_files
+
+  /var/vcap/packages/etcd_proxy/bin/etcd-proxy \
+  -etcd-dns-suffix=<%= p("etcd_proxy.etcd.dns_suffix") %> \
+  -etcd-port=<%= p("etcd_proxy.etcd.port") %> \
+  -port=<%= p("etcd_proxy.port") %> \
+  -ip=<%= p("etcd_proxy.ip") %> \
+  -cacert=${CERTS_DIR}/ca.crt \
+  -cert=${CERTS_DIR}/client.crt \
+  -key=${CERTS_DIR}/client.key \
+  1> >(tee -a ${LOG_DIR}/etcd_proxy.stdout.log | logger -p user.info -t vcap.etcd_proxy) \
+  2> >(tee -a ${LOG_DIR}/etcd_proxy.stderr.log | logger -p user.error -t vcap.etcd_proxy) &
+
+  echo ${!} > "${PIDFILE}"
+}
+
+setup
+
+case ${1} in
+  start)
+  pid_guard ${PIDFILE} "etcd_proxy"
+  start_etcd_proxy
+  ;;
+
+  stop)
+  kill_and_wait ${PIDFILE}
+  ;;
+
+  *)
+  echo "Usage: ctl {start|stop}"
+  ;;
+esac

@@ -1,0 +1,24 @@
+#!/bin/bash -exu
+
+function main() {
+  local root
+  root="${1}"
+
+  curl -L https://github.com/coreos/etcd/releases/download/v2.1.1/etcd-v2.1.1-linux-amd64.tar.gz | tar zxf - -C /tmp
+  curl -L https://github.com/nats-io/gnatsd/releases/download/v0.6.0/gnatsd-v0.6.0-linux-amd64.tar.gz | tar zxf - -C /tmp
+
+  mkdir -p "${GOPATH}/src/github.com/cloudfoundry-incubator"
+  pushd "${GOPATH}/src/github.com/cloudfoundry-incubator" > /dev/null
+    ln -s "${root}etcd-metrics-server"
+
+    pushd ./etcd-metrics-server > /dev/null
+      cp /tmp/etcd-v2.1.1-linux-amd64/etcd /usr/local/bin
+      cp /tmp/gnatsd /usr/local/bin
+
+      ginkgo -r -race -randomizeAllSpecs -randomizeSuites
+    popd > /dev/null
+
+  popd > /dev/null
+}
+
+main "${PWD}"

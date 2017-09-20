@@ -1,0 +1,25 @@
+{
+    "responses_metrics": {
+        "status_2xx": 1,
+        "status_3xx": 0,
+        "status_4xx": 0,
+        "status_5xx": 0,
+        "status_xxx": 0
+    },
+    "type": "MarketplaceGateway",
+    "index": 0,
+    "uuid": "0-b5c8a039c8a368bb64ad75cd857330bb",
+    "host": "10.10.33.0:32839",
+    "credentials": [
+        "CREDENTIAL_0",
+        "CREDENTIAL_1"
+    ],
+    "start": "2013-11-08 18:06:31 +0000",
+    "num_cores": 1,
+    "uptime": "0d:0h:0m:45s",
+    "mem": 61296,
+    "cpu": 13.7,
+    "mem_used_bytes": 271937536,
+    "mem_free_bytes": 1465544704,
+    "cpu_load_avg": 0.04
+}

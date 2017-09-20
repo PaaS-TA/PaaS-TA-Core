@@ -1,0 +1,33 @@
+---
+name: etcd_testconsumer
+templates:
+  etcd_testconsumer_ctl.sh.erb: bin/etcd_testconsumer_ctl
+  pre-start.erb: bin/pre-start
+
+packages:
+  - testconsumer
+  - etcd-dns-checker
+
+properties:
+  etcd_testconsumer.etcd.require_ssl:
+    description: "enable ssl for all communication with etcd"
+    default: false
+
+  etcd_testconsumer.etcd.machines:
+    description: "Addresses of etcd machines"
+
+  etcd_testconsumer.etcd.ca_cert:
+    description: "PEM-encoded CA certificate"
+    default: ""
+
+  etcd_testconsumer.etcd.client_cert:
+    description: "PEM-encoded client certificate"
+    default: ""
+
+  etcd_testconsumer.etcd.client_key:
+    description: "PEM-encoded client key"
+    default: ""
+
+  etcd_testconsumer.etcd.dns_health_check_host:
+    description: "Host to ping for confirmation of DNS resolution"
+    default: "consul.service.cf.internal"

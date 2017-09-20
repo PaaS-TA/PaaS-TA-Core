@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+set -ex
+
+function check_base_url_protocol {
+   echo <%= domain = p("capi.nsync.cc.base_url") %>
+
+  <% if domain.match(/^http(s?):\/\/(.*)/).nil? %>
+    echo "Invalid configuration. The 'capi.nsync.cc.base_url' is currently set to <%= domain %>. It must contain proper protocol, either https:// or http://"
+    exit 1
+  <% end %>
+}
+
+function main {
+  check_base_url_protocol
+}
+
+main
+exit 0

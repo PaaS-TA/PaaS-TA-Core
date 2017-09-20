@@ -1,0 +1,10 @@
+set -e
+
+export GOROOT=$(readlink -nf /var/vcap/packages/golang1.7)
+export GOPATH=$BOSH_INSTALL_TARGET
+export PATH=$GOROOT/bin:$PATH
+
+mkdir -p $GOPATH/src/github.com/nats-io/
+mv github.com/nats-io/gnatsd/ $GOPATH/src/github.com/nats-io/gnatsd
+
+go install github.com/nats-io/gnatsd

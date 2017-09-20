@@ -1,0 +1,57 @@
+#!/bin/bash -exu
+
+SCRIPT_NAME=$(basename $0)
+RUN_DIR=/var/vcap/sys/run/consul_agent
+LOG_DIR=/var/vcap/sys/log/consul_agent
+JOB_DIR=/var/vcap/jobs/consul_agent
+CONFAB_PACKAGE=/var/vcap/packages/confab
+
+exec > >(tee -a >(logger -p user.info -t vcap.${SCRIPT_NAME}.stdout) | sed -e "s/^/[`date +\"%Y-%m-%d %H:%M:%S%z\"`] /" >> $LOG_DIR/${SCRIPT_NAME}.log)
+exec 2> >(tee -a >(logger -p user.error -t vcap.${SCRIPT_NAME}.stderr) |  sed -e "s/^/[`date +\"%Y-%m-%d %H:%M:%S%z\"`] /" >> $LOG_DIR/${SCRIPT_NAME}.err.log)
+
+function start_confab() {
+  local nameservers
+  nameservers=("$(cat /etc/resolv.conf | grep nameserver | awk '{print $2}' | grep -Ev '127.0.0.1\b')")
+
+  local recursors
+  recursors=""
+
+  for nameserver in ${nameservers[@]}; do
+    recursors="${recursors} -recursor=${nameserver}"
+  done
+
+  "${CONFAB_PACKAGE}/bin/confab" \
+    start \
+    ${recursors} \
+    --config-file "${JOB_DIR}/confab.json" \
+    1> >(tee -a ${LOG_DIR}/consul_agent.stdout.log | logger -p user.info -t vcap.consul-agent) \
+    2> >(tee -a ${LOG_DIR}/consul_agent.stderr.log | logger -p user.error -t vcap.consul-agent)
+}
+
+function stop_confab() {
+  "${CONFAB_PACKAGE}/bin/confab" \
+    stop \
+    --config-file "${JOB_DIR}/confab.json" \
+    1> >(tee -a ${LOG_DIR}/consul_agent.stdout.log | logger -p user.info -t vcap.consul-agent) \
+    2> >(tee -a ${LOG_DIR}/consul_agent.stderr.log | logger -p user.error -t vcap.consul-agent)
+}
+
+function main() {
+  mkdir -p "${RUN_DIR}"
+
+  case ${1} in
+        start)
+          start_confab
+          ;;
+
+        stop)
+          stop_confab
+          ;;
+
+        *)
+    echo "Usage: ${0} {start|stop}"
+          ;;
+  esac
+}
+
+main $@

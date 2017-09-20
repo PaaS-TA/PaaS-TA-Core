@@ -1,0 +1,10 @@
+#!/bin/bash -exu
+
+ROOT="${PWD}"
+
+mkdir -p "${GOPATH}/src/github.com/pivotal-cf-experimental"
+
+pushd "${GOPATH}/src/github.com/pivotal-cf-experimental" > /dev/null
+  ln -s "${ROOT}/gomegamatchers"
+  ./gomegamatchers/scripts/test
+popd > /dev/null

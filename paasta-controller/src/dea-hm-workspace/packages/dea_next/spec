@@ -1,0 +1,13 @@
+---
+name: dea_next
+dependencies:
+- ruby-2.3
+- golang1.7
+files:
+- dea_next/Gemfile
+- dea_next/Gemfile.lock
+- dea_next/LICENSE
+- dea_next/NOTICE
+- dea_next/{bin,lib,vendor}/**/*
+- dea_next/go/{bin,src,vendor}/**/*
+- dea_next/buildpacks/{bin,lib}/**/*

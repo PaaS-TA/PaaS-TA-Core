@@ -1,0 +1,9 @@
+---
+etcd/etcd-v2.1.1-linux-amd64.tar.gz:
+  object_id: 7c506af5-8fee-4981-beac-8da611a4c7db
+  sha: d90a29e051f8dea2f5bb4200610ccbcec45497d7
+  size: 5608238
+golang/go1.7.3.linux-amd64.tar.gz:
+  object_id: 3058ecf7-e728-427d-83b9-e568ab533b34
+  sha: ead40e884ad4d6512bcf7b3c7420dd7fa4a96140
+  size: 82565628

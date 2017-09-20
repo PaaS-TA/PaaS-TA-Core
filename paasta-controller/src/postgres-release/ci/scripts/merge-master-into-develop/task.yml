@@ -1,0 +1,19 @@
+---
+platform: linux
+
+image: docker:///cfinfrastructure/minimal
+
+inputs:
+  - name: postgres-release
+  - name: release-repo
+  - name: release-repo-master
+
+outputs:
+  - name: final-release-repo
+
+run:
+  path: postgres-release/ci/scripts/merge-master-into-develop/task.sh
+
+params:
+  MASTER_BRANCH:
+  MERGED_REPO: final-release-repo

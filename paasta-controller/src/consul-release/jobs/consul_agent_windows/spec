@@ -1,0 +1,64 @@
+---
+name: consul_agent_windows
+templates:
+  agent.crt.erb: config/certs/agent.crt
+  agent.key.erb: config/certs/agent.key
+  ca.crt.erb: config/certs/ca.crt
+  confab.json.erb: confab.json
+  pre-start.ps1.erb: bin/pre-start.ps1
+
+packages:
+- consul-windows
+- confab-windows
+
+properties:
+  consul.agent.servers.lan:
+    description: "LAN server addresses to join on start."
+    default: []
+
+  consul.agent.servers.wan:
+    description: "WAN server addresses to join."
+    default: []
+
+  consul.agent.log_level:
+    description: "Agent log level."
+    default: info
+
+  consul.agent.datacenter:
+    description: "Name of the agent's datacenter."
+    default: dc1
+
+  consul.agent.services:
+    description: "Map of consul service definitions."
+    default: {}
+
+  consul.agent.protocol_version:
+    description: "The Consul protocol to use."
+    default: 2
+
+  consul.agent.dns_config.allow_stale:
+    description: "Enables a stale query for DNS information. This allows any Consul server, rather than only the leader, to service the request."
+    default: false
+
+  consul.agent.dns_config.max_stale:
+    description: "When allow_stale is specified, this is used to limit how stale results are allowed to be."
+    default: "5s"
+
+  consul.agent.domain:
+    description: "Domain suffix for DNS"
+
+  consul.rewrite_resolv:
+    description: "When set to true this property will rewrite the resolv.conf file and add 127.0.0.1 as the first entry"
+    default: true
+
+  consul.ca_cert:
+    description: "PEM-encoded CA certificate"
+
+  consul.agent_cert:
+    description: "PEM-encoded agent certificate"
+
+  consul.agent_key:
+    description: "PEM-encoded client key"
+
+  consul.encrypt_keys:
+    description: "A list of passphrases that will be converted into encryption keys, the first key in the list is the active one"

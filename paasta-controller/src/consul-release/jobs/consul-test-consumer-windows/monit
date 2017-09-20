@@ -1,0 +1,13 @@
+{
+  "processes": [
+    {
+      "name": "consul-test-consumer",
+      "executable": "C:\\var\\vcap\\packages\\acceptance-tests-windows\\bin\\testconsumer.exe",
+      "args": [
+        "--port", "6769",
+        "--consul-url", "http://127.0.0.1:8500",
+        "--path-to-check-a-record", "C:\\var\\vcap\\packages\\acceptance-tests-windows\\bin\\check-a-record.exe"
+      ]
+    }
+  ]
+}

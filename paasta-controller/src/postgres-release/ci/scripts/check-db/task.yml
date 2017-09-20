@@ -1,0 +1,15 @@
+---
+platform: linux
+
+image: docker:///cfinfrastructure/deployment
+
+inputs:
+- name: postgres-release
+
+run:
+  path: postgres-release/ci/scripts/check-db/task.sh
+
+params:
+  CF_DEPLOYMENT:
+  API_USER:
+  API_PASSWORD:

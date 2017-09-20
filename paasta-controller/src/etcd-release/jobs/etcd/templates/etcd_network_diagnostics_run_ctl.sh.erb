@@ -1,0 +1,31 @@
+#!/bin/bash -exu
+
+RUN_DIR=/var/vcap/sys/run/etcd
+PIDFILE=${RUN_DIR}/etcd-network-diagnostics.pid
+LOG_DIR=/var/vcap/sys/log/etcd
+
+function main() {
+  case ${1} in
+    start)
+        /var/vcap/jobs/etcd/bin/etcd_network_diagnostics_run.sh \
+          2> >(tee -a ${LOG_DIR}/etcd-network-diagnostics.stderr.log | logger -p user.error -t vcap.etcd-network-diagnostics) \
+          1> >(tee -a ${LOG_DIR}/etcd-network-diagnostics.stdout.log | logger -p user.info  -t vcap.etcd-network-diagnostics) &
+
+        echo "${!}" > "${PIDFILE}"
+    ;;
+
+    stop)
+        local pid
+        pid="$(cat "${PIDFILE}")"
+
+        kill -9 "${pid}"
+        rm "${PIDFILE}"
+    ;;
+
+    *)
+    echo "Usage: ctl {start|stop}"
+    ;;
+  esac
+}
+
+main ${@}

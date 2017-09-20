@@ -1,0 +1,18 @@
+#!/bin/bash -xu
+
+LOG_DIR=/var/vcap/sys/log/consul_agent
+JOB_DIR=/var/vcap/jobs/consul_agent
+
+exec 3>&1
+
+mkdir -p "${LOG_DIR}"
+
+exec 1>> ${LOG_DIR}/drain.log
+exec 2>> ${LOG_DIR}/drain.log
+
+<% if p("consul.agent.mode") == "server" %>
+${JOB_DIR}/bin/agent_ctl stop
+<% end %>
+
+echo 0 >&3
+exit 0

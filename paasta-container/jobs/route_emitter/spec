@@ -1,0 +1,54 @@
+---
+name: route_emitter
+
+templates:
+  route_emitter_ctl.erb: bin/route_emitter_ctl
+  route_emitter_as_vcap.erb: bin/route_emitter_as_vcap
+  bbs_ca.crt.erb: config/certs/bbs/ca.crt
+  bbs_client.crt.erb: config/certs/bbs/client.crt
+  bbs_client.key.erb: config/certs/bbs/client.key
+
+packages:
+  - pid_utils
+  - route_emitter
+
+properties:
+  diego.route_emitter.nats.user:
+    description: "Username for server authentication."
+  diego.route_emitter.nats.password:
+    description: "Password for server authentication."
+  diego.route_emitter.nats.port:
+    description: "The port for the NATS server to listen on."
+    default: 4222
+  diego.route_emitter.nats.machines:
+    description: "IP of each NATS cluster member."
+
+  diego.route_emitter.debug_addr:
+    description: "address at which to serve debug info"
+    default: "127.0.0.1:17009"
+  diego.route_emitter.sync_interval_in_seconds:
+    description: "Interval to sync routes to the router in seconds."
+    default: 60
+  diego.route_emitter.log_level:
+    description: "Log level"
+    default: "info"
+  diego.route_emitter.dropsonde_port:
+    description: "local metron agent's port"
+    default: 3457
+
+  diego.route_emitter.bbs.api_location:
+    description: "Address to the BBS Server"
+    default: "bbs.service.cf.internal:8889"
+  diego.route_emitter.bbs.ca_cert:
+    description: "PEM-encoded CA certificate"
+  diego.route_emitter.bbs.client_cert:
+    description: "PEM-encoded client certificate"
+  diego.route_emitter.bbs.client_key:
+    description: "PEM-encoded client key"
+  diego.route_emitter.bbs.require_ssl:
+    description: "enable ssl for all communication with the bbs"
+    default: true
+  diego.route_emitter.bbs.client_session_cache_size:
+    description: "capacity of the tls client cache"
+  diego.route_emitter.bbs.max_idle_conns_per_host:
+    description: "maximum number of idle http connections"

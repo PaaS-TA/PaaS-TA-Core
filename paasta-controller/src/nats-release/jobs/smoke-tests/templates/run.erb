@@ -1,0 +1,9 @@
+#!/bin/bash
+
+export BUNDLE_GEMFILE=/var/vcap/packages/nats/nats/Gemfile
+export CONFIG=/var/vcap/jobs/smoke-tests/bin/config.json
+
+PATH=/var/vcap/packages/ruby-2.2.5/bin:$PATH
+
+exec chpst -u vcap:vcap \
+  bundle exec /var/vcap/jobs/smoke-tests/bin/smoke-tests.rb $CONFIG

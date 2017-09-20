@@ -1,0 +1,11 @@
+---
+name: iptables_agent
+templates:
+  iptables_agent_ctl.erb: bin/iptables_agent_ctl
+  pre-start.erb: bin/pre-start
+
+packages:
+  - iptables-agent
+
+properties: {}
+

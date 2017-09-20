@@ -1,0 +1,70 @@
+---
+name: blobstore
+
+templates:
+  nginx_ctl.erb:            bin/nginx_ctl
+  dns_health_check.erb: bin/dns_health_check
+  signer_ctl.sh.erb:    bin/signer_ctl
+  nginx.conf.erb:       config/nginx.conf
+  blobstore.conf.erb:   config/sites/blobstore.conf
+  mime.types:           config/mime.types
+  write_users.erb:      config/write_users
+  blobstore.crt.erb:    ssl/blobstore.crt
+  blobstore.key.erb:    ssl/blobstore.key
+  pre-start.sh.erb:     bin/pre-start
+
+packages:
+- nginx_webdav
+- blobstore_url_signer
+- capi_utils
+
+properties:
+  blobstore.internal_access_rules:
+    description: >-
+      List of allow / deny rules for the blobstore internal server. Defaults
+      to RFC 1918 Private Networks. Will be followed by 'deny all'. See
+      http://nginx.org/en/docs/http/ngx_http_access_module.html for valid rules
+    default:
+      - "allow 10.0.0.0/8;"
+      - "allow 172.16.0.0/12;"
+      - "allow 192.168.0.0/16;"
+
+  blobstore.port:
+    description: TCP port on which the blobstore server (nginx) listens
+    default: 8080
+  blobstore.tls.port:
+    description: The TCP port on which the internal blobstore server listens
+    default: 4443
+
+  blobstore.tls.cert:
+    description: The PEM-encoded certificate (optionally as a certificate chain) for serving blobs over TLS/SSL
+
+  blobstore.tls.private_key:
+    description: The PEM-encoded private key for signing TLS/SSL traffic
+
+  blobstore.admin_users:
+    description: |
+     List of Username and Password pairs that have admin access to the blobstore. Cloud Controller must use one of these to access the blobstore via HTTP Basic Auth.
+     Example:
+       users:
+       - username: user1
+         password: password1
+       - username: user2
+         password: password2
+
+  blobstore.secure_link.secret:
+    description: "The secret used for signing URLs"
+
+  blobstore.max_upload_size:
+    description: "Max allowed file size for upload"
+    default: "5000m"
+
+  blobstore.nginx_workers_per_core:
+    description: "Number of NGINX worker processes per CPU core"
+    default: 2
+
+  system_domain:
+    description: "The system domain.  The public server will listen on host 'blobstore.system-domain.tld'"
+
+  domain:
+    description: "DEPRECATED: The system domain.  The public server will listen on host 'blobstore.system-domain.tld'"

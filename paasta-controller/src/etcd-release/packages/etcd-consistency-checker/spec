@@ -1,0 +1,8 @@
+---
+name: etcd-consistency-checker
+
+dependencies:
+  - golang1.7
+
+files:
+  - etcd-consistency-checker/**/*.go

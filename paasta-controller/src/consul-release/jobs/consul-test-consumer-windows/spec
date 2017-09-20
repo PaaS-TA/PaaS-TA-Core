@@ -1,0 +1,13 @@
+---
+name: consul-test-consumer-windows
+templates:
+  pre-start.ps1.erb: bin/pre-start.ps1
+  dns_health_check.ps1: bin/dns_health_check.ps1
+
+packages:
+  - acceptance-tests-windows
+
+properties:
+  consul-test-consumer.nameserver:
+    description: "Nameserver to use to mock out responses/response times"
+    default: ""

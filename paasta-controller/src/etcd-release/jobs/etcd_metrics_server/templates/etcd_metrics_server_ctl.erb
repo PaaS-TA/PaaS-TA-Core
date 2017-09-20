@@ -1,0 +1,62 @@
+#!/bin/bash -exu
+
+SCRIPT_NAME=$(basename ${0})
+RUN_DIR=/var/vcap/sys/run/etcd_metrics_server
+PIDFILE=${RUN_DIR}/etcd_metrics_server.pid
+WORK_DIR=/var/vcap/store/etcd_metrics_server
+LOG_DIR=/var/vcap/sys/log/etcd_metrics_server
+ETCD_COMMON_DIR=/var/vcap/packages/etcd-common
+CERTS_DIR=/var/vcap/jobs/etcd_metrics_server/certs
+
+function setup() {
+  set +xu
+  source "${ETCD_COMMON_DIR}/utils.sh"
+  set -xu
+
+  mkdir -p ${RUN_DIR}
+
+  exec > >(tee -a >(logger -p user.info -t vcap.${SCRIPT_NAME}.stdout) | awk -W interactive '{ system("echo -n [$(date +\"%Y-%m-%d %H:%M:%S%z\")]"); print " " $0 }' >> ${LOG_DIR}/${SCRIPT_NAME}.log)
+  exec 2> >(tee -a >(logger -p user.error -t vcap.${SCRIPT_NAME}.stderr) | awk -W interactive '{ system("echo -n [$(date +\"%Y-%m-%d %H:%M:%S%z\")]"); print " " $0 }' >> ${LOG_DIR}/${SCRIPT_NAME}.err.log)
+}
+
+function start_etcd_metrics_server() {
+  local node_name
+  node_name="<%= name.gsub('_', '-') %>-<%= spec.index %>"
+
+  /var/vcap/packages/etcd_metrics_server/bin/etcd-metrics-server \
+      -index=<%= spec.index %> \
+      -port=<%= p("etcd_metrics_server.status.port") %> \
+      -username='<%= p("etcd_metrics_server.status.username") %>' \
+      -password='<%= p("etcd_metrics_server.status.password") %>' \
+      <% if p("etcd_metrics_server.etcd.require_ssl") %> \
+      -etcdScheme="https" \
+      -cert="${CERTS_DIR}/client.crt" \
+      -key="${CERTS_DIR}/client.key" \
+      -caCert="${CERTS_DIR}/ca.crt" \
+      -etcdAddress="${node_name}.<%= p("etcd_metrics_server.etcd.dns_suffix") %>:<%= p("etcd_metrics_server.etcd.port") %>" \
+      <% else %> \
+      -etcdAddress=<%= p("etcd_metrics_server.etcd.machine") %>:<%= p("etcd_metrics_server.etcd.port") %> \
+      <% end %> \
+      1> >(tee -a ${LOG_DIR}/etcd_metrics_server.stdout.log | logger -p user.info -t vcap.etcd_metrics_server) \
+      2> >(tee -a ${LOG_DIR}/etcd_metrics_server.stderr.log | logger -p user.error -t vcap.etcd_metrics_server) &
+
+
+  echo ${!} > "${PIDFILE}"
+}
+
+setup
+
+case ${1} in
+  start)
+    pid_guard ${PIDFILE} "etcd_metrics_server"
+    start_etcd_metrics_server
+    ;;
+
+  stop)
+    kill_and_wait ${PIDFILE}
+    ;;
+
+  *)
+    echo "Usage: ctl {start|stop}"
+    ;;
+esac

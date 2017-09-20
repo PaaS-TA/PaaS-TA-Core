@@ -1,0 +1,8 @@
+---
+name: ruby-buildpack
+templates: {}
+
+packages:
+- ruby-buildpack
+
+properties: {}

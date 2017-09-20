@@ -1,0 +1,46 @@
+#!/bin/bash
+set -exu
+
+JOB_DIR=/var/vcap/jobs/nats
+RUN_DIR=/var/vcap/sys/run/nats
+LOG_DIR=/var/vcap/sys/log/nats
+PIDFILE=$RUN_DIR/nats.pid
+CONFIG_DIR=$JOB_DIR/config
+
+source /var/vcap/packages/nats-common/utils.sh
+redirect_logs $LOG_DIR nats_ctl
+
+case $1 in
+
+  start)
+    # Allowed number of open file descriptors
+    ulimit -n 100000
+
+    pid_guard $PIDFILE "NATS"
+
+    mkdir -p $RUN_DIR
+    chown -R vcap:vcap $RUN_DIR
+    echo $$ > $PIDFILE
+    chown vcap:vcap $PIDFILE
+
+    exec > >(chpst -u vcap:vcap sh -c "
+        tee -a ${LOG_DIR}/nats.log | \
+        sed 's/^[0-9][0-9][0-9][0-9]\/[0-9][0-9]\/[0-9][0-9] [0-9][0-9]:[0-9][0-9]:[0-9][0-9] //' | \
+          logger -p user.info -t vcap.nats
+      ") 2>&1
+
+    exec chpst -u vcap:vcap /var/vcap/packages/gnatsd/bin/gnatsd \
+      -c /var/vcap/jobs/nats/config/nats.conf
+    ;;
+
+  stop)
+    kill_and_wait $PIDFILE
+
+    ;;
+
+  *)
+    echo "Usage: nats_ctl {start|stop}"
+
+    ;;
+
+esac

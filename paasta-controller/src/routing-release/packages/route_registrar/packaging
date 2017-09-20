@@ -1,0 +1,15 @@
+set -e -x
+
+export GOROOT=$(readlink -nf /var/vcap/packages/golang1.6)
+export PATH=$GOROOT/bin:$PATH
+
+mkdir -p ${BOSH_INSTALL_TARGET}/src
+
+cp -a ./routing-release/src/* ${BOSH_INSTALL_TARGET}/src
+
+export GOPATH=${BOSH_INSTALL_TARGET}
+
+go install code.cloudfoundry.org/route-registrar
+
+# clean up source artifacts
+rm -rf ${BOSH_INSTALL_TARGET}/src ${BOSH_INSTALL_TARGET}/pkg

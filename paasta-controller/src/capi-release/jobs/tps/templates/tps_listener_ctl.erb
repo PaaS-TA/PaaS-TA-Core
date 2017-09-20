@@ -1,0 +1,51 @@
+#!/bin/bash -e
+
+RUN_DIR=/var/vcap/sys/run/tps
+LOG_DIR=/var/vcap/sys/log/tps
+DATA_DIR=/var/vcap/data/tps
+
+PIDFILE=$RUN_DIR/tps_listener.pid
+
+source /var/vcap/packages/capi_utils/pid_utils.sh
+
+case $1 in
+
+  start)
+    pid_guard $PIDFILE "tps_listener"
+
+    mkdir -p $RUN_DIR
+    chown -R vcap:vcap $RUN_DIR
+
+    mkdir -p $LOG_DIR
+    chown -R vcap:vcap $LOG_DIR
+
+    mkdir -p $DATA_DIR
+    chown -R vcap:vcap $DATA_DIR
+
+    depot=$DATA_DIR/depot
+
+    mkdir -p $DATA_DIR/depot
+
+    echo $$ > $PIDFILE
+
+    # Work around for GOLANG 1.5.3 DNS bug
+    export GODEBUG=netdns=cgo
+
+    # Allowed number of open file descriptors
+    ulimit -n 100000
+
+    exec chpst -u vcap:vcap /var/vcap/jobs/tps/bin/tps_listener_as_vcap
+
+    ;;
+
+  stop)
+    kill_and_wait $PIDFILE
+
+    ;;
+
+  *)
+    echo "Usage: $0 {start|stop}"
+
+    ;;
+
+esac

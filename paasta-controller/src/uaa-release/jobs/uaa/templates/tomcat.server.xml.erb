@@ -1,0 +1,77 @@
+<?xml version='1.0' encoding='utf-8'?>
+<Server port="-1">
+  <Listener className="org.apache.catalina.startup.VersionLoggerListener" />
+  <Listener className="org.apache.catalina.core.AprLifecycleListener" SSLEngine="on" />
+  <Listener className="org.apache.catalina.core.JreMemoryLeakPreventionListener" />
+  <Listener className="org.apache.catalina.mbeans.GlobalResourcesLifecycleListener" />
+  <Listener className="org.apache.catalina.core.ThreadLocalLeakPreventionListener" />
+
+  <Service name="Catalina">
+    <%
+    # Default private address proxy list
+    defaultInternalProxies = "10\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|169\.254\.\d{1,3}\.\d{1,3}|127\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.1[6-9]{1}\.\d{1,3}\.\d{1,3}|172\.2[0-9]{1}\.\d{1,3}\.\d{1,3}|172\.3[0-1]{1}\.\d{1,3}\.\d{1,3}"
+    # If we have proxy list set. Use it
+    internalProxies = p('uaa.proxy_ips_regex')
+    # Look up Router IPs
+    if_p('uaa.proxy.servers') do |proxyServers|
+      proxyServers.each do |ip|
+        regExIp = ip.gsub(".","\\.").gsub(":","\\:")
+        internalProxies = regExIp  + "|" + internalProxies
+      end
+    end
+    # If we don't have any proxies by now. Use the default list so we don't go blank
+    if internalProxies.to_s.strip.length == 0
+        internalProxies = defaultInternalProxies
+    end
+    %>
+
+    <% if p("uaa.port") != -1 %>
+    <Connector class="org.apache.coyote.http11.Http11NioProtocol"
+               protocol="HTTP/1.1"
+               connectionTimeout="20000"
+               port="<%= p('uaa.port') %>"
+               bindOnInit="false"
+    />
+    <% end %>
+
+    <% if p("uaa.ssl.port") != -1  %>
+    <Connector class="org.apache.coyote.http11.Http11NioProtocol" protocol="HTTP/1.1" connectionTimeout="20000"
+               scheme="https"
+               port="<%= p('uaa.ssl.port') %>"
+               SSLEnabled="true"
+               secure="true"
+               clientAuth="false"
+               sslProtocol="TLS"
+               keystoreFile="/var/vcap/data/uaa/uaa_keystore.p12"
+               keystoreType="PKCS12"
+               keyAlias="uaa_ssl_cert"
+               keystorePass="k0*l*s3cur1tyr0ck$"
+               bindOnInit="false"
+    />
+    <% end %>
+
+
+    <Connector protocol="org.apache.coyote.http11.Http11NioProtocol"
+               connectionTimeout="20000"
+               port="8989"
+               address="127.0.0.1"
+               bindOnInit="true"/>
+    <Engine name="Catalina" defaultHost="localhost">
+
+      <Host name="localhost"
+            appBase="webapps"
+            unpackWARs="true"
+            autoDeploy="false"
+            failCtxIfServletStartFails="true">
+        <Valve className="org.apache.catalina.valves.RemoteIpValve"
+               remoteIpHeader="x-forwarded-for"
+               protocolHeader="<%= p('uaa.ssl.protocol_header') %>"
+               internalProxies="<%= internalProxies %>"
+        />
+        <Valve className="org.apache.catalina.valves.AccessLogValve" directory="/var/vcap/sys/log/uaa"
+               prefix="localhost_access" suffix=".log" rotatable="false" pattern="%h %l %u %t &quot;%r&quot; %s %b"/>
+
+      </Host>
+    </Engine>
+  </Service>
+</Server>

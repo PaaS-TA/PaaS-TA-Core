@@ -1,0 +1,16 @@
+---
+platform: linux
+
+image: docker:///cfinfrastructure/deployment
+
+inputs:
+  - name: postgres-release
+
+run:
+  path: postgres-release/ci/scripts/test-with-diego/task.sh
+
+params:
+  BOSH_DIRECTOR:
+  BOSH_USER:
+  BOSH_PASSWORD:
+  DEPLOYMENT_NAME:

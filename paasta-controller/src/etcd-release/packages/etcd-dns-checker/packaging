@@ -1,0 +1,15 @@
+set -e
+
+mkdir -p /tmp/go
+export GOPATH=/tmp/go
+export GOROOT=$(readlink -nf /var/vcap/packages/golang1.7)
+
+mkdir -p ${GOPATH}/src/github.com/cloudfoundry-incubator
+mv etcd-dns-checker ${GOPATH}/src/github.com/cloudfoundry-incubator/check-a-record
+
+mkdir -p ${BOSH_INSTALL_TARGET}/bin
+
+export PATH=${GOROOT}/bin:$PATH
+
+go build -o ${BOSH_INSTALL_TARGET}/bin/check-a-record github.com/cloudfoundry-incubator/check-a-record
+chown vcap:vcap "${BOSH_INSTALL_TARGET}/bin/check-a-record"

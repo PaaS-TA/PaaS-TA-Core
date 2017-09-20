@@ -1,0 +1,32 @@
+---
+packages:
+- name: confab
+  version: 46aa912b5bfd1fadb3d2e10b11103996b3107f0f
+  fingerprint: 46aa912b5bfd1fadb3d2e10b11103996b3107f0f
+  sha1: bf75514f208fe4127f1d6429b0288194e1292150
+  dependencies:
+  - golang1.5
+- name: consul-common
+  version: ffab9ae7bea8a053aacca8816681e241b0fab30b
+  fingerprint: ffab9ae7bea8a053aacca8816681e241b0fab30b
+  sha1: 250008511c54b31a506e527d0c80636f4da00a83
+  dependencies: []
+- name: consul
+  version: 14b83378b30a2b55a25e641e835af3e5c87a0d41
+  fingerprint: 14b83378b30a2b55a25e641e835af3e5c87a0d41
+  sha1: a7763aa8a87f006bbd28620ae59f77e2888aaa29
+  dependencies: []
+- name: golang1.5
+  version: 3f071f0da836f7c0cb2090f33c09c3d2c6d2ec23
+  fingerprint: 3f071f0da836f7c0cb2090f33c09c3d2c6d2ec23
+  sha1: 512f901436e0992b3ce33aa56ea78ba6dd51d439
+  dependencies: []
+jobs:
+- name: consul_agent
+  version: 904c44896a0e17c2a4f23bd5da2058c397d7f2fa
+  fingerprint: 904c44896a0e17c2a4f23bd5da2058c397d7f2fa
+  sha1: 59a16b9e8fe728600f0fe1164e5ca52722660b1d
+commit_hash: 3948514d
+uncommitted_changes: false
+name: consul
+version: '11'

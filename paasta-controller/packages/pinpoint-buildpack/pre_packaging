@@ -1,0 +1,5 @@
+set -e -x
+
+cd ${BUILD_DIR}/pinpoint-buildpack
+zip -r java-buildpack-offline-pinpoint-v2.zip ./*
+

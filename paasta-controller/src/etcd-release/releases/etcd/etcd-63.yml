@@ -1,0 +1,63 @@
+---
+packages:
+- name: etcd-common
+  version: 0f365b3a98184c2a6537efd51f67e8d5e9d2c486
+  fingerprint: 0f365b3a98184c2a6537efd51f67e8d5e9d2c486
+  sha1: 6749bb4be8769a56ce73dea53a3122687f28c9a1
+  dependencies: []
+- name: etcd-dns-checker
+  version: 9676918944de93dd773b706cc7ecc68073492372
+  fingerprint: 9676918944de93dd773b706cc7ecc68073492372
+  sha1: 7ee18df116d17f199afebce64af6cf4680ea41c2
+  dependencies:
+  - golang1.6
+- name: etcd
+  version: e1b0e46ea13b2076eae1d84ef7de8444eac9d3c0
+  fingerprint: e1b0e46ea13b2076eae1d84ef7de8444eac9d3c0
+  sha1: 6d332105abd5a7276f7b4dc3eafb2847e572e392
+  dependencies:
+  - golang1.6
+- name: etcd_metrics_server
+  version: b479213a364e84d6d5cab59ea4c21bb9d20cacb3
+  fingerprint: b479213a364e84d6d5cab59ea4c21bb9d20cacb3
+  sha1: a19074322327c175c28f6acb397b64d7d454e43e
+  dependencies:
+  - golang1.6
+- name: etcd_proxy
+  version: 7a1f40d2f06b41f1aa7698da040007869b5d1bc9
+  fingerprint: 7a1f40d2f06b41f1aa7698da040007869b5d1bc9
+  sha1: 2e12386852d93bdf1de95da7ba8bf037e23f13c7
+  dependencies:
+  - golang1.6
+- name: golang1.6
+  version: d3a4ac26953c7c2c5db712195f0e920401424663
+  fingerprint: d3a4ac26953c7c2c5db712195f0e920401424663
+  sha1: 50f7fe7f5fa8aae1d9457113881796af443bfca4
+  dependencies: []
+- name: testconsumer
+  version: f459c8d513e34061d196483e18363cf7fe2e4b1e
+  fingerprint: f459c8d513e34061d196483e18363cf7fe2e4b1e
+  sha1: 16f406bdd1af4114268dbb0ed1d53c2d846e5f49
+  dependencies:
+  - golang1.6
+jobs:
+- name: etcd
+  version: 82302ab1804781dd95d1ca42969875c7bd117d4d
+  fingerprint: 82302ab1804781dd95d1ca42969875c7bd117d4d
+  sha1: 8505ac45c08b279fd64e83da49d7114f579ab9f0
+- name: etcd_metrics_server
+  version: 581ae0b3b6fc463c8dd164b12f8ed952409eab4e
+  fingerprint: 581ae0b3b6fc463c8dd164b12f8ed952409eab4e
+  sha1: 9f052004eb0260de1466dc1132cd820cc3b9fa1a
+- name: etcd_proxy
+  version: 4d8821d978016cc657a1ab2f746615876c8e49d1
+  fingerprint: 4d8821d978016cc657a1ab2f746615876c8e49d1
+  sha1: 6c2779f459c5999b52b0060506c407744c68d020
+- name: etcd_testconsumer
+  version: 4ac9ec619839e9aa1db6acba597b8ddc235a47fd
+  fingerprint: 4ac9ec619839e9aa1db6acba597b8ddc235a47fd
+  sha1: 09fe5044a3afb0745962a4018925937d258edcb5
+commit_hash: 8ec99c39
+uncommitted_changes: true
+name: etcd
+version: '63'

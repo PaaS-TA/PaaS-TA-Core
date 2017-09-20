@@ -1,0 +1,46 @@
+#!/bin/bash
+
+set -ex
+
+absolute_path() {
+  (cd $1 && pwd)
+}
+
+function usage() {
+  >&2 echo "
+  Usage: $0 -d DIEGO_RELEASE_DIR -c CF_RELEASE_DIR
+
+  -d diego release directory location
+  -c cf release directory location"
+  exit 1
+}
+
+while getopts "d:c:" opt; do
+  case $opt in
+    d)
+      DIEGO_RELEASE_DIR=$OPTARG
+      ;;
+    c)
+      CF_RELEASE_DIR=$OPTARG
+      ;;
+    \?)
+      echo no dawg >&2
+      ;;
+  esac
+done
+
+scripts_path=$(absolute_path `dirname $0`)
+CURRENT_DIR=$(absolute_path $scripts_path/..)
+OUTPUT_DIR=$CURRENT_DIR/manifests
+
+mkdir -p $OUTPUT_DIR
+
+pushd $CF_RELEASE_DIR > /dev/null
+  ./scripts/generate-bosh-lite-dev-manifest
+popd > /dev/null
+
+pushd $DIEGO_RELEASE_DIR > /dev/null
+  export CF_RELEASE_DIR
+  ./scripts/generate-mysql-bosh-lite-manifest
+  mv ./bosh-lite/deployments/cf-mysql.yml $OUTPUT_DIR/
+popd > /dev/null

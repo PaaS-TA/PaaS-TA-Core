@@ -1,0 +1,47 @@
+#!/bin/bash
+
+set -e
+
+# ensure gosub is installed (this will recompile it only if necessary)
+go get github.com/vito/gosub
+go install github.com/vito/gosub
+
+function sync_package() {
+  bosh_pkg=${1}
+
+  shift
+
+  (
+    set -e
+
+    cd packages/${bosh_pkg}
+
+    {
+      cat spec | grep -v '# gosub'
+
+      for package in $(gosub list "$@"); do
+        repo=$(echo ${2} | cut -f1-3 -d/)
+        if [[ "${repo}" == *"gorouter"* ]] || [[ "${repo}" == *"route-registrar"* ]]; then
+          package="routing-release/src/${package}"
+        fi
+        echo ${package} | sed -e 's/\(.*\)/  - \1\/*.go # gosub/g'
+      done
+    } > spec.new
+
+    mv spec.new spec
+  )
+}
+
+sync_package haproxy-monitor   -app haproxy-monitor/cmd/... &
+sync_package router_configurer -app code.cloudfoundry.org/cf-tcp-router/cmd/... &
+sync_package tcp_emitter       -app code.cloudfoundry.org/tcp-emitter/cmd/... &
+sync_package routing-api       -app code.cloudfoundry.org/routing-api/cmd/... &
+sync_package gorouter          -app code.cloudfoundry.org/gorouter/... &
+sync_package route_registrar   -app code.cloudfoundry.org/route-registrar/... &
+sync_package acceptance_tests \
+  -test code.cloudfoundry.org/routing-acceptance-tests/... \
+  -app github.com/onsi/ginkgo/ginkgo &
+
+wait
+
+git diff --name-only packages/*/spec

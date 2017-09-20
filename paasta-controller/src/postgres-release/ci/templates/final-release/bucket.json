@@ -1,0 +1,87 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "S3 buckets for release blobs",
+
+  "Parameters": {
+    "BucketName": {
+      "Description": "Name of the release blobs bucket",
+      "Type": "String",
+      "Default": ""
+    }
+  },
+
+  "Resources": {
+    "BlobstoreUser": {
+      "Type" : "AWS::IAM::User"
+    },
+    "BlobstoreAccessKey": {
+      "Type" : "AWS::IAM::AccessKey",
+      "Properties": {
+        "UserName": { "Ref": "BlobstoreUser" }
+      }
+    },
+    "ReleaseBlobsBucket": {
+      "Type" : "AWS::S3::Bucket",
+      "Properties" : {
+        "BucketName" : { "Ref": "BucketName" }
+      }
+    },
+    "ReleaseBlobsBucketPolicy": {
+      "Type" : "AWS::S3::BucketPolicy",
+      "Properties" : {
+        "PolicyDocument" : {
+          "Statement" : [ {
+            "Sid" : "AllowReadForEveryone",
+            "Action" : [
+              "s3:GetObject"
+            ],
+            "Effect" : "Allow",
+            "Principal" : "*",
+            "Resource" : { "Fn::Join" : [
+              "", [ "arn:aws:s3:::", { "Ref" : "ReleaseBlobsBucket" } , "/*" ]
+            ] }
+          },
+          {
+            "Sid" : "AllowList",
+            "Action" : [
+              "s3:ListBucket"
+            ],
+            "Effect" : "Allow",
+            "Principal" : "*",
+            "Resource" : { "Fn::Join" : [
+              "", [ "arn:aws:s3:::", { "Ref" : "ReleaseBlobsBucket" } ]
+            ] }
+          },
+          {
+            "Sid" : "AllowWrite",
+            "Action" : [
+              "s3:PutObject"
+            ],
+            "Effect" : "Allow",
+            "Principal" : {
+              "AWS" : { "Fn::GetAtt" : [ "BlobstoreUser", "Arn" ] }
+            },
+            "Resource" : { "Fn::Join" : [
+              "", [ "arn:aws:s3:::", { "Ref" : "ReleaseBlobsBucket" } , "/*" ]
+            ] }
+          } ]
+        },
+        "Bucket" : { "Ref" : "ReleaseBlobsBucket" }
+      }
+    }
+  },
+  "Outputs" : {
+    "BlobstoreAccessKeyID": {
+      "Description": "Access Key ID",
+      "Value": { "Ref": "BlobstoreAccessKey" }
+    },
+    "BlobstoreSecretAccessKey" : {
+      "Description" : "Secret Key",
+      "Value": { "Fn::GetAtt" : [ "BlobstoreAccessKey", "SecretAccessKey"]}
+    },
+    "BlobstoreDomain" : {
+      "Description": "Blobstore Domain",
+      "Value": { "Ref": "ReleaseBlobsBucket" }
+    }
+  }
+}

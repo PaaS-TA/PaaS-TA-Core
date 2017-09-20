@@ -1,0 +1,64 @@
+#!/bin/bash
+
+set -e
+
+RUN_DIR=/var/vcap/sys/run/rep
+PIDFILE=$RUN_DIR/rep.pid
+LOG_DIR=/var/vcap/sys/log/rep
+LOGFILE=$LOG_DIR/drain.log
+ADDRESS=<%= p("diego.rep.enable_legacy_api_endpoints") ? p("diego.rep.listen_addr").sub(/^0\.0\.0\.0:/, "localhost:") : p("diego.rep.listen_addr_admin")%>
+
+mkdir -p $LOG_DIR
+
+exec 3>&1
+
+source /var/vcap/packages/pid_utils/pid_utils.sh
+
+exec 1>> $LOGFILE
+exec 2>> $LOGFILE
+
+evacuate() {
+  curl --fail --silent -X POST http://$ADDRESS/evacuate >/dev/null 2>&1
+}
+
+heartbeat() {
+  curl --fail --silent http://$ADDRESS/ping >/dev/null 2>&1
+}
+
+output_for_bosh() {
+  exit_code=$?
+
+  if [ $exit_code -eq 0 ]; then
+    echo "$(date): rep exited"
+  else
+    echo "$(date): evacuation failed"
+  fi
+
+  echo $exit_code >&3
+}
+
+trap output_for_bosh EXIT
+
+if [ ! -f $PIDFILE ]; then
+  echo "$(date): PIDFILE does not exist"
+  exit 0
+fi
+
+pid=$(cat $PIDFILE)
+
+if [ ! -e /proc/$pid ]; then
+  echo "$(date): rep process not running"
+  exit 0
+fi
+
+echo "$(date): drain triggered"
+if evacuate; then
+  while heartbeat; do
+    sleep 5
+    echo "$(date): waiting"
+  done
+
+  kill_and_wait $PIDFILE
+else
+  exit 1
+fi

@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+
+set -e
+
+# This script is used to help compare the number of rows between two given
+# mysql databases.  Operators need to provide username, password, hostname, and
+# database name in that order for the first database, followed by the same
+# information for the second database.
+
+before_db_user=$1
+before_db_pw=$2
+before_db_hostname=$3
+before_db_name=$4
+
+after_db_user=$5
+after_db_pw=$6
+after_db_hostname=$7
+after_db_name=$8
+
+count_rows() {
+  echo -n "$5: "
+  MYSQL_PWD=$2 mysql -u "$1" --host="$3" "$4" -N -B -e "select count(*) from $5;"
+}
+
+table_names() {
+  MYSQL_PWD=$2 mysql -u "$1" --host="$3" "$4" -N -B -e "select table_name from information_schema.tables where table_schema = '$4';"
+}
+
+working_dir=/tmp/$(uuidgen)
+mkdir -p $working_dir
+cd $working_dir
+
+> before_count
+for table_name in $(table_names $before_db_user $before_db_pw $before_db_hostname $before_db_name); do
+  count_rows $before_db_user $before_db_pw $before_db_hostname $before_db_name $table_name >> before_count
+done
+
+if [ -z "$after_db_user" ]; then
+  cat before_count
+  exit 0
+fi
+
+> after_count
+for table_name in $(table_names $after_db_user $after_db_pw $after_db_hostname $after_db_name); do
+  count_rows $after_db_user $after_db_pw $after_db_hostname $after_db_name $table_name >> after_count
+done
+
+diff before_count after_count

@@ -1,0 +1,10 @@
+---
+platform: linux
+
+image: docker:///cfinfrastructure/gomegamatchers
+
+inputs:
+- name: gomegamatchers
+
+run:
+  path: gomegamatchers/ci/tasks/test/test

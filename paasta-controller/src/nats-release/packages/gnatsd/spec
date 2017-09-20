@@ -1,0 +1,6 @@
+name: gnatsd
+dependencies:
+  - golang1.7
+files:
+  - github.com/nats-io/gnatsd/**/*.go
+  - github.com/nats-io/gnatsd/LICENSE

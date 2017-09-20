@@ -1,0 +1,5 @@
+---
+8.0.0_1: https://java-buildpack.cloudfoundry.org/gem-fire-modules-tomcat7/gem-fire-modules-tomcat7-8.0.0_1.jar
+8.1.0: https://java-buildpack.cloudfoundry.org/gem-fire-modules-tomcat7/gem-fire-modules-tomcat7-8.1.0.jar
+8.2.0: https://java-buildpack.cloudfoundry.org/gem-fire-modules-tomcat7/gem-fire-modules-tomcat7-8.2.0.jar
+8.2.1: https://java-buildpack.cloudfoundry.org/gem-fire-modules-tomcat7/gem-fire-modules-tomcat7-8.2.1.jar

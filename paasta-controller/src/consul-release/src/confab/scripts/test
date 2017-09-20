@@ -1,0 +1,24 @@
+#!/bin/bash -eu
+
+function main() {
+  if [[ -n "$@" ]]; then
+    run "$@"
+  else
+    local dir
+    dir="$(cd "$(dirname "${0}")/.." && pwd)"
+
+    run \
+      -randomizeSuites \
+      "${dir}"
+  fi
+}
+
+function run() {
+    ginkgo \
+      -r \
+      -race \
+      -randomizeAllSpecs \
+      "${@}"
+}
+
+main "$@"

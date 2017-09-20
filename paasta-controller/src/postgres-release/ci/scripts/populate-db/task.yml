@@ -1,0 +1,16 @@
+---
+platform: linux
+
+image: docker:///cfinfrastructure/deployment
+
+inputs:
+  - name: postgres-release
+  - name: cf-acceptance-tests
+
+run:
+  path: postgres-release/ci/scripts/populate-db/task.sh
+
+params:
+  CF_DEPLOYMENT:
+  API_USER:
+  API_PASSWORD:

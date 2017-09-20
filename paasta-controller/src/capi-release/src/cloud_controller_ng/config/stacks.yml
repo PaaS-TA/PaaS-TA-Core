@@ -1,0 +1,5 @@
+default: "cflinuxfs2"
+
+stacks:
+  - name: "cflinuxfs2"
+    description: "test cflinuxfs2 entry"

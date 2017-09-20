@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="DataSourceManagerImpl" format="xml" hash="882261999">
+    <data-source source="LOCAL" name="PostgreSQL - ccdb@10.244.0.30" uuid="d0bf7eba-d2aa-4ff1-b4e9-b378b7e903f4">
+      <driver-ref>postgresql</driver-ref>
+      <synchronize>true</synchronize>
+      <jdbc-driver>org.postgresql.Driver</jdbc-driver>
+      <jdbc-url>jdbc:postgresql://10.244.0.30:5524/ccdb</jdbc-url>
+    </data-source>
+  </component>
+</project>

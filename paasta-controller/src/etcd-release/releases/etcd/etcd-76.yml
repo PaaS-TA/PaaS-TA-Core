@@ -1,0 +1,93 @@
+---
+packages:
+- name: acceptance-tests
+  version: 1ef2b54c60ce3042720a326097db6d48c1f8ece5
+  fingerprint: 1ef2b54c60ce3042720a326097db6d48c1f8ece5
+  sha1: 9bbc35bfa1c509ff3d1c00f5813e5a99e93708b7
+  dependencies:
+  - golang1.6
+- name: etcd-common
+  version: 0f365b3a98184c2a6537efd51f67e8d5e9d2c486
+  fingerprint: 0f365b3a98184c2a6537efd51f67e8d5e9d2c486
+  sha1: 6749bb4be8769a56ce73dea53a3122687f28c9a1
+  dependencies: []
+- name: etcd-consistency-checker
+  version: 3cf9e965c6a4d31ff80ac7cc15f06bfabce90601
+  fingerprint: 3cf9e965c6a4d31ff80ac7cc15f06bfabce90601
+  sha1: d74657d70659acc71eb76683d48e125666b7a4bf
+  dependencies:
+  - golang1.6
+- name: etcd-dns-checker
+  version: 9676918944de93dd773b706cc7ecc68073492372
+  fingerprint: 9676918944de93dd773b706cc7ecc68073492372
+  sha1: 7ee18df116d17f199afebce64af6cf4680ea41c2
+  dependencies:
+  - golang1.6
+- name: etcd
+  version: e1b0e46ea13b2076eae1d84ef7de8444eac9d3c0
+  fingerprint: e1b0e46ea13b2076eae1d84ef7de8444eac9d3c0
+  sha1: 6d332105abd5a7276f7b4dc3eafb2847e572e392
+  dependencies:
+  - golang1.6
+- name: etcd_metrics_server
+  version: e498285a38c9d86eac759e40c05af6ea77fe9456
+  fingerprint: e498285a38c9d86eac759e40c05af6ea77fe9456
+  sha1: f1e49fba9a5860bef8c9a68731730d8145fb236c
+  dependencies:
+  - golang1.6
+- name: etcd_proxy
+  version: d788f7bf118239e095b6a4eccd34c4f725477789
+  fingerprint: d788f7bf118239e095b6a4eccd34c4f725477789
+  sha1: d14f064760b8106b828eb228a05c3265f78da9af
+  dependencies:
+  - golang1.6
+- name: golang1.6
+  version: d3a4ac26953c7c2c5db712195f0e920401424663
+  fingerprint: d3a4ac26953c7c2c5db712195f0e920401424663
+  sha1: 50f7fe7f5fa8aae1d9457113881796af443bfca4
+  dependencies: []
+- name: iptables-agent
+  version: 776e70cadad97d00ef389117dc188df22245e6de
+  fingerprint: 776e70cadad97d00ef389117dc188df22245e6de
+  sha1: 6664b29f96aba3eaf0c1f42216a872fc63cf92a4
+  dependencies:
+  - golang1.6
+- name: testconsumer
+  version: 37d10452a9c6ad23691ab9cd52122f517b400e89
+  fingerprint: 37d10452a9c6ad23691ab9cd52122f517b400e89
+  sha1: c81468ed8c388c9a70040fc39971087b25959a74
+  dependencies:
+  - golang1.6
+jobs:
+- name: acceptance-tests
+  version: 4e5c41bbc9fe9700c0cc1fd5db7cfc1095a85934
+  fingerprint: 4e5c41bbc9fe9700c0cc1fd5db7cfc1095a85934
+  sha1: 2ce1798c7a2ba1601f519dc3b8016db94771f783
+- name: etcd
+  version: 39ae1941c3b81003f3b216e139d422fef6289f8c
+  fingerprint: 39ae1941c3b81003f3b216e139d422fef6289f8c
+  sha1: ab3355315ce44a82002ac244cbddda1cbb60d0a2
+- name: etcd_metrics_server
+  version: 7565065e00c294161f172adfc57623fd9a6cc7c7
+  fingerprint: 7565065e00c294161f172adfc57623fd9a6cc7c7
+  sha1: 61cb9738ddfb3d5467f46c1558211b9cc7c76cc2
+- name: etcd_proxy
+  version: c9ec37441808d6b5ab37c423b735b4755ab52d04
+  fingerprint: c9ec37441808d6b5ab37c423b735b4755ab52d04
+  sha1: 7bd6d79f7abbfcd638fd6180a009f61922b45dac
+- name: etcd_testconsumer
+  version: da4e7146b1deb53004a8bdb7a68b53229916148d
+  fingerprint: da4e7146b1deb53004a8bdb7a68b53229916148d
+  sha1: f919ff60c74ba65dd4c6c8c4c3f20516abc8e015
+- name: iptables_agent
+  version: b05a965a736820c295e0e0dc98b9303867e4b984
+  fingerprint: b05a965a736820c295e0e0dc98b9303867e4b984
+  sha1: 8276cdfcf8fe1115ca9a6f4a42b35e6bb0797012
+license:
+  version: 71fbe8907c0c6d7b750448fdfb34fd862cba7177
+  fingerprint: 71fbe8907c0c6d7b750448fdfb34fd862cba7177
+  sha1: e214771ef91e0ea12e520e28ae5c6b7be1c4758f
+commit_hash: 7de4d124
+uncommitted_changes: true
+name: etcd
+version: '76'

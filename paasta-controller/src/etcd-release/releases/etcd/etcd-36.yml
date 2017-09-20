@@ -1,0 +1,37 @@
+---
+packages:
+- name: etcd-common
+  version: a5492fb0ad41a80d2fa083172c0430073213a296
+  fingerprint: a5492fb0ad41a80d2fa083172c0430073213a296
+  sha1: 5d757aa40c466350edbaae17119a295763437557
+  dependencies: []
+- name: etcd
+  version: b38616a5b7e6cff0f1db95facb6b2e729fba0c30
+  fingerprint: b38616a5b7e6cff0f1db95facb6b2e729fba0c30
+  sha1: ac551ef80b768f1ce6eeb22de325f27ec263a5b7
+  dependencies:
+  - golang1.4
+- name: etcd_metrics_server
+  version: fc0f1835cd8e95ca86cf3851645486531ae4f12b
+  fingerprint: fc0f1835cd8e95ca86cf3851645486531ae4f12b
+  sha1: 07ae535743b05db269ff3cf73716044a8ae34132
+  dependencies:
+  - golang1.4
+- name: golang1.4
+  version: 714698bc352d2a1dbe321376f0676037568147bb
+  fingerprint: 714698bc352d2a1dbe321376f0676037568147bb
+  sha1: 019dc48e7a1857563960f0cb20667d5cd55c53c6
+  dependencies: []
+jobs:
+- name: etcd
+  version: fd0e652e4c4ad8693677b8b67c40c6e0e5303a49
+  fingerprint: fd0e652e4c4ad8693677b8b67c40c6e0e5303a49
+  sha1: 198a7e74eaecc27d57e25fb6d6cf86499c893918
+- name: etcd_metrics_server
+  version: e0a732bd3772b11f5e26bde2f74fdb880fdddd56
+  fingerprint: e0a732bd3772b11f5e26bde2f74fdb880fdddd56
+  sha1: 8da7a0a4314d7270d7e39eee2fd10e3ee391277f
+commit_hash: 993cbd05
+uncommitted_changes: false
+name: etcd
+version: '36'

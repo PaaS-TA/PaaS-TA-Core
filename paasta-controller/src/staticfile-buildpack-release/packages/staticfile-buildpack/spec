@@ -1,0 +1,4 @@
+---
+name: staticfile-buildpack
+files:
+- staticfile-buildpack/staticfile_buildpack-cached-*.zip

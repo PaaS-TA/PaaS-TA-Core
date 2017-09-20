@@ -1,0 +1,35 @@
+#!/bin/bash -e
+
+LOG_DIR=/var/vcap/sys/log/tps
+CONF_DIR=/var/vcap/jobs/tps/config
+
+<% if p("capi.tps.bbs.require_ssl") %>
+  bbs_sec_flags=" \
+   -bbsClientCert=${CONF_DIR}/certs/bbs/client.crt \
+   -bbsClientKey=${CONF_DIR}/certs/bbs/client.key \
+   -bbsCACert=${CONF_DIR}/certs/bbs/ca.crt"
+
+  bbs_api_url="<%= "https://" + p("capi.tps.bbs.api_location") %>"
+<% else %>
+  bbs_sec_flags=""
+  bbs_api_url="<%= "http://" + p("capi.tps.bbs.api_location") %>"
+<% end %>
+
+exec /var/vcap/packages/tps/bin/tps-listener ${bbs_sec_flags} \
+  -bbsAddress=${bbs_api_url} \
+  <% if_p("capi.tps.bbs.client_session_cache_size") do |value| %> \
+    -bbsClientSessionCacheSize=<%= value %> \
+  <% end %> \
+  <% if_p("capi.tps.bbs.max_idle_conns_per_host") do |value| %> \
+    -bbsMaxIdleConnsPerHost=<%= value %> \
+  <% end %> \
+  -consulCluster=http://127.0.0.1:<%= p("capi.tps.consul_agent_port") %> \
+  -dropsondePort=<%= p("capi.tps.dropsonde_port") %> \
+  -debugAddr=<%= p("capi.tps.listener.debug_addr") %> \
+  -maxInFlightRequests=<%= p("capi.tps.max_in_flight_requests") %> \
+  -listenAddr=<%= p("capi.tps.listener.listen_addr") %> \
+  -logLevel=<%= p("capi.tps.log_level") %> \
+  -trafficControllerURL=<%= p("capi.tps.traffic_controller_url") %> \
+  -skipSSLVerification=<%= p("diego.ssl.skip_cert_verify") %> \
+  2> >(tee -a $LOG_DIR/tps_listener.stderr.log | logger -p user.error -t vcap.tps-listener) \
+  1> >(tee -a $LOG_DIR/tps_listener.stdout.log | logger -p user.info -t vcap.tps-listener)

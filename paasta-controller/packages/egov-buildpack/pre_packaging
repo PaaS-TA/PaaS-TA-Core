@@ -1,0 +1,5 @@
+set -e -x
+
+cd ${BUILD_DIR}/egov-buildpack
+zip -r egov-java-buildpack-offline-egov3.5.zip ./*
+

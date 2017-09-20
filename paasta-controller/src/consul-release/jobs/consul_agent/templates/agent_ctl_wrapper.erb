@@ -1,0 +1,11 @@
+#!/bin/bash -exu
+
+SCRIPT_DIR=$(dirname $0)
+
+function main(){
+  ulimit -v unlimited
+  ulimit -n 4096
+  sudo -u vcap $SCRIPT_DIR/agent_ctl $@
+}
+
+main $@

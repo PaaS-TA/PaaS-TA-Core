@@ -1,0 +1,18 @@
+{
+	"ImportPath": "code.cloudfoundry.org/routing-acceptance-tests/assets/tcp-sample-receiver",
+	"GoVersion": "go1.5.3",
+	"Deps": [
+		{
+			"ImportPath": "github.com/tedsuo/ifrit/ginkgomon",
+			"Rev": "65ca48cd8a947d0e80efa4bda726f0363352e5f9"
+		},
+		{
+			"ImportPath": "github.com/onsi/ginkgo",
+			"Rev": "462326b1628e124b23f42e87a8f2750e3c4e2d24"
+		},
+		{
+			"ImportPath": "github.com/onsi/gomega",
+			"Rev": "6331bf5a5b5e7a832348789eb3cedff7a6917103"
+		}
+	]
+}

@@ -1,0 +1,6 @@
+check process fake-dns-server
+  with pidfile /var/vcap/sys/run/fake-dns-server/fake-dns-server.pid
+  start program "/var/vcap/jobs/fake-dns-server/bin/run start"
+    as uid vcap and gid vcap with timeout 60 seconds
+  stop program "/var/vcap/jobs/fake-dns-server/bin/run stop"
+  group vcap

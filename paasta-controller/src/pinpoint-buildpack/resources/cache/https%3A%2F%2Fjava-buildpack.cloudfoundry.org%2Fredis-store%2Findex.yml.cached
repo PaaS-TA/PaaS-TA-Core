@@ -1,0 +1,4 @@
+---
+1.0.0_RELEASE: https://java-buildpack.cloudfoundry.org/redis-store/redis-store-1.0.0_RELEASE.jar
+1.1.0_RELEASE: https://java-buildpack.cloudfoundry.org/redis-store/redis-store-1.1.0_RELEASE.jar
+1.2.0_RELEASE: https://java-buildpack.cloudfoundry.org/redis-store/redis-store-1.2.0_RELEASE.jar

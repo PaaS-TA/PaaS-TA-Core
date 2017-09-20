@@ -1,0 +1,29 @@
+# values in this example are only suitable for testing and are not recommended
+# for production systems
+log_guid: "my_logs"
+oauth:
+  token_endpoint: "127.0.0.1"
+  port: 3000
+  ca_certs: "some-ca-cert"
+metron_config:
+  address: "1.2.3.4"
+  port: "4567"
+metrics_reporting_interval: "500ms"
+statsd_endpoint: "localhost:8125"
+system_domain: "example.com"
+max_ttl: "2m"
+statsd_client_flush_interval: "10ms"
+sqldb:
+  username: "username"
+  password: "password"
+  schema: "routing_api_test"
+  type: mysql
+  port: 1234
+  host: "localhost"
+etcd:
+  node_urls: ["http://localhost:1234"]
+consul_cluster:
+  servers: "http://localhost:5678"
+  lock_ttl: 10s
+  retry_interval: 5s
+

@@ -1,0 +1,8 @@
+---
+name: staticfile-buildpack
+templates: {}
+
+packages:
+- staticfile-buildpack
+
+properties: {}

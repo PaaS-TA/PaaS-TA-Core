@@ -1,0 +1,17 @@
+---
+ruby-2.2.5/bundler-1.11.2.gem:
+  object_id: fce765ae-6866-4fe6-afa3-c711113217e6
+  sha: 8eb956dec72da753d3d2a2126c78508b17af434e
+  size: 263168
+ruby-2.2.5/yaml-0.1.6.tar.gz:
+  object_id: e184a466-f67a-42f3-9f1a-c2d932bad5ee
+  sha: f3d404e11bec3c4efcddfd14c42d46f1aabe0b5d
+  size: 503012
+ruby-2.2.5/ruby-2.2.5.tar.gz:
+  object_id: ec312325-de67-49ce-b107-cd658935199c
+  sha: 457707459827bd527347a5cee7b4dc509b486713
+  size: 16654395
+golang/go1.7.linux-amd64.tar.gz:
+  object_id: a826cf02-b8a4-4c2a-b0da-67e50b537ad7
+  sha: a744e29da97fc3aadad1ee0d7d89b0d899645e50
+  size: 81573766

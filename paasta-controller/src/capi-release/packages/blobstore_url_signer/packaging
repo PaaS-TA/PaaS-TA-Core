@@ -1,0 +1,8 @@
+set -e
+
+export GOROOT=$(readlink -nf /var/vcap/packages/golang1.7)
+export PATH=$GOROOT/bin:$PATH
+export GOPATH=$PWD/capi-release
+
+go install github.com/cloudfoundry/blobstore_url_signer
+cp -a $PWD/capi-release/bin/blobstore_url_signer $BOSH_INSTALL_TARGET

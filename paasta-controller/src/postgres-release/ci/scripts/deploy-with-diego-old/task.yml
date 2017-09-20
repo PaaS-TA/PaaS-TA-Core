@@ -1,0 +1,27 @@
+---
+platform: linux
+
+
+image_resource:
+  type: docker-image
+  source:
+    repository: cfinfrastructure/deployment
+
+inputs:
+- name: postgres-ci-env
+- name: postgres-release
+
+run:
+  path: postgres-release/ci/scripts/deploy-with-diego-old/task.sh
+
+params:
+  BOSH_DIRECTOR:
+  BOSH_USER:
+  BOSH_PASSWORD:
+  OLD_CF_RELEASE:
+  OLD_DIEGO_RELEASE:
+  OLD_GARDEN_RELEASE:
+  OLD_ETCD_RELEASE:
+  CF_DEPLOYMENT:
+  DIEGO_DEPLOYMENT:
+  OLD_STEMCELL:

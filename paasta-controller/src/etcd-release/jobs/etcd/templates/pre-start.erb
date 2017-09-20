@@ -1,0 +1,29 @@
+#!/bin/bash -exu
+
+LOG_DIR=/var/vcap/sys/log/etcd
+DATA_DIR=/var/vcap/store/etcd
+RUN_DIR=/var/vcap/sys/run/etcd
+CERT_DIR=/var/vcap/jobs/etcd/config/certs
+
+function create_directories_and_chown_to_vcap() {
+    mkdir -p ${LOG_DIR}
+    chown -R vcap:vcap ${LOG_DIR}
+
+    mkdir -p ${DATA_DIR}
+    chown -R vcap:vcap ${DATA_DIR}
+
+    <% if p("etcd.require_ssl") || p("etcd.peer_require_ssl") %>
+    mkdir -p ${CERT_DIR}
+    chown -R vcap:vcap ${CERT_DIR}
+    <% end %>
+
+    # This is here for upgrade purposes to ensure RUN_DIR is owned by vcap
+    mkdir -p ${RUN_DIR}
+    chown -R vcap:vcap ${RUN_DIR}
+}
+
+function main() {
+  create_directories_and_chown_to_vcap
+}
+
+main

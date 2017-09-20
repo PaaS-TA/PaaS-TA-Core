@@ -1,0 +1,359 @@
+[submodule "src/github.com/tedsuo/ifrit"]
+	path = src/github.com/tedsuo/ifrit
+	url = https://github.com/tedsuo/ifrit
+	branch = master
+[submodule "src/github.com/onsi/gomega"]
+	path = src/github.com/onsi/gomega
+	url = https://github.com/onsi/gomega
+	branch = master
+[submodule "src/github.com/coreos/go-etcd"]
+	path = src/github.com/coreos/go-etcd
+	url = https://github.com/coreos/go-etcd
+	branch = master
+[submodule "src/github.com/cloudfoundry-incubator/cf-test-helpers"]
+	path = src/github.com/cloudfoundry-incubator/cf-test-helpers
+	url = https://github.com/cloudfoundry-incubator/cf-test-helpers
+	branch = master
+[submodule "src/github.com/ajstarks/svgo"]
+	path = src/github.com/ajstarks/svgo
+	url = https://github.com/ajstarks/svgo
+[submodule "src/github.com/onsi/ginkgo"]
+	path = src/github.com/onsi/ginkgo
+	url = https://github.com/onsi/ginkgo
+	branch = master
+[submodule "src/github.com/cloudfoundry-incubator/candiedyaml"]
+	path = src/github.com/cloudfoundry-incubator/candiedyaml
+	url = https://github.com/cloudfoundry-incubator/candiedyaml
+	branch = master
+[submodule "src/github.com/cloudfoundry/gosteno"]
+	path = src/github.com/cloudfoundry/gosteno
+	url = https://github.com/cloudfoundry/gosteno
+	branch = master
+[submodule "src/github.com/nu7hatch/gouuid"]
+	path = src/github.com/nu7hatch/gouuid
+	url = https://github.com/nu7hatch/gouuid
+	branch = master
+[submodule "src/github.com/tedsuo/rata"]
+	path = src/github.com/tedsuo/rata
+	url = https://github.com/tedsuo/rata
+	branch = master
+[submodule "src/github.com/GaryBoone/GoStats"]
+	path = src/github.com/GaryBoone/GoStats
+	url = https://github.com/GaryBoone/GoStats
+	branch = master
+[submodule "src/github.com/cloudfoundry/storeadapter"]
+	path = src/github.com/cloudfoundry/storeadapter
+	url = https://github.com/cloudfoundry/storeadapter
+	branch = master
+[submodule "src/code.cloudfoundry.org/lager"]
+	path = src/code.cloudfoundry.org/lager
+	url = https://github.com/cloudfoundry/lager
+	branch = master
+[submodule "src/github.com/cloudfoundry/dropsonde"]
+	path = src/github.com/cloudfoundry/dropsonde
+	url = https://github.com/cloudfoundry/dropsonde
+	branch = master
+[submodule "src/github.com/bmizerany/pat"]
+	path = src/github.com/bmizerany/pat
+	url = https://github.com/bmizerany/pat
+	branch = master
+[submodule "src/github.com/apcera/gnatsd"]
+	path = src/github.com/apcera/gnatsd
+	url = https://github.com/apcera/gnatsd
+[submodule "src/github.com/coreos/etcd"]
+	path = src/github.com/coreos/etcd
+	url = https://github.com/coreos/etcd
+	branch = ssl-mutual-auth
+[submodule "src/github.com/vito/go-sse"]
+	path = src/github.com/vito/go-sse
+	url = https://github.com/vito/go-sse
+	branch = master
+[submodule "src/github.com/golang/protobuf"]
+	path = src/github.com/golang/protobuf
+	url = https://github.com/golang/protobuf
+	branch = master
+[submodule "src/github.com/hashicorp/go-multierror"]
+	path = src/github.com/hashicorp/go-multierror
+	url = https://github.com/hashicorp/go-multierror
+	branch = master
+[submodule "src/github.com/hashicorp/consul"]
+	path = src/github.com/hashicorp/consul
+	url = https://github.com/hashicorp/consul
+[submodule "src/golang.org/x/crypto"]
+	path = src/golang.org/x/crypto
+	url = https://go.googlesource.com/crypto
+	branch = master
+[submodule "src/github.com/kr/pty"]
+	path = src/github.com/kr/pty
+	url = https://github.com/kr/pty
+	branch = master
+[submodule "src/github.com/gogo/protobuf"]
+	path = src/github.com/gogo/protobuf
+	url = https://github.com/gogo/protobuf
+	branch = master
+[submodule "src/github.com/pborman/getopt"]
+	path = src/github.com/pborman/getopt
+	url = https://github.com/pborman/getopt
+	branch = master
+[submodule "src/github.com/google/shlex"]
+	path = src/github.com/google/shlex
+	url = https://github.com/google/shlex
+	branch = master
+[submodule "src/github.com/cloudfoundry/sonde-go"]
+	path = src/github.com/cloudfoundry/sonde-go
+	url = https://github.com/cloudfoundry/sonde-go
+	branch = master
+[submodule "src/github.com/ugorji/go"]
+	path = src/github.com/ugorji/go
+	url = https://github.com/ugorji/go
+	branch = master
+[submodule "src/github.com/onsi/say"]
+	path = src/github.com/onsi/say
+	url = https://github.com/onsi/say
+	branch = master
+[submodule "src/github.com/zorkian/go-datadog-api"]
+	path = src/github.com/zorkian/go-datadog-api
+	url = https://github.com/zorkian/go-datadog-api
+	branch = master
+[submodule "src/github.com/aws/aws-sdk-go"]
+	path = src/github.com/aws/aws-sdk-go
+	url = https://github.com/aws/aws-sdk-go
+	branch = master
+[submodule "src/github.com/vaughan0/go-ini"]
+	path = src/github.com/vaughan0/go-ini
+	url = https://github.com/vaughan0/go-ini
+	branch = master
+[submodule "src/github.com/docker/libtrust"]
+	path = src/github.com/docker/libtrust
+	url = https://github.com/docker/libtrust
+[submodule "src/github.com/Sirupsen/logrus"]
+	path = src/github.com/Sirupsen/logrus
+	url = https://github.com/Sirupsen/logrus
+[submodule "src/golang.org/x/net"]
+	path = src/golang.org/x/net
+	url = https://go.googlesource.com/net
+[submodule "src/github.com/docker/distribution"]
+	path = src/github.com/docker/distribution
+	url = https://github.com/docker/distribution
+[submodule "src/github.com/gorilla/mux"]
+	path = src/github.com/gorilla/mux
+	url = https://github.com/gorilla/mux
+[submodule "src/github.com/gorilla/context"]
+	path = src/github.com/gorilla/context
+	url = https://github.com/gorilla/context
+[submodule "src/github.com/kr/fs"]
+	path = src/github.com/kr/fs
+	url = https://github.com/kr/fs
+[submodule "src/github.com/pkg/sftp"]
+	path = src/github.com/pkg/sftp
+	url = https://github.com/pkg/sftp
+[submodule "src/github.com/go-sql-driver/mysql"]
+	path = src/github.com/go-sql-driver/mysql
+	url = https://github.com/go-sql-driver/mysql
+[submodule "src/github.com/cloudfoundry/systemcerts"]
+	path = src/github.com/cloudfoundry/systemcerts
+	url = https://github.com/cloudfoundry/systemcerts
+[submodule "src/github.com/lib/pq"]
+	path = src/github.com/lib/pq
+	url = https://github.com/lib/pq
+	branch = master
+[submodule "src/code.cloudfoundry.org/auction"]
+	path = src/code.cloudfoundry.org/auction
+	url = https://github.com/cloudfoundry/auction
+	branch = master
+[submodule "src/code.cloudfoundry.org/bbs"]
+	path = src/code.cloudfoundry.org/bbs
+	url = https://github.com/cloudfoundry/bbs
+	branch = master
+[submodule "src/code.cloudfoundry.org/auctioneer"]
+	path = src/code.cloudfoundry.org/auctioneer
+	url = https://github.com/cloudfoundry/auctioneer
+	branch = master
+[submodule "src/code.cloudfoundry.org/cacheddownloader"]
+	path = src/code.cloudfoundry.org/cacheddownloader
+	url = https://github.com/cloudfoundry/cacheddownloader
+	branch = master
+[submodule "src/code.cloudfoundry.org/consuladapter"]
+	path = src/code.cloudfoundry.org/consuladapter
+	url = https://github.com/cloudfoundry/consuladapter
+	branch = master
+[submodule "src/code.cloudfoundry.org/executor"]
+	path = src/code.cloudfoundry.org/executor
+	url = https://github.com/cloudfoundry/executor
+	branch = master
+[submodule "src/code.cloudfoundry.org/healthcheck"]
+	path = src/code.cloudfoundry.org/healthcheck
+	url = https://github.com/cloudfoundry/healthcheck
+	branch = master
+[submodule "src/code.cloudfoundry.org/inigo"]
+	path = src/code.cloudfoundry.org/inigo
+	url = https://github.com/cloudfoundry/inigo
+	branch = master
+[submodule "src/code.cloudfoundry.org/locket"]
+	path = src/code.cloudfoundry.org/locket
+	url = https://github.com/cloudfoundry/locket
+	branch = master
+[submodule "src/code.cloudfoundry.org/rep"]
+	path = src/code.cloudfoundry.org/rep
+	url = https://github.com/cloudfoundry/rep
+	branch = master
+[submodule "src/code.cloudfoundry.org/vizzini"]
+	path = src/code.cloudfoundry.org/vizzini
+	url = https://github.com/cloudfoundry/vizzini
+	branch = master
+[submodule "src/code.cloudfoundry.org/benchmarkbbs"]
+	path = src/code.cloudfoundry.org/benchmarkbbs
+	url = https://github.com/cloudfoundry/benchmarkbbs
+	branch = master
+[submodule "src/code.cloudfoundry.org/buildpackapplifecycle"]
+	path = src/code.cloudfoundry.org/buildpackapplifecycle
+	url = https://github.com/cloudfoundry/buildpackapplifecycle
+	branch = master
+[submodule "src/code.cloudfoundry.org/debugserver"]
+	path = src/code.cloudfoundry.org/debugserver
+	url = https://github.com/cloudfoundry/debugserver
+	branch = master
+[submodule "src/code.cloudfoundry.org/cflager"]
+	path = src/code.cloudfoundry.org/cflager
+	url = https://github.com/cloudfoundry/cflager
+	branch = master
+[submodule "src/code.cloudfoundry.org/cfhttp"]
+	path = src/code.cloudfoundry.org/cfhttp
+	url = https://github.com/cloudfoundry/cfhttp
+	branch = master
+[submodule "src/code.cloudfoundry.org/dockerapplifecycle"]
+	path = src/code.cloudfoundry.org/dockerapplifecycle
+	url = https://github.com/cloudfoundry/dockerapplifecycle
+	branch = master
+[submodule "src/code.cloudfoundry.org/diego-upgrade-stability-tests"]
+	path = src/code.cloudfoundry.org/diego-upgrade-stability-tests
+	url = https://github.com/cloudfoundry/diego-upgrade-stability-tests
+	branch = master
+[submodule "src/code.cloudfoundry.org/runtimeschema"]
+	path = src/code.cloudfoundry.org/runtimeschema
+	url = https://github.com/cloudfoundry/runtimeschema
+	branch = master
+[submodule "src/code.cloudfoundry.org/fileserver"]
+	path = src/code.cloudfoundry.org/fileserver
+	url = https://github.com/cloudfoundry/fileserver
+	branch = master
+[submodule "src/code.cloudfoundry.org/diego-ssh"]
+	path = src/code.cloudfoundry.org/diego-ssh
+	url = https://github.com/cloudfoundry/diego-ssh
+	branch = master
+[submodule "src/code.cloudfoundry.org/route-emitter"]
+	path = src/code.cloudfoundry.org/route-emitter
+	url = https://github.com/cloudfoundry/route-emitter
+	branch = master
+[submodule "src/code.cloudfoundry.org/archiver"]
+	path = src/code.cloudfoundry.org/archiver
+	url = https://github.com/cloudfoundry/archiver
+	branch = master
+[submodule "src/code.cloudfoundry.org/bytefmt"]
+	path = src/code.cloudfoundry.org/bytefmt
+	url = https://github.com/cloudfoundry/bytefmt
+	branch = master
+[submodule "src/code.cloudfoundry.org/clock"]
+	path = src/code.cloudfoundry.org/clock
+	url = https://github.com/cloudfoundry/clock
+	branch = master
+[submodule "src/code.cloudfoundry.org/eventhub"]
+	path = src/code.cloudfoundry.org/eventhub
+	url = https://github.com/cloudfoundry/eventhub
+	branch = master
+[submodule "src/code.cloudfoundry.org/operationq"]
+	path = src/code.cloudfoundry.org/operationq
+	url = https://github.com/cloudfoundry/operationq
+	branch = master
+[submodule "src/code.cloudfoundry.org/localip"]
+	path = src/code.cloudfoundry.org/localip
+	url = https://github.com/cloudfoundry/localip
+	branch = master
+[submodule "src/github.com/spf13/cobra"]
+	path = src/github.com/spf13/cobra
+	url = https://github.com/spf13/cobra
+	branch = master
+[submodule "src/code.cloudfoundry.org/cfdot"]
+	path = src/code.cloudfoundry.org/cfdot
+	url = https://github.com/cloudfoundry/cfdot
+	branch = master
+[submodule "src/github.com/spf13/pflag"]
+	path = src/github.com/spf13/pflag
+	url = https://github.com/spf13/pflag
+	branch = master
+[submodule "src/github.com/nats-io/nats"]
+	path = src/github.com/nats-io/nats
+	url = https://github.com/nats-io/nats
+	branch = master
+[submodule "src/github.com/nats-io/nuid"]
+	path = src/github.com/nats-io/nuid
+	url = https://github.com/nats-io/nuid
+	branch = master
+[submodule "src/github.com/apcera/nats"]
+	path = src/github.com/apcera/nats
+	url = https://github.com/apcera/nats
+[submodule "src/code.cloudfoundry.org/voldriver"]
+	path = src/code.cloudfoundry.org/voldriver
+	url = https://github.com/cloudfoundry-incubator/voldriver
+	branch = master
+[submodule "src/code.cloudfoundry.org/volman"]
+	path = src/code.cloudfoundry.org/volman
+	url = https://github.com/cloudfoundry-incubator/volman
+	branch = master
+[submodule "src/code.cloudfoundry.org/localdriver"]
+	path = src/code.cloudfoundry.org/localdriver
+	url = https://github.com/cloudfoundry-incubator/localdriver
+	branch = master
+[submodule "src/code.cloudfoundry.org/goshims"]
+	path = src/code.cloudfoundry.org/goshims
+	url = https://github.com/cloudfoundry-incubator/goshims
+	branch = master
+[submodule "src/code.cloudfoundry.org/gorouter"]
+	path = src/code.cloudfoundry.org/gorouter
+	url = https://github.com/cloudfoundry/gorouter
+	branch = master
+[submodule "src/code.cloudfoundry.org/garden"]
+	path = src/code.cloudfoundry.org/garden
+	url = https://github.com/cloudfoundry/garden
+	branch = master
+[submodule "src/gopkg.in/yaml.v2"]
+	path = src/gopkg.in/yaml.v2
+	url = https://gopkg.in/yaml.v2
+	branch = v2
+[submodule "src/code.cloudfoundry.org/routing-info"]
+	path = src/code.cloudfoundry.org/routing-info
+	url = https://github.com/cloudfoundry-incubator/routing-info
+	branch = master
+[submodule "src/github.com/dgrijalva/jwt-go"]
+	path = src/github.com/dgrijalva/jwt-go
+	url = https://github.com/dgrijalva/jwt-go
+[submodule "src/code.cloudfoundry.org/uaa-go-client"]
+	path = src/code.cloudfoundry.org/uaa-go-client
+	url = https://github.com/cloudfoundry-incubator/uaa-go-client
+[submodule "src/github.com/armon/go-proxyproto"]
+	path = src/github.com/armon/go-proxyproto
+	url = https://github.com/armon/go-proxyproto
+[submodule "src/code.cloudfoundry.org/routing-api"]
+	path = src/code.cloudfoundry.org/routing-api
+	url = https://github.com/cloudfoundry-incubator/routing-api
+[submodule "src/github.com/rcrowley/go-metrics"]
+	path = src/github.com/rcrowley/go-metrics
+	url = https://github.com/rcrowley/go-metrics
+[submodule "src/code.cloudfoundry.org/trace-logger"]
+	path = src/code.cloudfoundry.org/trace-logger
+	url = https://github.com/cloudfoundry-incubator/trace-logger
+[submodule "src/code.cloudfoundry.org/guardian"]
+	path = src/code.cloudfoundry.org/guardian
+	url = https://github.com/cloudfoundry/guardian
+	branch = master
+[submodule "src/github.com/eapache/go-resiliency"]
+	path = src/github.com/eapache/go-resiliency
+	url = https://github.com/eapache/go-resiliency
+[submodule "src/code.cloudfoundry.org/urljoiner"]
+	path = src/code.cloudfoundry.org/urljoiner
+	url = https://github.com/cloudfoundry/urljoiner
+	branch = master
+[submodule "src/code.cloudfoundry.org/workpool"]
+	path = src/code.cloudfoundry.org/workpool
+	url = https://github.com/cloudfoundry/workpool
+	branch = master

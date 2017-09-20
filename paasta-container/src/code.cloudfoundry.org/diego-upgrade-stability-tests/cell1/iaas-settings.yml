@@ -1,0 +1,586 @@
+iaas_settings:
+  stemcell:
+    name: bosh-warden-boshlite-ubuntu-trusty-go_agent
+    version: latest
+  compilation_cloud_properties: {}
+  resource_pool_cloud_properties:
+    - name: access_z1
+      cloud_properties: {}
+    - name: access_z2
+      cloud_properties: {}
+    - name: access_z3
+      cloud_properties: {}
+    - name: brain_z1
+      cloud_properties: {}
+    - name: brain_z2
+      cloud_properties: {}
+    - name: brain_z3
+      cloud_properties: {}
+    - name: cc_bridge_z1
+      cloud_properties: {}
+    - name: cc_bridge_z2
+      cloud_properties: {}
+    - name: cc_bridge_z3
+      cloud_properties: {}
+    - name: cell_z1
+      cloud_properties: {}
+    - name: cell_z2
+      cloud_properties: {}
+    - name: cell_z3
+      cloud_properties: {}
+    - name: colocated_z1
+      cloud_properties: {}
+    - name: colocated_z2
+      cloud_properties: {}
+    - name: colocated_z3
+      cloud_properties: {}
+    - name: database_z1
+      cloud_properties: {}
+    - name: database_z2
+      cloud_properties: {}
+    - name: database_z3
+      cloud_properties: {}
+    - name: route_emitter_z1
+      cloud_properties: {}
+    - name: route_emitter_z2
+      cloud_properties: {}
+    - name: route_emitter_z3
+      cloud_properties: {}
+  subnet_configs:
+  - name: diego1
+    type: manual
+    subnets:
+    - range: 10.244.22.0/30
+      reserved:
+      - 10.244.22.1
+      static:
+      - 10.244.22.2
+      cloud_properties: {}
+    - range: 10.244.22.4/30
+      reserved:
+      - 10.244.22.5
+      static:
+      - 10.244.22.6
+      cloud_properties: {}
+    - range: 10.244.22.8/30
+      reserved:
+      - 10.244.22.9
+      static:
+      - 10.244.22.10
+      cloud_properties: {}
+    - range: 10.244.22.12/30
+      reserved:
+      - 10.244.22.13
+      static:
+      - 10.244.22.14
+      cloud_properties: {}
+    - range: 10.244.22.16/30
+      reserved:
+      - 10.244.22.17
+      static:
+      - 10.244.22.18
+      cloud_properties: {}
+    - range: 10.244.22.20/30
+      reserved:
+      - 10.244.22.21
+      static:
+      - 10.244.22.22
+      cloud_properties: {}
+    - range: 10.244.22.24/30
+      reserved:
+      - 10.244.22.25
+      static:
+      - 10.244.22.26
+      cloud_properties: {}
+    - range: 10.244.22.28/30
+      reserved:
+      - 10.244.22.29
+      static:
+      - 10.244.22.30
+      cloud_properties: {}
+    - range: 10.244.22.32/30
+      reserved:
+      - 10.244.22.33
+      static:
+      - 10.244.22.34
+      cloud_properties: {}
+    - range: 10.244.22.36/30
+      reserved:
+      - 10.244.22.37
+      static:
+      - 10.244.22.38
+      cloud_properties: {}
+    - range: 10.244.22.40/30
+      reserved:
+      - 10.244.22.41
+      static:
+      - 10.244.22.42
+      cloud_properties: {}
+    - range: 10.244.22.44/30
+      reserved:
+      - 10.244.22.45
+      static:
+      - 10.244.22.46
+      cloud_properties: {}
+    - range: 10.244.22.48/30
+      reserved:
+      - 10.244.22.49
+      static:
+      - 10.244.22.50
+      cloud_properties: {}
+    - range: 10.244.22.52/30
+      reserved:
+      - 10.244.22.53
+      static:
+      - 10.244.22.54
+      cloud_properties: {}
+    - range: 10.244.22.56/30
+      reserved:
+      - 10.244.22.57
+      static:
+      - 10.244.22.58
+      cloud_properties: {}
+    - range: 10.244.22.60/30
+      reserved:
+      - 10.244.22.61
+      static:
+      - 10.244.22.62
+      cloud_properties: {}
+    - range: 10.244.22.64/30
+      reserved:
+      - 10.244.22.65
+      static:
+      - 10.244.22.66
+      cloud_properties: {}
+    - range: 10.244.22.68/30
+      reserved:
+      - 10.244.22.69
+      static:
+      - 10.244.22.70
+      cloud_properties: {}
+    - range: 10.244.22.72/30
+      reserved:
+      - 10.244.22.73
+      static:
+      - 10.244.22.74
+      cloud_properties: {}
+    - range: 10.244.22.76/30
+      reserved:
+      - 10.244.22.77
+      static:
+      - 10.244.22.78
+      cloud_properties: {}
+    - range: 10.244.22.80/30
+      reserved:
+      - 10.244.22.81
+      static:
+      - 10.244.22.82
+      cloud_properties: {}
+    - range: 10.244.22.84/30
+      reserved:
+      - 10.244.22.85
+      static: []
+      cloud_properties: {}
+    - range: 10.244.22.88/30
+      reserved:
+      - 10.244.22.89
+      static: []
+      cloud_properties: {}
+    - range: 10.244.22.92/30
+      reserved:
+      - 10.244.22.93
+      static: []
+      cloud_properties: {}
+    - range: 10.244.22.96/30
+      reserved:
+      - 10.244.22.97
+      static: []
+      cloud_properties: {}
+    - range: 10.244.22.100/30
+      reserved:
+      - 10.244.22.101
+      static: []
+      cloud_properties: {}
+    - range: 10.244.22.104/30
+      reserved:
+      - 10.244.22.105
+      static: []
+      cloud_properties: {}
+    - range: 10.244.22.108/30
+      reserved:
+      - 10.244.22.109
+      static: []
+      cloud_properties: {}
+    - range: 10.244.22.112/30
+      reserved:
+      - 10.244.22.113
+      static: []
+      cloud_properties: {}
+    - range: 10.244.22.116/30
+      reserved:
+      - 10.244.22.117
+      static: []
+      cloud_properties: {}
+    - range: 10.244.22.120/30
+      reserved:
+      - 10.244.22.121
+      static: []
+      cloud_properties: {}
+  - name: diego2
+    type: manual
+    subnets:
+    - range: 10.244.24.0/30
+      reserved:
+      - 10.244.24.1
+      static:
+      - 10.244.24.2
+      cloud_properties: {}
+    - range: 10.244.24.4/30
+      reserved:
+      - 10.244.24.5
+      static:
+      - 10.244.24.6
+      cloud_properties: {}
+    - range: 10.244.24.8/30
+      reserved:
+      - 10.244.24.9
+      static:
+      - 10.244.24.10
+      cloud_properties: {}
+    - range: 10.244.24.12/30
+      reserved:
+      - 10.244.24.13
+      static:
+      - 10.244.24.14
+      cloud_properties: {}
+    - range: 10.244.24.16/30
+      reserved:
+      - 10.244.24.17
+      static:
+      - 10.244.24.18
+      cloud_properties: {}
+    - range: 10.244.24.20/30
+      reserved:
+      - 10.244.24.21
+      static:
+      - 10.244.24.22
+      cloud_properties: {}
+    - range: 10.244.24.24/30
+      reserved:
+      - 10.244.24.25
+      static:
+      - 10.244.24.26
+      cloud_properties: {}
+    - range: 10.244.24.28/30
+      reserved:
+      - 10.244.24.29
+      static:
+      - 10.244.24.30
+      cloud_properties: {}
+    - range: 10.244.24.32/30
+      reserved:
+      - 10.244.24.33
+      static:
+      - 10.244.24.34
+      cloud_properties: {}
+    - range: 10.244.24.36/30
+      reserved:
+      - 10.244.24.37
+      static:
+      - 10.244.24.38
+      cloud_properties: {}
+    - range: 10.244.24.40/30
+      reserved:
+      - 10.244.24.41
+      static:
+      - 10.244.24.42
+      cloud_properties: {}
+    - range: 10.244.24.44/30
+      reserved:
+      - 10.244.24.45
+      static:
+      - 10.244.24.46
+      cloud_properties: {}
+    - range: 10.244.24.48/30
+      reserved:
+      - 10.244.24.49
+      static:
+      - 10.244.24.50
+      cloud_properties: {}
+    - range: 10.244.24.52/30
+      reserved:
+      - 10.244.24.53
+      static:
+      - 10.244.24.54
+      cloud_properties: {}
+    - range: 10.244.24.56/30
+      reserved:
+      - 10.244.24.57
+      static:
+      - 10.244.24.58
+      cloud_properties: {}
+    - range: 10.244.24.60/30
+      reserved:
+      - 10.244.24.61
+      static:
+      - 10.244.24.62
+      cloud_properties: {}
+    - range: 10.244.24.64/30
+      reserved:
+      - 10.244.24.65
+      static:
+      - 10.244.24.66
+      cloud_properties: {}
+    - range: 10.244.24.68/30
+      reserved:
+      - 10.244.24.69
+      static:
+      - 10.244.24.70
+      cloud_properties: {}
+    - range: 10.244.24.72/30
+      reserved:
+      - 10.244.24.73
+      static:
+      - 10.244.24.74
+      cloud_properties: {}
+    - range: 10.244.24.76/30
+      reserved:
+      - 10.244.24.77
+      static:
+      - 10.244.24.78
+      cloud_properties: {}
+    - range: 10.244.24.80/30
+      reserved:
+      - 10.244.24.81
+      static:
+      - 10.244.24.82
+      cloud_properties: {}
+    - range: 10.244.24.84/30
+      reserved:
+      - 10.244.24.85
+      static: []
+      cloud_properties: {}
+    - range: 10.244.24.88/30
+      reserved:
+      - 10.244.24.89
+      static: []
+      cloud_properties: {}
+    - range: 10.244.24.92/30
+      reserved:
+      - 10.244.24.93
+      static: []
+      cloud_properties: {}
+    - range: 10.244.24.96/30
+      reserved:
+      - 10.244.24.97
+      static: []
+      cloud_properties: {}
+    - range: 10.244.24.100/30
+      reserved:
+      - 10.244.24.101
+      static: []
+      cloud_properties: {}
+    - range: 10.244.24.104/30
+      reserved:
+      - 10.244.24.105
+      static: []
+      cloud_properties: {}
+    - range: 10.244.24.108/30
+      reserved:
+      - 10.244.24.109
+      static: []
+      cloud_properties: {}
+    - range: 10.244.24.112/30
+      reserved:
+      - 10.244.24.113
+      static: []
+      cloud_properties: {}
+    - range: 10.244.24.116/30
+      reserved:
+      - 10.244.24.117
+      static: []
+      cloud_properties: {}
+    - range: 10.244.24.120/30
+      reserved:
+      - 10.244.24.121
+      static: []
+      cloud_properties: {}
+  - name: diego3
+    type: manual
+    subnets:
+    - range: 10.244.26.0/30
+      reserved:
+      - 10.244.26.1
+      static:
+      - 10.244.26.2
+      cloud_properties: {}
+    - range: 10.244.26.4/30
+      reserved:
+      - 10.244.26.5
+      static:
+      - 10.244.26.6
+      cloud_properties: {}
+    - range: 10.244.26.8/30
+      reserved:
+      - 10.244.26.9
+      static:
+      - 10.244.26.10
+      cloud_properties: {}
+    - range: 10.244.26.12/30
+      reserved:
+      - 10.244.26.13
+      static:
+      - 10.244.26.14
+      cloud_properties: {}
+    - range: 10.244.26.16/30
+      reserved:
+      - 10.244.26.17
+      static:
+      - 10.244.26.18
+      cloud_properties: {}
+    - range: 10.244.26.20/30
+      reserved:
+      - 10.244.26.21
+      static:
+      - 10.244.26.22
+      cloud_properties: {}
+    - range: 10.244.26.24/30
+      reserved:
+      - 10.244.26.25
+      static:
+      - 10.244.26.26
+      cloud_properties: {}
+    - range: 10.244.26.28/30
+      reserved:
+      - 10.244.26.29
+      static:
+      - 10.244.26.30
+      cloud_properties: {}
+    - range: 10.244.26.32/30
+      reserved:
+      - 10.244.26.33
+      static:
+      - 10.244.26.34
+      cloud_properties: {}
+    - range: 10.244.26.36/30
+      reserved:
+      - 10.244.26.37
+      static:
+      - 10.244.26.38
+      cloud_properties: {}
+    - range: 10.244.26.40/30
+      reserved:
+      - 10.244.26.41
+      static:
+      - 10.244.26.42
+      cloud_properties: {}
+    - range: 10.244.26.44/30
+      reserved:
+      - 10.244.26.45
+      static:
+      - 10.244.26.46
+      cloud_properties: {}
+    - range: 10.244.26.48/30
+      reserved:
+      - 10.244.26.49
+      static:
+      - 10.244.26.50
+      cloud_properties: {}
+    - range: 10.244.26.52/30
+      reserved:
+      - 10.244.26.53
+      static:
+      - 10.244.26.54
+      cloud_properties: {}
+    - range: 10.244.26.56/30
+      reserved:
+      - 10.244.26.57
+      static:
+      - 10.244.26.58
+      cloud_properties: {}
+    - range: 10.244.26.60/30
+      reserved:
+      - 10.244.26.61
+      static:
+      - 10.244.26.62
+      cloud_properties: {}
+    - range: 10.244.26.64/30
+      reserved:
+      - 10.244.26.65
+      static:
+      - 10.244.26.66
+      cloud_properties: {}
+    - range: 10.244.26.68/30
+      reserved:
+      - 10.244.26.69
+      static:
+      - 10.244.26.70
+      cloud_properties: {}
+    - range: 10.244.26.72/30
+      reserved:
+      - 10.244.26.73
+      static:
+      - 10.244.26.74
+      cloud_properties: {}
+    - range: 10.244.26.76/30
+      reserved:
+      - 10.244.26.77
+      static:
+      - 10.244.26.78
+      cloud_properties: {}
+    - range: 10.244.26.80/30
+      reserved:
+      - 10.244.26.81
+      static:
+      - 10.244.26.82
+      cloud_properties: {}
+    - range: 10.244.26.84/30
+      reserved:
+      - 10.244.26.85
+      static: []
+      cloud_properties: {}
+    - range: 10.244.26.88/30
+      reserved:
+      - 10.244.26.89
+      static: []
+      cloud_properties: {}
+    - range: 10.244.26.92/30
+      reserved:
+      - 10.244.26.93
+      static: []
+      cloud_properties: {}
+    - range: 10.244.26.96/30
+      reserved:
+      - 10.244.26.97
+      static: []
+      cloud_properties: {}
+    - range: 10.244.26.100/30
+      reserved:
+      - 10.244.26.101
+      static: []
+      cloud_properties: {}
+    - range: 10.244.26.104/30
+      reserved:
+      - 10.244.26.105
+      static: []
+      cloud_properties: {}
+    - range: 10.244.26.108/30
+      reserved:
+      - 10.244.26.109
+      static: []
+      cloud_properties: {}
+    - range: 10.244.26.112/30
+      reserved:
+      - 10.244.26.113
+      static: []
+      cloud_properties: {}
+    - range: 10.244.26.116/30
+      reserved:
+      - 10.244.26.117
+      static: []
+      cloud_properties: {}
+    - range: 10.244.26.120/30
+      reserved:
+      - 10.244.26.121
+      static: []
+      cloud_properties: {}

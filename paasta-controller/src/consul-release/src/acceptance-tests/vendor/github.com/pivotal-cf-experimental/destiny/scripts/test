@@ -1,0 +1,12 @@
+#!/bin/bash -eu
+
+function main() {
+	local root_dir
+	root_dir="$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." && pwd )"
+
+	pushd "${root_dir}" > /dev/null
+	  GO15VENDOREXPERIMENT=1 ginkgo -succinct -r -p -race -randomizeAllSpecs ${@}
+	popd > /dev/null
+}
+
+main "${@:-""}"

@@ -1,0 +1,6 @@
+check process etcd_proxy
+  with pidfile /var/vcap/sys/run/etcd_proxy/etcd_proxy.pid
+  start program "/var/vcap/jobs/etcd_proxy/bin/etcd_proxy_ctl start"
+    as uid vcap and gid vcap with timeout 60 seconds
+  stop program "/var/vcap/jobs/etcd_proxy/bin/etcd_proxy_ctl stop"
+  group vcap

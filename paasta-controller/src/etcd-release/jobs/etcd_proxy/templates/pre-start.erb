@@ -1,0 +1,23 @@
+#!/bin/bash -exu
+
+RUN_DIR=/var/vcap/sys/run/etcd_proxy
+LOG_DIR=/var/vcap/sys/log/etcd_proxy
+CERT_DIR=/var/vcap/jobs/etcd_proxy/certs
+
+function create_directories_and_chown_to_vcap() {
+  mkdir -p ${LOG_DIR}
+  chown -R vcap:vcap ${LOG_DIR}
+
+  # This is here for upgrade purposes to ensure RUN_DIR is owned by vcap
+  mkdir -p ${RUN_DIR}
+  chown -R vcap:vcap ${RUN_DIR}
+
+  mkdir -p ${CERT_DIR}
+  chown -R vcap:vcap ${CERT_DIR}
+}
+
+function main() {
+  create_directories_and_chown_to_vcap
+}
+
+main

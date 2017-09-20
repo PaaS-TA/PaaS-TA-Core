@@ -1,0 +1,5 @@
+#!/bin/bash
+
+set -ex
+
+ginkgo -r -race -randomizeAllSpecs src/deaagent

@@ -1,0 +1,85 @@
+$Error.Clear()
+
+Configuration ConsulWindows {
+  Node "localhost" {
+
+    Script SetupDNS {
+      SetScript = {
+        [array]$routeable_interfaces = Get-WmiObject Win32_NetworkAdapterConfiguration | Where { $_.IpAddress -AND ($_.IpAddress | Where { $addr = [Net.IPAddress] $_; $addr.AddressFamily -eq "InterNetwork" -AND ($addr.address -BAND ([Net.IPAddress] "255.255.0.0").address) -ne ([Net.IPAddress] "169.254.0.0").address }) }
+        $ifindex = $routeable_interfaces[0].Index
+        $interface = (Get-WmiObject Win32_NetworkAdapter | Where { $_.DeviceID -eq $ifindex }).netconnectionid
+
+        $currentDNS = ((Get-DnsClientServerAddress -InterfaceAlias $interface) | where { $_.AddressFamily -eq [System.Net.Sockets.AddressFamily]::InterNetwork }).ServerAddresses
+        $newDNS = @("127.0.0.1") + $currentDNS
+        Set-DnsClientServerAddress -InterfaceAlias $interface -ServerAddresses ($newDNS -join ",")
+      }
+      GetScript = {
+        return $false
+      }
+      TestScript = {
+        [array]$routeable_interfaces = Get-WmiObject Win32_NetworkAdapterConfiguration | Where { $_.IpAddress -AND ($_.IpAddress | Where { $addr = [Net.IPAddress] $_; $addr.AddressFamily -eq "InterNetwork" -AND ($addr.address -BAND ([Net.IPAddress] "255.255.0.0").address) -ne ([Net.IPAddress] "169.254.0.0").address }) }
+        $ifindex = $routeable_interfaces[0].Index
+        $interface = (Get-WmiObject Win32_NetworkAdapter | Where { $_.DeviceID -eq $ifindex }).netconnectionid
+
+        if((Get-DnsClientServerAddress -InterfaceAlias $interface -AddressFamily ipv4 -ErrorAction Stop).ServerAddresses[0] -eq "127.0.0.1")
+        {
+          Write-Verbose -Message "DNS Servers are set correctly."
+          return $true
+        }
+        else
+        {
+          Write-Verbose -Message "DNS Servers not yet correct."
+          return $false
+        }
+      }
+    }
+
+    Script ClearDNSCache
+    {
+        SetScript = {
+            Clear-DnsClientCache
+        }
+        GetScript = {
+            Get-DnsClientCache
+        }
+        TestScript = {
+            @(Get-DnsClientCache).Count -eq 0
+        }
+    }
+
+    Registry DisableDNSNegativeCache
+    {
+        Ensure = "Present"
+        Key = "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\Dnscache\Parameters"
+        ValueName = "MaxNegativeCacheTtl"
+        ValueType = "DWord"
+        ValueData = "0"
+    }
+  }
+}
+
+if (![bool](Test-WSMan -ErrorAction SilentlyContinue)) {
+  Enable-PSRemoting -Force
+}
+
+$LOG_DIR="/var/vcap/sys/log/consul_agent_windows"
+$DATA_DIR="/var/vcap/data/consul_agent_windows"
+$CONF_DIR="/var/vcap/jobs/consul_agent_windows/config"
+$CERT_DIR="$CONF_DIR/certs"
+
+New-Item -ItemType Directory -Force -Path "${LOG_DIR}"
+New-Item -ItemType Directory -Force -Path "${DATA_DIR}"
+New-Item -ItemType Directory -Force -Path "${CONF_DIR}"
+New-Item -ItemType Directory -Force -Path "${CERT_DIR}"
+
+Install-WindowsFeature DSC-Service
+ConsulWindows
+Start-DscConfiguration -Wait -Path .\ConsulWindows -Force -Verbose
+
+if ($Error) {
+    Write-Host "Error summary:"
+    foreach($ErrorMessage in $Error)
+    {
+      Write-Host $ErrorMessage
+    }
+}

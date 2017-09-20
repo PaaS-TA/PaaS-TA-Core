@@ -1,0 +1,8 @@
+---
+name: confab
+
+dependencies:
+  - golang1.7
+
+files:
+  - confab/**/*

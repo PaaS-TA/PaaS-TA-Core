@@ -1,0 +1,21 @@
+---
+consul/consul-template_0.14.0_linux_amd64.zip:
+  object_id: 9658016c-ab14-4037-b859-d144fa9fc9e7
+  sha: f932301f69a477253e4e4bf3c60159ea77cf28a8
+  size: 3523492
+consul/consul_0.7.0_linux_amd64.zip:
+  object_id: 968385bb-5742-4655-874f-52217187effe
+  sha: 32d5f51c35b75216cf73cabe0329239355dc4266
+  size: 6470848
+consul-windows/consul_0.7.0_windows_amd64.zip:
+  object_id: 3cdd73d8-5785-472d-99f7-af4df0ff4b72
+  sha: b3c92be882b51a5b98b2b6994ef2bb18f57ded8b
+  size: 6431639
+golang/go1.7.3.linux-amd64.tar.gz:
+  object_id: 892023d4-f2da-4f93-8638-047c54bc6fd3
+  sha: ead40e884ad4d6512bcf7b3c7420dd7fa4a96140
+  size: 82565628
+golang/go1.7.3.windows-amd64.zip:
+  object_id: 2bacba8a-7304-46bc-be46-0747b94b4368
+  sha: d10f32a97baa97344af80b6fa61374debe12124f
+  size: 88850225

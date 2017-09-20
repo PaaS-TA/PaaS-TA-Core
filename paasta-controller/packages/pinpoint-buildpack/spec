@@ -1,0 +1,9 @@
+---
+name: pinpoint-buildpack
+files:
+#- pinpoint-buildpack/egov-java-buildpack-offline-egov*.zip
+- pinpoint-buildpack/bin/*
+- pinpoint-buildpack/config/*.*
+- pinpoint-buildpack/lib/**/*.*
+- pinpoint-buildpack/resources/**/*.*
+

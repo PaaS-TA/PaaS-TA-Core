@@ -1,0 +1,31 @@
+azs:
+- name: z1
+
+vm_types:
+- name: default
+
+networks:
+- name: private
+  type: manual
+  subnets:
+  - az: z1
+    cloud_properties:
+      name: random
+    gateway: 10.244.2.1
+    range: 10.244.2.0/24
+    reserved:
+    - 10.244.2.2-10.244.2.3
+    - 10.244.2.255
+    static:
+    - 10.244.2.4
+
+disk_types:
+- name: default
+  disk_size: 1024
+
+compilation:
+  workers: 3
+  network: private
+  az: z1
+  reuse_compilation_vms: true
+  vm_type: default

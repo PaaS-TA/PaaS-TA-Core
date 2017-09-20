@@ -1,0 +1,10 @@
+#!/bin/bash
+
+CONTAINER_ROOT_DIRECTORY="$( cd "$( dirname "${BASH_SOURCE[0]}" )"/../../.. && pwd )"
+
+mkdir -p "${GOPATH}/src/github.com/cloudfoundry-incubator"
+
+pushd "${GOPATH}/src/github.com/cloudfoundry-incubator" > /dev/null
+  ln -s "${CONTAINER_ROOT_DIRECTORY}/check-a-record"
+  GO15VENDOREXPERIMENT=1 ginkgo -r check-a-record
+popd > /dev/null

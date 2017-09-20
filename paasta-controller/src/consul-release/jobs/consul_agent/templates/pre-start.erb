@@ -1,0 +1,50 @@
+#!/bin/bash -exu
+
+LOG_DIR=/var/vcap/sys/log/consul_agent
+DATA_DIR=<%= p('consul.agent.mode') == 'server' ? '/var/vcap/store/consul_agent' :
+  '/var/vcap/data/consul_agent' %>
+CONF_DIR=/var/vcap/jobs/consul_agent/config
+CERT_DIR=$CONF_DIR/certs
+PKG_DIR=/var/vcap/packages
+RUN_DIR=/var/vcap/sys/run/consul_agent
+
+function setup_resolvconf() {
+  local resolvconf_file
+  resolvconf_file=/etc/resolvconf/resolv.conf.d/head
+
+  if ! grep -qE '127.0.0.1\b' "${resolvconf_file}"; then
+          if [[ "$(stat -c "%s" "${resolvconf_file}")" = "0" ]]; then
+                  echo 'nameserver 127.0.0.1' > "${resolvconf_file}"
+          else
+                  sed -i -e '1i nameserver 127.0.0.1' "${resolvconf_file}"
+          fi
+  fi
+
+  resolvconf -u
+}
+
+function create_directories_and_chown_to_vcap() {
+  mkdir -p "${LOG_DIR}"
+  chown -R vcap:vcap "${LOG_DIR}"
+
+  mkdir -p "${DATA_DIR}"
+  chown -R vcap:vcap "${DATA_DIR}"
+
+  mkdir -p "${CONF_DIR}"
+  chown -R vcap:vcap "${CONF_DIR}"
+
+  mkdir -p "${RUN_DIR}"
+  chown -R vcap:vcap "${RUN_DIR}"
+
+  chown vcap:vcap ${CERT_DIR}/*.{crt,key}
+  chmod 640 ${CERT_DIR}/*.{crt,key}
+}
+
+function main() {
+  create_directories_and_chown_to_vcap
+
+  setup_resolvconf
+  setcap cap_net_bind_service=+ep ${PKG_DIR}/consul/bin/consul
+}
+
+main

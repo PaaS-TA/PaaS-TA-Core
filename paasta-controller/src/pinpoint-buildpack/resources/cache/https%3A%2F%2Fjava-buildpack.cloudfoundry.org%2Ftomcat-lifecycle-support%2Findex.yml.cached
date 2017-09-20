@@ -1,0 +1,7 @@
+---
+2.0.0_RELEASE: https://java-buildpack.cloudfoundry.org/tomcat-lifecycle-support/tomcat-lifecycle-support-2.0.0_RELEASE.jar
+2.1.0_RELEASE: https://java-buildpack.cloudfoundry.org/tomcat-lifecycle-support/tomcat-lifecycle-support-2.1.0_RELEASE.jar
+2.2.0_RELEASE: https://java-buildpack.cloudfoundry.org/tomcat-lifecycle-support/tomcat-lifecycle-support-2.2.0_RELEASE.jar
+2.3.0_RELEASE: https://java-buildpack.cloudfoundry.org/tomcat-lifecycle-support/tomcat-lifecycle-support-2.3.0_RELEASE.jar
+2.4.0_RELEASE: https://java-buildpack.cloudfoundry.org/tomcat-lifecycle-support/tomcat-lifecycle-support-2.4.0_RELEASE.jar
+2.5.0_RELEASE: https://java-buildpack.cloudfoundry.org/tomcat-lifecycle-support/tomcat-lifecycle-support-2.5.0_RELEASE.jar

@@ -1,0 +1,42 @@
+#!/bin/bash -exu
+
+function main() {
+  local run_dir
+  run_dir="/var/vcap/sys/run/consul-test-consumer"
+
+  local log_dir
+  log_dir="/var/vcap/sys/log/consul-test-consumer"
+
+  local pkg_dir
+  pkg_dir="/var/vcap/packages/acceptance-tests"
+
+  local pidfile
+  pidfile="${run_dir}/consul-test-consumer.pid"
+
+  mkdir -p "${run_dir}"
+  mkdir -p "${log_dir}"
+
+  case "${1}" in
+    "start")
+      chpst -u vcap:vcap "${pkg_dir}/bin/testconsumer" --port 6769 --consul-url http://127.0.0.1:8500 --path-to-check-a-record "${pkg_dir}/bin/check-a-record" \
+        2> >(tee -a ${log_dir}/consul-test-consumer.stderr.log | logger -p user.error -t vcap.consul-test-consumer) \
+        1> >(tee -a ${log_dir}/consul-test-consumer.stdout.log | logger -p user.info  -t vcap.consul-test-consumer) &
+      echo "${!}" > "${pidfile}"
+      ;;
+
+    "stop")
+      local pid
+      pid="$(cat "${pidfile}")"
+
+      kill -9 "${pid}"
+      rm "${pidfile}"
+      ;;
+
+    *)
+      echo "Usage: $0 {start|stop}"
+      ;;
+
+  esac
+}
+
+main ${@}

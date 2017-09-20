@@ -1,0 +1,88 @@
+---
+name: etcd
+templates:
+  pre-start.erb: bin/pre-start
+  dns_health_check.erb: bin/dns_health_check
+  drain: bin/drain
+  etcd_bosh_utils.sh.erb: bin/etcd_bosh_utils.sh
+  etcd_ctl.erb: bin/etcd_ctl
+  etcd_ctl_wrapper.erb: bin/etcd_ctl_wrapper
+  etcd_consistency_checker_ctl.sh.erb: bin/etcd_consistency_checker_ctl
+  etcd_network_diagnostics_run_ctl.sh.erb: bin/etcd_network_diagnostics_run_ctl.sh
+  etcd_network_diagnostics_run.sh.erb: bin/etcd_network_diagnostics_run.sh
+
+packages:
+  - etcd-common
+  - etcd
+  - etcd-dns-checker
+  - etcd-consistency-checker
+
+properties:
+  etcd.enable_network_diagnostics:
+    description: "Enable network diagnostics for etcd"
+    default: true
+
+  etcd.network_diagnostics_duration_in_seconds:
+    description: "Time in seconds that network diagnostic logs will be collected at startup"
+    default: 300
+
+  etcd.heartbeat_interval_in_milliseconds:
+    description: "Interval between heartbeats in milliseconds. See https://coreos.com/docs/cluster-management/debugging/etcd-tuning"
+    default: 50
+
+  etcd.election_timeout_in_milliseconds:
+    description: "Time without receiving a heartbeat before peer should attempt to become leader in milliseconds. See https://coreos.com/docs/cluster-management/debugging/etcd-tuning"
+    default: 1000
+
+  etcd.machines:
+    description: "Addresses of etcd machines"
+
+  etcd.cluster:
+    description: "Information about etcd cluster"
+
+  etcd.require_ssl:
+    description: "enable ssl for all communication with etcd"
+    default: true
+
+  etcd.ca_cert:
+    description: "PEM-encoded CA certificate"
+
+  etcd.server_cert:
+    description: "PEM-encoded server certificate"
+
+  etcd.server_key:
+    description: "PEM-encoded server key"
+
+  etcd.client_cert:
+    description: "PEM-encoded client certificate"
+
+  etcd.client_key:
+    description: "PEM-encoded client key"
+
+  etcd.client_ip:
+    description: "IP for etcd client"
+    default: "0.0.0.0"
+
+  etcd.peer_require_ssl:
+    description: "enable ssl between etcd peers"
+    default: true
+
+  etcd.peer_ca_cert:
+    description: "PEM-encoded peer CA certificate"
+
+  etcd.peer_cert:
+    description: "PEM-encoded peer certificate"
+
+  etcd.peer_key:
+    description: "PEM-encoded peer key"
+
+  etcd.peer_ip:
+    description: "IP for etcd peer"
+    default: "0.0.0.0"
+
+  etcd.dns_health_check_host:
+    description: "Host to ping for confirmation of DNS resolution"
+    default: "consul.service.cf.internal"
+
+  etcd.advertise_urls_dns_suffix:
+    description: "DNS suffix for all nodes in the etcd cluster"

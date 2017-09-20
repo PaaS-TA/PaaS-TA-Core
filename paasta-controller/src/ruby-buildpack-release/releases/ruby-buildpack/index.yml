@@ -1,0 +1,5 @@
+---
+builds:
+  eb2366f3-72fc-4eee-9bf2-199bb7f9d954:
+    version: 1.6.27
+format-version: '2'

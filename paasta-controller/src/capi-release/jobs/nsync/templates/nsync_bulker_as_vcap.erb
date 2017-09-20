@@ -1,0 +1,44 @@
+#!/bin/bash -e
+
+LOG_DIR=/var/vcap/sys/log/nsync
+CONF_DIR=/var/vcap/jobs/nsync/config
+
+<% require "shellwords" %>
+
+<% if p("capi.nsync.bbs.require_ssl") %>
+  bbs_sec_flags=" \
+   -bbsClientCert=${CONF_DIR}/certs/bbs/client.crt \
+   -bbsClientKey=${CONF_DIR}/certs/bbs/client.key \
+   -bbsCACert=${CONF_DIR}/certs/bbs/ca.crt"
+
+  bbs_api_url="<%= "https://" + p("capi.nsync.bbs.api_location") %>"
+<% else %>
+  bbs_sec_flags=""
+  bbs_api_url="<%= "http://" + p("capi.nsync.bbs.api_location") %>"
+<% end %>
+
+
+exec /var/vcap/packages/nsync/bin/nsync-bulker ${bbs_sec_flags} \
+  -bbsAddress=${bbs_api_url} \
+  <% if_p("capi.nsync.bbs.client_session_cache_size") do |value| %> \
+    -bbsClientSessionCacheSize=<%= value %> \
+  <% end %> \
+  <% if_p("capi.nsync.bbs.max_idle_conns_per_host") do |value| %> \
+    -bbsMaxIdleConnsPerHost=<%= value %> \
+  <% end %> \
+  -dropsondePort=<%= p("capi.nsync.dropsonde_port") %> \
+  -privilegedContainers=<%= p("capi.nsync.diego_privileged_containers") %> \
+  -consulCluster=http://127.0.0.1:<%= p("capi.nsync.consul_agent_port") %> \
+  -ccBaseURL=<%= Shellwords.shellescape(p("capi.nsync.cc.base_url")) %> \
+  -ccUsername=<%= Shellwords.shellescape(p("capi.nsync.cc.basic_auth_username")) %> \
+  -ccPassword=<%= Shellwords.shellescape(p("capi.nsync.cc.basic_auth_password")) %> \
+  -communicationTimeout=<%= "#{p("capi.nsync.cc.fetch_timeout_in_seconds")}s" %> \
+  -debugAddr=<%= p("capi.nsync.bulker_debug_addr") %> \
+  -pollingInterval=<%= "#{p("capi.nsync.cc.polling_interval_in_seconds")}s" %> \
+  -bulkBatchSize=<%= p("capi.nsync.cc.bulk_batch_size") %> \
+  -skipCertVerify=<%= p("diego.ssl.skip_cert_verify") %> \
+  <%= p("capi.nsync.lifecycle_bundles").map { |bundle| "-lifecycle #{bundle}" }.join(" ") %> \
+  -fileServerURL=<%= p("capi.nsync.file_server_url") %> \
+  -logLevel=<%= p("capi.nsync.log_level") %> \
+  2> >(tee -a $LOG_DIR/nsync_bulker.stderr.log | logger -p user.error -t vcap.nsync-bulker) \
+  1> >(tee -a $LOG_DIR/nsync_bulker.stdout.log | logger -p user.info -t vcap.nsync-bulker)

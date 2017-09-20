@@ -1,0 +1,7 @@
+---
+1.0.0_RELEASE: https://java-buildpack.cloudfoundry.org/memory-calculator/mountainlion/x86_64/memory-calculator-1.0.0_RELEASE
+1.1.0_RELEASE: https://java-buildpack.cloudfoundry.org/memory-calculator/mountainlion/x86_64/memory-calculator-1.1.0_RELEASE
+1.1.1_RELEASE: https://java-buildpack.cloudfoundry.org/memory-calculator/mountainlion/x86_64/memory-calculator-1.1.1_RELEASE
+2.0.0_RELEASE: https://java-buildpack.cloudfoundry.org/memory-calculator/mountainlion/x86_64/memory-calculator-2.0.0_RELEASE.tar.gz
+2.0.1_RELEASE: https://java-buildpack.cloudfoundry.org/memory-calculator/mountainlion/x86_64/memory-calculator-2.0.1_RELEASE.tar.gz
+2.0.2_RELEASE: https://java-buildpack.cloudfoundry.org/memory-calculator/mountainlion/x86_64/memory-calculator-2.0.2_RELEASE.tar.gz

@@ -1,0 +1,11 @@
+---
+builds:
+  a03aea65-d9c2-448b-9536-39cecb42bda9:
+    version: 1.0.1
+  8b363f1e-0725-4f9d-b019-2d6ff4acfa4c:
+    version: 1.0.2
+  d7763af6-0bcc-49b1-b29c-55caa6ed5cae:
+    version: 1.0.3
+  56664455-b051-4e7c-aa3a-5c120461ab3e:
+    version: 1.0.4
+format-version: '2'

@@ -1,0 +1,20 @@
+groups:
+- name: gomegamatchers
+  jobs:
+  - test-gomegamatchers
+
+resources:
+- name: gomegamatchers
+  type: git
+  source:
+    branch: master
+    uri: https://github.com/pivotal-cf-experimental/gomegamatchers.git
+
+jobs:
+- name: test-gomegamatchers
+  public: true
+  plan:
+  - get: gomegamatchers
+    trigger: true
+  - task: test
+    file: gomegamatchers/ci/tasks/test/test.yml

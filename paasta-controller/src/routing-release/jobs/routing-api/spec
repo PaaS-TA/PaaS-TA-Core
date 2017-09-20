@@ -1,0 +1,110 @@
+---
+name: routing-api
+templates:
+  routing-api_ctl.erb: bin/routing-api_ctl
+  dns_health_check.erb: bin/dns_health_check
+  pre-start: bin/pre-start
+  etcd_ca.crt.erb: config/certs/etcd/ca.crt
+  etcd_client.crt.erb: config/certs/etcd/client.crt
+  uaa_ca.crt.erb: config/certs/uaa/ca.crt
+  etcd_client.key.erb: config/certs/etcd/client.key
+  routing-api.yml.erb: config/routing-api.yml
+
+packages:
+- routing-api
+- routing_utils
+
+properties:
+  routing_api.max_ttl:
+    description: "String representing the maximum TTL a client can request for route registration."
+    default: "120s"
+  routing_api.auth_disabled:
+    description: "Disables UAA authentication"
+    default: false
+  routing_api.metrics_reporting_interval:
+    description: "String representing interval for reporting the following metrics: total_http_subscriptions, total_http_routes, total_tcp_subscriptions, total_tcp_routes, total_token_errors, key_refresh_events. Units: ms, s, m h"
+    default: "30s"
+  routing_api.statsd_endpoint:
+    description: "The endpoint for the statsd server used to translate the following metrics from statsd to dropsonde: total_http_subscriptions, total_http_routes, total_tcp_subscriptions, total_tcp_routes, total_token_errors, key_refresh_events."
+    default: "localhost:8125"
+  routing_api.debug_address:
+    description: "Address at which to serve debug info"
+    default: "0.0.0.0:17002"
+  routing_api.statsd_client_flush_interval:
+    description: "Buffered statsd client flush interval"
+    default: "300ms"
+  routing_api.system_domain:
+    description: "Domain reserved for CF operator; base URL where the UAA, Cloud Controller, and other non-user apps listen"
+  skip_ssl_validation:
+    description: Skip TLS verification when talking to UAA
+    default: false
+  routing_api.log_level:
+    description: "Log level"
+    default: "info"
+
+  routing_api.etcd.servers:
+    description: "Must be the internal DNS name for the etcd cluster when require_ssl:true. When require_ssl:false either a DNS name or an array of IP addresses is supported."
+  routing_api.etcd.client_cert:
+     description: "Client certificate for communication between clients and etcd"
+     default: ""
+  routing_api.etcd.client_key:
+     description: "Client key for communication between clients and etcd"
+     default: ""
+  routing_api.etcd.ca_cert:
+     description: "Certificate authority used to sign cert hosted by etcd"
+     default: ""
+  routing_api.etcd.require_ssl:
+     description: "etcd requires client to communicate via TLS"
+     default: false
+
+  metron.port:
+    description: "The port used to emit dropsonde messages to the Metron agent."
+    default: 3457
+
+  dns_health_check_host:
+    description: "Host to ping for confirmation of DNS resolution"
+    default: consul.service.cf.internal
+
+  routing_api.sqldb.host:
+    description: "Host for SQL database"
+  routing_api.sqldb.port:
+    description: "Port on which SQL database is listening"
+
+  routing_api.sqldb.type:
+    description: "Type of SQL database"
+    example: "mysql"
+  routing_api.sqldb.schema:
+    description: "Database name for routing api"
+    example: "routing_api"
+
+  routing_api.sqldb.username:
+    description: "Username used for connecting to SQL database"
+  routing_api.sqldb.password:
+    description: "Password used for connecting to SQL database"
+
+  uaa.ca_cert:
+    description : "Certificate authority for communication between clients and UAA."
+    default: ""
+
+  uaa.tls_port:
+    description: "Port on which UAA is listening for TLS connections. This is required for obtaining a key to verify client OAuth tokens."
+
+  routing_api.router_groups:
+    description: "Array of router groups that will be seeded into routing_api database. Once some value is included with a deploy, subsequent changes to this property will be ignored. TCP Routing requires a router group of type: tcp."
+    default: []
+    example: |
+      - name: default-tcp
+        reservable_ports: 1024-10000,12000
+        type: tcp
+
+  consul.servers:
+    description: "comma-separated list of consul server URLs (scheme://ip:port)"
+    default: "http://127.0.0.1:8500"
+
+  routing_api.lock_ttl:
+    description: "TTL for service lock"
+    default: "10s"
+
+  routing_api.lock_retry_interval:
+    description: "interval to wait before retrying a failed lock acquisition"
+    default: "5s"

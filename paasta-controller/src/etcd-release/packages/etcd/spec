@@ -1,0 +1,5 @@
+---
+name: etcd
+
+files:
+  - etcd/etcd-v2.1.1-linux-amd64.tar.gz

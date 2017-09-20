@@ -1,0 +1,21 @@
+---
+packages:
+- name: consul-common
+  version: ffab9ae7bea8a053aacca8816681e241b0fab30b
+  fingerprint: ffab9ae7bea8a053aacca8816681e241b0fab30b
+  sha1: 250008511c54b31a506e527d0c80636f4da00a83
+  dependencies: []
+- name: consul
+  version: 14b83378b30a2b55a25e641e835af3e5c87a0d41
+  fingerprint: 14b83378b30a2b55a25e641e835af3e5c87a0d41
+  sha1: a7763aa8a87f006bbd28620ae59f77e2888aaa29
+  dependencies: []
+jobs:
+- name: consul_agent
+  version: ac2d634f0a17241bd63dc9aa78cb941fae458de4
+  fingerprint: ac2d634f0a17241bd63dc9aa78cb941fae458de4
+  sha1: 93f38e073664cd9a408ff08a18a8a21258e9b3ea
+commit_hash: 707d0cba
+uncommitted_changes: false
+name: consul
+version: '2'

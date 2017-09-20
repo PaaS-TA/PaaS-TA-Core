@@ -1,0 +1,7 @@
+---
+builds:
+  f4164e3f-3816-4cc0-b2ee-e449693fd47f:
+    version: 1.0.3
+  2224c034-2088-4c04-be12-67847daef7a8:
+    version: 1.0.4
+format-version: '2'

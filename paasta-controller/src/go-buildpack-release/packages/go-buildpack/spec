@@ -1,0 +1,4 @@
+---
+name: go-buildpack
+files:
+- go-buildpack/go_buildpack-cached-*.zip

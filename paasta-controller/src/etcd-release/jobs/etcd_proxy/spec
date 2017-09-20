@@ -1,0 +1,41 @@
+---
+name: etcd_proxy
+
+description: "etcd http proxy server"
+
+templates:
+  etcd_proxy_ctl.erb: bin/etcd_proxy_ctl
+  pre-start.erb: bin/pre-start
+
+packages:
+  - etcd-common
+  - etcd_proxy
+
+properties:
+  etcd_proxy.etcd.dns_suffix:
+    description: "dns suffix of etcd server"
+    default: "etcd.service.cf.internal"
+
+  etcd_proxy.etcd.port:
+    description: "port of the etcd server"
+    default: 4001
+
+  etcd_proxy.etcd.ca_cert:
+    description: "etcd ca certificate"
+    default: ""
+
+  etcd_proxy.etcd.client_cert:
+    description: "etcd client certificate"
+    default: ""
+
+  etcd_proxy.etcd.client_key:
+    description: "etcd client key"
+    default: ""
+
+  etcd_proxy.port:
+    description: "port of proxy server"
+    default: 4001
+
+  etcd_proxy.ip:
+    description: "IP of proxy server"
+    default: "0.0.0.0"

@@ -1,0 +1,27 @@
+#!/bin/bash -exu
+
+CONSATS_DIR="/var/vcap/packages/acceptance-tests"
+
+export PATH="${PATH}:/var/vcap/packages/consul/bin"
+export GOROOT="$(readlink -nf /var/vcap/packages/golang1.7)"
+export GOPATH="${CONSATS_DIR}"
+export PATH="${GOROOT}/bin:${PATH}"
+export GO15VENDOREXPERIMENT=1
+
+export CONSATS_CONFIG=/tmp/config.json
+export CONSUL_RELEASE_VERSION="<%= p('consul.acceptance_tests.consul_release_version') %>"
+export LATEST_CONSUL_RELEASE_VERSION="<%= p('consul.acceptance_tests.latest_consul_release_version') %>"
+
+cat > $CONSATS_CONFIG <<EOF
+<%= p('consul.acceptance_tests').to_json %>
+EOF
+
+chown -R vcap:vcap "/var/vcap/data/"
+pushd "/var/vcap/data/tmp" > /dev/null
+
+<% if p('consul.acceptance_tests.enable_turbulence_tests') %>
+  chpst -u vcap:vcap bash -c "${GOPATH}/src/github.com/cloudfoundry-incubator/consul-release/src/acceptance-tests/scripts/test-turbulence -nodes <%= p('consul.acceptance_tests.parallel_nodes') %>"
+<% else %>
+  chpst -u vcap:vcap bash -c "${GOPATH}/src/github.com/cloudfoundry-incubator/consul-release/src/acceptance-tests/scripts/test -nodes <%= p('consul.acceptance_tests.parallel_nodes') %>"
+<% end %>
+popd > /dev/null

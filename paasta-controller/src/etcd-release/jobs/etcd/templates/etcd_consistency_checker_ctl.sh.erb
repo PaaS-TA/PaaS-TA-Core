@@ -1,0 +1,64 @@
+#!/bin/bash -exu
+
+SCRIPT_NAME=$(basename ${0})
+JOB_DIR=/var/vcap/jobs/etcd/bin
+RUN_DIR=/var/vcap/sys/run/etcd
+LOG_DIR=/var/vcap/sys/log/etcd
+PKG_DIR=/var/vcap/packages/etcd-consistency-checker
+PIDFILE=${RUN_DIR}/etcd_consistency_checker.pid
+CERT_DIR=/var/vcap/jobs/etcd/config/certs
+
+exec > >(tee -a >(logger -p user.info -t vcap.${SCRIPT_NAME}.stdout) | awk -W interactive '{ system("echo -n [$(date +\"%Y-%m-%d %H:%M:%S%z\")]"); print " " $0 }' >> ${LOG_DIR}/${SCRIPT_NAME}.log)
+exec 2> >(tee -a >(logger -p user.error -t vcap.${SCRIPT_NAME}.stderr) | awk -W interactive '{ system("echo -n [$(date +\"%Y-%m-%d %H:%M:%S%z\")]"); print " " $0 }' >> ${LOG_DIR}/${SCRIPT_NAME}.err.log)
+
+function main() {
+  case "${1}" in
+    "start")
+      set +x
+      source "${JOB_DIR}/etcd_bosh_utils.sh"
+      set -x
+
+      local tls_flags
+      tls_flags=""
+
+      <% if p("etcd.require_ssl") %>
+      set +e
+      /var/vcap/packages/etcd-dns-checker/bin/check-a-record <%= p("etcd.dns_health_check_host") %>
+      if [ "0" != "$?" ]; then
+        echo "DNS is not up"
+        exit 1
+      fi
+      set -e
+
+      tls_flags="\
+      --ca-cert ${CERT_DIR}/server-ca.crt \
+      --cert ${CERT_DIR}/client.crt \
+      --key ${CERT_DIR}/client.key"
+      <% end %>
+
+
+      "${PKG_DIR}/bin/etcd-consistency-checker" \
+        --cluster-members "${cluster_members}" \
+        ${tls_flags} \
+        2> >(tee -a ${LOG_DIR}/etcd_consistency_checker.stderr.log | logger -p user.error -t vcap.etcd_consistency_checker) \
+        1> >(tee -a ${LOG_DIR}/etcd_consistency_checker.stdout.log | logger -p user.info  -t vcap.etcd_consistency_checker) &
+
+      echo "${!}" > "${PIDFILE}"
+      ;;
+
+    "stop")
+      local pid
+      pid="$(cat "${PIDFILE}")"
+
+      kill -9 "${pid}"
+      rm "${PIDFILE}"
+      ;;
+
+    *)
+      echo "Usage: $0 {start|stop}"
+      ;;
+
+  esac
+}
+
+main ${@}

@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+
+LOG_DIR=/var/vcap/sys/log/nfs_mounter
+
+mkdir -p "${LOG_DIR}"
+chown vcap:vcap "${LOG_DIR}"

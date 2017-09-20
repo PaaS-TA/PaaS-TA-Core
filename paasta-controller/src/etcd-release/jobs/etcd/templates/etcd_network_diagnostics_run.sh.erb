@@ -1,0 +1,61 @@
+#!/bin/bash -xu
+
+function debug(){
+  echo $(date) - ${@}
+}
+
+function health_check() {
+  local node
+  node=$(echo "${1}" | sed 's/https:/http:/')
+  debug "curl ${node}/version"
+  curl -v -m 1 "${node}/version" > /dev/null
+  debug "curl against ${node}: Exited with status ${?}"
+}
+
+function member_list_single_node() {
+  local node
+  node="${1}"
+  debug "etcdctl -C ${node} member list"
+  /var/vcap/packages/etcd/etcdctl ${etcdctl_sec_flags} -debug -C "${node}" member list
+  debug "etcdctl -C ${node} member list: Exited with status ${?}"
+}
+
+function main() {
+  source /var/vcap/jobs/etcd/bin/etcd_bosh_utils.sh
+
+  debug "ifconfig"
+  ifconfig | sed 's/^/  /'
+  echo " "
+
+  local counter
+  counter=<%= p("etcd.network_diagnostics_duration_in_seconds") %>
+
+  until [ ${counter} -lt 0 ]; do
+    debug "Member-list"
+    member_list | sed 's/^/  /'
+    echo " "
+
+    debug "Individually query all members"
+    for cluster_member in $(echo ${cluster_members} | sed 's/,/ /g')
+    do
+      health_check "${cluster_member}" | sed 's/^/  /'
+      member_list_single_node "${cluster_member}" | sed 's/^/  /'
+      echo " "
+    done
+
+    debug "arp cache"
+    arp -v | sed 's/^/  /'
+    echo " "
+
+    debug "Sleeping for 3 seconds"
+    sleep 3
+    echo ""
+    echo ""
+
+    let counter-=3
+  done
+
+  debug "exiting"
+}
+
+main

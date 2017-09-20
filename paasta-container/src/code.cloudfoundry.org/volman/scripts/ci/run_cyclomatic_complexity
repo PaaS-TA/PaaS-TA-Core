@@ -1,0 +1,18 @@
+#!/bin/bash
+# vim: set ft=sh
+
+set -e
+
+cd volman/
+
+export GOROOT=/usr/local/go
+export GOPATH=/tmp
+export PATH=$GOROOT/bin:$PATH
+
+go get github.com/fzipp/gocyclo
+go install github.com/fzipp/gocyclo
+
+export GOPATH=$PWD:$GOPATH
+export PATH=$GOPATH/bin:$PATH
+
+gocyclo -top 10 .

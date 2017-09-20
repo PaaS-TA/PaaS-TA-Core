@@ -1,0 +1,6 @@
+check process etcd_testconsumer
+  with pidfile /var/vcap/sys/run/etcd_testconsumer/etcd_testconsumer.pid
+  start program "/var/vcap/jobs/etcd_testconsumer/bin/etcd_testconsumer_ctl start"
+    as uid vcap and gid vcap with timeout 60 seconds
+  stop program "/var/vcap/jobs/etcd_testconsumer/bin/etcd_testconsumer_ctl stop"
+  group vcap

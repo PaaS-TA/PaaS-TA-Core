@@ -1,0 +1,48 @@
+---
+log_guid: "routing_api"
+max_ttl: <%= p("routing_api.max_ttl") %>
+system_domain: <%= p("routing_api.system_domain") %>
+metron_config:
+  address: "localhost"
+  port: <%= p("metron.port") %>
+metrics_reporting_interval: <%= p("routing_api.metrics_reporting_interval") %>
+statsd_endpoint: <%= p("routing_api.statsd_endpoint") %>
+oauth:
+  token_endpoint: uaa.service.cf.internal
+  port: <%= p("uaa.tls_port") %>
+  skip_ssl_validation: <%= p("skip_ssl_validation") %>
+  <% if p("uaa.ca_cert") != "" %>
+  ca_certs: "/var/vcap/jobs/routing-api/config/certs/uaa/ca.crt"
+  <% end %>
+debug_address: <%= p("routing_api.debug_address") %>
+statsd_client_flush_interval: <%= p("routing_api.statsd_client_flush_interval") %>
+router_groups: <%= p("routing_api.router_groups").to_yaml.gsub("---","") %>
+
+consul_cluster:
+  servers: <%= p("consul.servers") %>
+  lock_ttl: <%= p("routing_api.lock_ttl") %>
+  retry_interval: <%= p("routing_api.lock_retry_interval") %>
+
+<% if_p("routing_api.etcd.servers") do %>
+etcd:
+  require_ssl: <%= p("routing_api.etcd.require_ssl") %>
+  ca_file: "/var/vcap/jobs/routing-api/config/certs/etcd/ca.crt"
+  cert_file: "/var/vcap/jobs/routing-api/config/certs/etcd/client.crt"
+  key_file: "/var/vcap/jobs/routing-api/config/certs/etcd/client.key"
+  node_urls: <%= p("routing_api.etcd.servers").map { |addr|
+  "#{p("routing_api.etcd.require_ssl") ? "https" : "http"}://#{addr}:4001"
+  } %>
+<% end %>
+
+<% if_p("routing_api.sqldb.host",
+    "routing_api.sqldb.port",
+    "routing_api.sqldb.type",
+    "routing_api.sqldb.schema") do |host, port, type, schema| %>
+sqldb:
+  host: <%= host %>
+  port: <%= port %>
+  schema: <%= schema %>
+  type: <%= type %>
+  username: <%= p("routing_api.sqldb.username") %>
+  password: <%= p("routing_api.sqldb.password") %>
+<% end %>

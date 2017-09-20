@@ -1,0 +1,23 @@
+#!/bin/bash
+set -exu
+
+LOG_DIR=/var/vcap/sys/log/nats
+mkdir -p $LOG_DIR
+chown -R vcap:vcap $LOG_DIR
+
+# Avoid Neighbour table overflow
+# gc_thresh2 and gc_thresh3 are the soft and hard limits for arp table gc
+set +e
+sysctl -w net.ipv4.neigh.default.gc_thresh3=4096
+sysctl -w net.ipv4.neigh.default.gc_thresh2=2048
+set -e
+
+# Now that nats_ctl is run as vcap (instead of root), the following code allows
+# the migration from root user to vcap user
+if [ -f /var/vcap/sys/log/nats_ctl.log ]; then
+  mv /var/vcap/sys/log/nats_ctl.log $LOG_DIR/nats_ctl.log
+fi
+
+if [ -f /var/vcap/sys/log/nats_ctl.err.log ]; then
+  mv /var/vcap/sys/log/nats_ctl.err.log $LOG_DIR/nats_ctl.err.log
+fi

@@ -1,0 +1,50 @@
+---
+packages:
+- name: gnatsd
+  version: 81f9a5debd447ad76ad55cae5b558a3a9a1dd1e1
+  fingerprint: 81f9a5debd447ad76ad55cae5b558a3a9a1dd1e1
+  sha1: 5cad517edeb3be5f87930d01a4656b2f388ac045
+  dependencies:
+  - golang1.6
+- name: golang1.6
+  version: 5dd4024894667ba7f647b883bbff25c04960e5c1
+  fingerprint: 5dd4024894667ba7f647b883bbff25c04960e5c1
+  sha1: 23cc982f5d6017804713e57dc7e5b456b8ea94d5
+  dependencies: []
+- name: nats-common
+  version: 1f712a21c0b1cbb3b547eccc79eb159aaee48b99
+  fingerprint: 1f712a21c0b1cbb3b547eccc79eb159aaee48b99
+  sha1: f29b5e4446c402a49cd0877dd72727556903e358
+  dependencies: []
+- name: nats
+  version: 9da10677048bd8c1237ae5f14ffe6be34ad16def
+  fingerprint: 9da10677048bd8c1237ae5f14ffe6be34ad16def
+  sha1: 5fb5e7a76e870415c4997dc80fe5df5f7bd74d80
+  dependencies:
+  - ruby-2.2.5
+- name: ruby-2.2.5
+  version: 1471d078219e7aee8cb9c0ab1aefabbec561bfa7
+  fingerprint: 1471d078219e7aee8cb9c0ab1aefabbec561bfa7
+  sha1: 578d7fa6ab3aee0ba97d535ab646209f67d1eb2a
+  dependencies: []
+jobs:
+- name: nats
+  version: c155e35428e6876d86673fd9673aed0094baa8c5
+  fingerprint: c155e35428e6876d86673fd9673aed0094baa8c5
+  sha1: 6b49487fabe001ee39f65a417aea814f03bed073
+- name: nats_stream_forwarder
+  version: 4515283e8bc83b4eeaf3ee28f33009facce33b8f
+  fingerprint: 4515283e8bc83b4eeaf3ee28f33009facce33b8f
+  sha1: 7ff19351c3488c0d59cbd2a2ae4b2db24b5eff4f
+- name: smoke-tests
+  version: bf7489511795f9f7c8ac6f1ef3be8541af3b70fe
+  fingerprint: bf7489511795f9f7c8ac6f1ef3be8541af3b70fe
+  sha1: a210d8af1f03b2ea10a5c959697ae9aee6c58384
+license:
+  version: 08f2aa9f376c717e823b012885bc61cecf8c816e
+  fingerprint: 08f2aa9f376c717e823b012885bc61cecf8c816e
+  sha1: 78a2bf9d49b84cec960c52c8c87310e66ca5176f
+commit_hash: 38627bd8
+uncommitted_changes: true
+name: nats
+version: '10'

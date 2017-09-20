@@ -1,0 +1,8 @@
+---
+name: pinpoint-buildpack
+templates: {}
+
+packages:
+- pinpoint-buildpack
+
+properties: {}

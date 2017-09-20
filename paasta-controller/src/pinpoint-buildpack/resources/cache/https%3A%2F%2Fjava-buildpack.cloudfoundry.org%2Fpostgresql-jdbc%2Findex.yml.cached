@@ -1,0 +1,27 @@
+---
+8.2.504: https://java-buildpack.cloudfoundry.org/postgresql-jdbc/postgresql-jdbc-8.2.504.jar
+8.2.507: https://java-buildpack.cloudfoundry.org/postgresql-jdbc/postgresql-jdbc-8.2.507.jar
+8.3.603: https://java-buildpack.cloudfoundry.org/postgresql-jdbc/postgresql-jdbc-8.3.603.jar
+8.3.606: https://java-buildpack.cloudfoundry.org/postgresql-jdbc/postgresql-jdbc-8.3.606.jar
+8.4.701: https://java-buildpack.cloudfoundry.org/postgresql-jdbc/postgresql-jdbc-8.4.701.jar
+8.4.702: https://java-buildpack.cloudfoundry.org/postgresql-jdbc/postgresql-jdbc-8.4.702.jar
+9.0.801: https://java-buildpack.cloudfoundry.org/postgresql-jdbc/postgresql-jdbc-9.0.801.jar
+9.1.901: https://java-buildpack.cloudfoundry.org/postgresql-jdbc/postgresql-jdbc-9.1.901.jar
+9.1.901_1: https://java-buildpack.cloudfoundry.org/postgresql-jdbc/postgresql-jdbc-9.1.901_1.jar
+9.2.1002: https://java-buildpack.cloudfoundry.org/postgresql-jdbc/postgresql-jdbc-9.2.1002.jar
+9.2.1003: https://java-buildpack.cloudfoundry.org/postgresql-jdbc/postgresql-jdbc-9.2.1003.jar
+9.2.1004: https://java-buildpack.cloudfoundry.org/postgresql-jdbc/postgresql-jdbc-9.2.1004.jar
+9.3.1100: https://java-buildpack.cloudfoundry.org/postgresql-jdbc/postgresql-jdbc-9.3.1100.jar
+9.3.1101: https://java-buildpack.cloudfoundry.org/postgresql-jdbc/postgresql-jdbc-9.3.1101.jar
+9.3.1102: https://java-buildpack.cloudfoundry.org/postgresql-jdbc/postgresql-jdbc-9.3.1102.jar
+9.3.1103: https://java-buildpack.cloudfoundry.org/postgresql-jdbc/postgresql-jdbc-9.3.1103.jar
+9.3.1104: https://java-buildpack.cloudfoundry.org/postgresql-jdbc/postgresql-jdbc-9.3.1104.jar
+9.4.1200: https://java-buildpack.cloudfoundry.org/postgresql-jdbc/postgresql-jdbc-9.4.1200.jar
+9.4.1201: https://java-buildpack.cloudfoundry.org/postgresql-jdbc/postgresql-jdbc-9.4.1201.jar
+9.4.1202: https://java-buildpack.cloudfoundry.org/postgresql-jdbc/postgresql-jdbc-9.4.1202.jar
+9.4.1203: https://java-buildpack.cloudfoundry.org/postgresql-jdbc/postgresql-jdbc-9.4.1203.jar
+9.4.1204: https://java-buildpack.cloudfoundry.org/postgresql-jdbc/postgresql-jdbc-9.4.1204.jar
+9.4.1205: https://java-buildpack.cloudfoundry.org/postgresql-jdbc/postgresql-jdbc-9.4.1205.jar
+9.4.1206: https://java-buildpack.cloudfoundry.org/postgresql-jdbc/postgresql-jdbc-9.4.1206.jar
+9.4.1207: https://java-buildpack.cloudfoundry.org/postgresql-jdbc/postgresql-jdbc-9.4.1207.jar
+9.4.1208: https://java-buildpack.cloudfoundry.org/postgresql-jdbc/postgresql-jdbc-9.4.1208.jar

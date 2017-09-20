@@ -1,0 +1,10 @@
+#!/bin/bash
+
+set -e -u -x
+
+go get -u github.com/kisielk/errcheck
+
+errcheck ./..
+go vet ./...
+
+ginkgo -r -p -failOnPending -randomizeAllSpecs -race "$@"

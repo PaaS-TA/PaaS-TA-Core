@@ -1,0 +1,1 @@
+web: logging-route-service

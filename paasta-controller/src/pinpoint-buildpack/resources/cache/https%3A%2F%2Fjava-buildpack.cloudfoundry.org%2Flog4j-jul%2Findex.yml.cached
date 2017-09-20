@@ -1,0 +1,5 @@
+---
+2.1.0: https://java-buildpack.cloudfoundry.org/log4j-jul/log4j-jul-2.1.0.jar
+2.5.0: https://java-buildpack.cloudfoundry.org/log4j-jul/log4j-jul-2.5.0.jar
+2.6.0: https://java-buildpack.cloudfoundry.org/log4j-jul/log4j-jul-2.6.0.jar
+2.6.1: https://java-buildpack.cloudfoundry.org/log4j-jul/log4j-jul-2.6.1.jar

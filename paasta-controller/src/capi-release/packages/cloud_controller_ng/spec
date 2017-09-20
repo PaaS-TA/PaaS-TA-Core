@@ -1,0 +1,20 @@
+---
+name: cloud_controller_ng
+dependencies:
+- libpq
+- libmariadb
+- ruby-2.3
+
+files:
+- capi-release/src/cloud_controller_ng/{.ruby-version,Rakefile,Gemfile,Gemfile.lock}
+- capi-release/src/cloud_controller_ng/{db,lib,bin,app,middleware}/**/*
+- capi-release/src/cloud_controller_ng/vendor/errors/**/*.yml
+- capi-release/src/cloud_controller_ng/config/initializers/**/*
+- capi-release/src/cloud_controller_ng/config/environments/**/*
+- capi-release/src/cloud_controller_ng/config/application.rb
+- capi-release/src/cloud_controller_ng/config/boot.rb
+- capi-release/src/cloud_controller_ng/config/environment.rb
+- capi-release/src/cloud_controller_ng/config/routes.rb
+- capi-release/src/cloud_controller_ng/config/version
+- capi-release/src/cloud_controller_ng/LICENSE
+- capi-release/src/cloud_controller_ng/NOTICE

@@ -1,0 +1,35 @@
+#!/bin/bash -e
+
+RUN_DIR=/var/vcap/sys/run/ssh_proxy
+LOG_DIR=/var/vcap/sys/log/ssh_proxy
+
+PIDFILE=$RUN_DIR/ssh_proxy.pid
+
+source /var/vcap/packages/pid_utils/pid_utils.sh
+
+case $1 in
+
+  start)
+    pid_guard $PIDFILE "ssh_proxy"
+
+    mkdir -p $RUN_DIR
+    chown -R vcap:vcap $RUN_DIR
+
+    mkdir -p $LOG_DIR
+    chown -R vcap:vcap $LOG_DIR
+
+    exec chpst -u vcap:vcap bash -c '/var/vcap/jobs/ssh_proxy/bin/ssh_proxy_as_vcap'
+
+    ;;
+
+  stop)
+    kill_and_wait $PIDFILE
+
+    ;;
+
+  *)
+    echo "Usage: $0 {start|stop}"
+
+    ;;
+
+esac

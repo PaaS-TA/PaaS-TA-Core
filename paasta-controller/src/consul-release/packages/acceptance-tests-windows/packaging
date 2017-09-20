@@ -1,0 +1,41 @@
+. ./exiter.ps1
+
+try {
+    $BOSH_INSTALL_TARGET = Resolve-Path "${env:BOSH_INSTALL_TARGET}"
+    $env:GO15VENDOREXPERIMENT = 1
+    $env:GOROOT = "C:\var\vcap\packages\golang1.7-windows\go"
+    $env:GOPATH = "${BOSH_INSTALL_TARGET}"
+    $env:PATH = "${env:GOROOT}\bin;${env:PATH}"
+
+    # acceptance-tests
+
+    Robocopy.exe /CREATE "${BOSH_INSTALL_TARGET}/src/github.com/cloudfoundry-incubator/consul-release/src/acceptance-tests"
+
+    Robocopy.exe /E "${PWD}/acceptance-tests" "${BOSH_INSTALL_TARGET}/src/github.com/cloudfoundry-incubator/consul-release/src/acceptance-tests"
+
+    # check-a-record
+    Robocopy.exe /CREATE "${BOSH_INSTALL_TARGET}/src/github.com/cloudfoundry-incubator/check-a-record"
+
+    Robocopy.exe /E "${PWD}/acceptance-tests/vendor/github.com/cloudfoundry-incubator/check-a-record" "${BOSH_INSTALL_TARGET}/src/github.com/cloudfoundry-incubator"
+
+    go.exe install "github.com/cloudfoundry-incubator/consul-release/src/acceptance-tests/testing/testconsumer"
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error "Error installing: testconsumer"
+        Exit 1
+    }
+    go.exe install "github.com/cloudfoundry-incubator/consul-release/src/acceptance-tests/testing/fake-dns-server"
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error "Error installing: fake-dns-server"
+        Exit 1
+    }
+    go.exe install "github.com/cloudfoundry-incubator/consul-release/src/acceptance-tests/vendor/github.com/cloudfoundry-incubator/check-a-record"
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error "Error installing: check-a-record"
+        Exit 1
+    }
+} catch {
+    Write-Error "Exception: installing acceptance-tests-windows"
+    Write-Error $_.Exception.Message
+    Exit 1
+}
+Exit 0

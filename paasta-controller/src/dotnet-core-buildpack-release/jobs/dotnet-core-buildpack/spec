@@ -1,0 +1,8 @@
+---
+name: dotnet-core-buildpack
+templates: {}
+
+packages:
+- dotnet-core-buildpack
+
+properties: {}

@@ -1,0 +1,6 @@
+---
+name: cadvisor
+
+files:
+  - cadvisor/cadvisor
+

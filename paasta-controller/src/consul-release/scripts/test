@@ -1,0 +1,112 @@
+#!/bin/bash -exu
+
+export CONSUL_RELEASE_VERSION="99999+dev.$(date +%s)"
+export LATEST_CONSUL_RELEASE_VERSION="$(curl http://bosh.io/api/v1/releases/github.com/cloudfoundry-incubator/consul-release | jq -r .[0].version)"
+
+warden_cpi_version="29"
+turbulence_version="0.4"
+
+function check_dependencies() {
+  test -n "${CONSATS_CONFIG?"CONSATS_CONFIG is a required environment variable"}"
+  if [[ ! -f "${CONSATS_CONFIG}" ]]; then
+    echo "Could not locate CONSATS_CONFIG file at ${CONSATS_CONFIG}"
+    exit 1
+  fi
+
+  require jq
+  require bosh
+  require go
+  require wget
+}
+
+function require() {
+  local dependency
+  dependency="${1}"
+
+  if [[ -z "$(which "${dependency}")" ]]; then
+    echo "This test runner requires '${dependency}'"
+    exit 1
+  fi
+}
+
+function main() {
+  parse_config
+
+  local scripts_dir
+  scripts_dir=$(cd "$(dirname "${0}")" && pwd)
+
+  upload_releases "${scripts_dir}"
+  force_compilation "${scripts_dir}"
+  bash -c "${scripts_dir}/../src/acceptance-tests/scripts/test -nodes ${PARALLEL_NODES} $@"
+}
+
+function parse_config() {
+  set +x
+  export BOSH_DIRECTOR="$(jq --raw-output '.bosh.target' "${CONSATS_CONFIG}")"
+  export BOSH_USER="$(jq --raw-output '.bosh.username' "${CONSATS_CONFIG}")"
+  export BOSH_PASSWORD="$(jq --raw-output '.bosh.password' "${CONSATS_CONFIG}")"
+  export PARALLEL_NODES="$(jq --raw-output 'if .bosh.parallel_nodes == null then 1 else .bosh.parallel_nodes end' "${CONSATS_CONFIG}")"
+  set -x
+}
+
+function upload_releases() {
+  local scripts_dir
+  scripts_dir="${1}"
+
+  pushd "${scripts_dir}/.." > /dev/null
+    bosh -t "${BOSH_DIRECTOR}" create release --force --version "${CONSUL_RELEASE_VERSION}"
+    bosh -t "${BOSH_DIRECTOR}" upload release
+  popd > /dev/null
+
+  local releases_dir
+  releases_dir="/tmp/consats/releases"
+  mkdir -p "${releases_dir}"
+
+  wget -nc -O "${releases_dir}/bosh-warden-cpi-release-${warden_cpi_version}.tgz" "http://bosh.io/d/github.com/cppforlife/bosh-warden-cpi-release?v=${warden_cpi_version}" || echo "File Exists"
+  bosh -t ${BOSH_DIRECTOR} upload release "${releases_dir}/bosh-warden-cpi-release-${warden_cpi_version}.tgz" --skip-if-exists
+
+  wget -nc -O "${releases_dir}/turbulence-release-${turbulence_version}.tgz" "http://bosh.io/d/github.com/cppforlife/turbulence-release?v=${turbulence_version}" || echo "File Exists"
+  bosh -t "${BOSH_DIRECTOR}" upload release "${releases_dir}/turbulence-release-${turbulence_version}.tgz" --skip-if-exists
+
+  wget -nc -O "${releases_dir}/consul-release-${LATEST_CONSUL_RELEASE_VERSION}.tgz" "http://bosh.io/d/github.com/cloudfoundry-incubator/consul-release?v=${LATEST_CONSUL_RELEASE_VERSION}" || echo "File Exists"
+  bosh -t "${BOSH_DIRECTOR}" upload release "${releases_dir}/consul-release-${LATEST_CONSUL_RELEASE_VERSION}.tgz" --skip-if-exists
+}
+
+function force_compilation() {
+  local scripts_dir
+  scripts_dir="${1}"
+
+  set +x
+  local stemcell_version
+  stemcell_version=$(curl -k https://${BOSH_USER}:${BOSH_PASSWORD}@${BOSH_DIRECTOR}:25555/stemcells | jq -r .[0].version)
+  set -x
+
+  pushd /tmp > /dev/null
+    sed "s/REPLACE_ME_DIRECTOR_UUID/$(bosh -t ${BOSH_DIRECTOR} status --uuid)/g" "${scripts_dir}/fixtures/consul_compilation.yml" > "consul_compilation.yml"
+
+    if [[ -n $(bosh cloud-config) ]]; then
+      echo "cloud config exists...skipping update cloud-config"
+    else
+      bosh -t "${BOSH_DIRECTOR}" -n update cloud-config "${scripts_dir}/fixtures/cloud_config.yml"
+    fi
+
+    bosh -t "${BOSH_DIRECTOR}" -d "consul_compilation.yml" -n deploy
+    bosh -t "${BOSH_DIRECTOR}" -d "consul_compilation.yml" export release "consul/${CONSUL_RELEASE_VERSION}" "ubuntu-trusty/${stemcell_version}"
+    bosh -t "${BOSH_DIRECTOR}" -d "consul_compilation.yml" export release "turbulence/${turbulence_version}" "ubuntu-trusty/${stemcell_version}"
+    bosh -t "${BOSH_DIRECTOR}" -d "consul_compilation.yml" export release "bosh-warden-cpi/${warden_cpi_version}" "ubuntu-trusty/${stemcell_version}"
+    bosh -t "${BOSH_DIRECTOR}" -d "consul_compilation.yml" -n delete deployment compilation
+  popd > /dev/null
+}
+
+function cleanup_releases() {
+  set +e
+  bosh -t "${BOSH_DIRECTOR}" -n delete release turbulence "${turbulence_version}"
+  bosh -t "${BOSH_DIRECTOR}" -n delete release bosh-warden-cpi "${warden_cpi_version}"
+  bosh -t "${BOSH_DIRECTOR}" -n delete release consul "${LATEST_CONSUL_RELEASE_VERSION}"
+  bosh -t "${BOSH_DIRECTOR}" -n delete release consul "${CONSUL_RELEASE_VERSION}"
+  set -e
+}
+
+check_dependencies
+trap cleanup_releases EXIT
+main "$@"

@@ -1,0 +1,3 @@
+routing_api:
+  uri: http://routing-api.service.cf.internal
+  port: 3000

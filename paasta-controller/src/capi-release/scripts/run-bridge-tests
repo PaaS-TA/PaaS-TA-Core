@@ -1,0 +1,11 @@
+#!/bin/bash
+
+set -e
+
+scripts_path="./$(dirname $0)"
+bridge_path="$scripts_path/../src/code.cloudfoundry.org"
+
+pushd $bridge_path > /dev/null
+  ginkgo -r -keepGoing -p -trace -randomizeAllSpecs -progress --race \
+    cc-uploader nsync stager tps
+popd > /dev/null

@@ -1,0 +1,79 @@
+GIT
+  remote: https://github.com/cloudfoundry/membrane.git
+  revision: 1eeadcf64c20d94e61379707c20b16d3d9a26d87
+  specs:
+    membrane (1.1.0)
+
+GIT
+  remote: https://github.com/cloudfoundry/steno.git
+  revision: e0e7bb5cff8430e205f677ade927d4e488ebee10
+  specs:
+    steno (1.2.4)
+      fluent-logger
+      yajl-ruby (~> 1.0)
+
+PATH
+  remote: ../em-posix-spawn
+  specs:
+    em-posix-spawn (0.1.10)
+      eventmachine
+      posix-spawn
+
+PATH
+  remote: ../warden-client
+  specs:
+    warden-client (0.1.0)
+      warden-protocol (~> 0.1.0)
+
+PATH
+  remote: ../warden-protocol
+  specs:
+    warden-protocol (0.1.5)
+      beefcake (~> 1.0.0)
+
+GEM
+  remote: http://rubygems.org/
+  specs:
+    beefcake (1.0.0)
+    diff-lcs (1.2.5)
+    eventmachine (1.0.8)
+    fluent-logger (0.5.1)
+      msgpack (>= 0.4.4, < 0.6.0, != 0.5.3, != 0.5.2, != 0.5.1, != 0.5.0)
+    msgpack (0.5.12)
+    pidfile (0.3.0)
+    posix-spawn (0.3.11)
+    rake (10.4.2)
+    rspec (3.4.0)
+      rspec-core (~> 3.4.0)
+      rspec-expectations (~> 3.4.0)
+      rspec-mocks (~> 3.4.0)
+    rspec-core (3.4.1)
+      rspec-support (~> 3.4.0)
+    rspec-eventually (0.1.0)
+    rspec-expectations (3.4.0)
+      diff-lcs (>= 1.2.0, < 2.0)
+      rspec-support (~> 3.4.0)
+    rspec-mocks (3.4.0)
+      diff-lcs (>= 1.2.0, < 2.0)
+      rspec-support (~> 3.4.0)
+    rspec-support (3.4.1)
+    yajl-ruby (1.2.1)
+
+PLATFORMS
+  ruby
+
+DEPENDENCIES
+  em-posix-spawn!
+  eventmachine (~> 1.0)
+  membrane!
+  pidfile
+  rake
+  rspec (~> 3.0)
+  rspec-eventually (~> 0.1.0)
+  steno!
+  warden-client!
+  warden-protocol!
+  yajl-ruby
+
+BUNDLED WITH
+   1.11.2

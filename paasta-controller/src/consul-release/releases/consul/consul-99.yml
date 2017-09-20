@@ -1,0 +1,45 @@
+---
+packages:
+- name: acceptance-tests
+  version: 74d7468d88ad00c4c50cedd42442730909e0857f
+  fingerprint: 74d7468d88ad00c4c50cedd42442730909e0857f
+  sha1: 21bb46fe8baa6beb1cce2a8d078e31652b944ef2
+  dependencies:
+  - golang1.6
+- name: confab
+  version: ca06e61e571cd9cb2ff9cf2c06f3d00b18976c32
+  fingerprint: ca06e61e571cd9cb2ff9cf2c06f3d00b18976c32
+  sha1: 308c949342472f7a0e6dc540c01ceec81586bf8e
+  dependencies:
+  - golang1.6
+- name: consul
+  version: 786f3d52dcbb785f523f3b39b172b9b7e2a9c148
+  fingerprint: 786f3d52dcbb785f523f3b39b172b9b7e2a9c148
+  sha1: d8bcd91f20920bb48c92ebf9c61d26220e5068eb
+  dependencies: []
+- name: golang1.6
+  version: 85a489b7c0c2584aa9e0a6dd83666db31c6fc8e8
+  fingerprint: 85a489b7c0c2584aa9e0a6dd83666db31c6fc8e8
+  sha1: 90751001e4b65844f2718a8049cae920b6e0ca12
+  dependencies: []
+jobs:
+- name: acceptance-tests
+  version: ffcff29af08e22cdc13c2cf19c7e0299c3f79790
+  fingerprint: ffcff29af08e22cdc13c2cf19c7e0299c3f79790
+  sha1: e4ef057ad2cdda44ca43a500a445f4efb702a7d0
+- name: consul-test-consumer
+  version: 827e6870ce6cbdebaa81b75fc7cc31b7e10f86f6
+  fingerprint: 827e6870ce6cbdebaa81b75fc7cc31b7e10f86f6
+  sha1: 45ed7d207ff0af7f853e5bb300e0028254ef5db5
+- name: consul_agent
+  version: eed4d3cd884cbccc9e6218da4aa30cb0e0928a74
+  fingerprint: eed4d3cd884cbccc9e6218da4aa30cb0e0928a74
+  sha1: 5317b5030d96736a009ef32ac69441bd647659b8
+license:
+  version: 03c513f94198bc667f3ce8e6267e8b3f03b34c73
+  fingerprint: 03c513f94198bc667f3ce8e6267e8b3f03b34c73
+  sha1: 72b67257d5fb0fa4f90fc8863e75d7cd21893669
+commit_hash: '59042326'
+uncommitted_changes: true
+name: consul
+version: '99'

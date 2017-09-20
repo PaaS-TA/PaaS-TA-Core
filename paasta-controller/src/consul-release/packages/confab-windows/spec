@@ -1,0 +1,9 @@
+---
+name: confab-windows
+
+dependencies:
+  - golang1.7-windows
+
+files:
+  - confab/**/*
+  - exiter.ps1

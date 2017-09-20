@@ -1,0 +1,71 @@
+director_uuid: BOSH-DIRECTOR-UUID
+
+name: etcd
+
+jobs:
+- name: etcd_z1
+  instances: 3
+  networks:
+  - name: etcd1
+    static_ips:
+    - 10.244.4.4
+    - 10.244.4.5
+    - 10.244.4.6
+  resource_pool: etcd_z1
+  persistent_disk: 1024
+  templates:
+  - release: etcd
+    name: etcd
+
+networks:
+- type: manual
+  name: etcd1
+  subnets:
+  - reserved:
+    - 10.244.4.2-10.244.4.3
+    - 10.244.4.12-10.244.4.254
+    static:
+    - 10.244.4.4
+    - 10.244.4.5
+    - 10.244.4.6
+    - 10.244.4.7
+    - 10.244.4.8
+    cloud_properties:
+      name: random
+    gateway: 10.244.4.1
+    range: 10.244.4.0/24
+
+compilation:
+  workers: 3
+  cloud_properties: {}
+  network: etcd1
+  reuse_compilation_vms: true
+
+update:
+  canary_watch_time: 1000-180000
+  max_in_flight: 1
+  serial: true
+  update_watch_time: 1000-180000
+  canaries: 1
+
+resource_pools:
+- name: etcd_z1
+  network: etcd1
+  cloud_properties: {}
+  stemcell:
+    name: bosh-warden-boshlite-ubuntu-trusty-go_agent
+    version: latest
+
+properties:
+  etcd:
+    machines:
+    - 10.244.4.4
+    - 10.244.4.5
+    - 10.244.4.6
+    peer_require_ssl: false
+    require_ssl: false
+    heartbeat_interval_in_milliseconds: 50
+
+releases:
+- name: etcd
+  version: latest

@@ -1,0 +1,50 @@
+#!/bin/bash
+
+RUN_DIR=/var/vcap/sys/run/hm9000
+LOG_DIR=/var/vcap/sys/log/hm9000
+PIDFILE=$RUN_DIR/hm9000_evacuator.pid
+
+source /var/vcap/packages/common/utils.sh
+
+case $1 in
+
+  start)
+    set +e
+    host consul.service.cf.internal
+    if [[ "0" != "$?" ]]; then
+      echo "DNS is not up"
+      mon 1
+    fi
+    set -e
+
+    pid_guard $PIDFILE "hm9000_evacuator"
+
+    mkdir -p $RUN_DIR
+    mkdir -p $LOG_DIR
+
+    chown -R vcap:vcap $RUN_DIR
+    chown -R vcap:vcap $LOG_DIR
+
+    echo $$ > $PIDFILE
+
+    export GODEBUG=netdns=cgo
+    exec chpst -u vcap:vcap /var/vcap/packages/hm9000/hm9000 \
+        evacuator \
+        --debugAddr="0.0.0.0:17003" \
+        --config=/var/vcap/jobs/hm9000/config/hm9000.json \
+        2> >(tee -a $LOG_DIR/hm9000_evacuator.stderr.log | logger -p user.error -t vcap.hm9000.evacuator) \
+        1> >(tee -a $LOG_DIR/hm9000_evacuator.log | logger -p user.info -t vcap.hm9000.evacuator)
+
+    ;;
+
+  stop)
+    kill_and_wait $PIDFILE
+
+    ;;
+
+  *)
+    echo "Usage: hm9000_evacuator_ctl {start|stop}"
+
+    ;;
+
+esac

@@ -1,0 +1,57 @@
+# Cloud Foundry Java Buildpack
+# Copyright 2013-2016 the original author or authors.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Configuration for components to use in the buildpack
+---
+containers:
+  - "JavaBuildpack::Container::DistZip"
+  - "JavaBuildpack::Container::Groovy"
+  - "JavaBuildpack::Container::JavaMain"
+  - "JavaBuildpack::Container::Jboss"
+  - "JavaBuildpack::Container::PlayFramework"
+  - "JavaBuildpack::Container::Ratpack"
+  - "JavaBuildpack::Container::SpringBoot"
+  - "JavaBuildpack::Container::SpringBootCLI"
+  - "JavaBuildpack::Container::Tomcat"
+
+# In order to use Oracle JREs instead of OpenJDK, you must comment out the OpenJDK line and uncomment the Oracle line.
+# Please see the documentation for more detail.
+jres:
+  - "JavaBuildpack::Jre::OpenJdkJRE"
+# - "JavaBuildpack::Jre::OracleJRE"
+
+# Frameworks are processed in order. Any Java Opts added by the JavaOpts framework will be specified in the start
+# command after any Java Opts added by previous frameworks.
+
+frameworks:
+  - "JavaBuildpack::Framework::AppDynamicsAgent"
+  - "JavaBuildpack::Framework::ContainerCertificateTrustStore"
+  - "JavaBuildpack::Framework::ContainerCustomizer"
+  - "JavaBuildpack::Framework::Debug"
+  - "JavaBuildpack::Framework::DynaTraceAgent"
+# - "JavaBuildpack::Framework::IntroscopeAgent"
+  - "JavaBuildpack::Framework::Jmx"
+  - "JavaBuildpack::Framework::JrebelAgent"
+# - "JavaBuildpack::Framework::LunaSecurityProvider"
+  - "JavaBuildpack::Framework::MariaDbJDBC"
+  - "JavaBuildpack::Framework::NewRelicAgent"
+  - "JavaBuildpack::Framework::PlayFrameworkAutoReconfiguration"
+  - "JavaBuildpack::Framework::PlayFrameworkJPAPlugin"
+  - "JavaBuildpack::Framework::PostgresqlJDBC"
+  - "JavaBuildpack::Framework::RuxitAgent"
+  - "JavaBuildpack::Framework::SpringAutoReconfiguration"
+  - "JavaBuildpack::Framework::SpringInsight"
+  - "JavaBuildpack::Framework::YourKitProfiler"
+  - "JavaBuildpack::Framework::JavaOpts"

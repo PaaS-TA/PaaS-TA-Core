@@ -1,0 +1,33 @@
+#!/bin/bash
+
+RUN_DIR=/var/vcap/sys/run
+PIDFILE=$RUN_DIR/rpc_mountd.pid
+LOG_DIR=/var/vcap/sys/log
+
+source /var/vcap/packages/capi_utils/syslog_utils.sh
+source /var/vcap/packages/capi_utils/pid_utils.sh
+
+tee_output_to_sys_log_and_file "${LOG_DIR}" "$(basename "$0")"
+
+case $1 in
+
+  start)
+    pid_guard $PIDFILE "rpc.mountd"
+
+    /usr/sbin/rpc.mountd
+    pidof rpc.mountd > $PIDFILE
+
+    ;;
+
+  stop)
+    kill_and_wait $PIDFILE
+
+    ;;
+
+  *)
+    echo "Usage: rpc_mountd_ctl {start|stop}"
+
+    ;;
+
+esac
+exit 0

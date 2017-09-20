@@ -1,0 +1,6 @@
+---
+final_name: binary-buildpack
+blobstore:
+  provider: s3
+  options:
+    bucket_name: pivotal-buildpacks

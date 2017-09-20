@@ -1,0 +1,84 @@
+sudo: required
+language: java
+jdk:
+  - oraclejdk8
+
+branches:
+  except:
+  - /^travis-success-.*$/
+env:
+  global:
+  - secure: Ubdyw9qc/AVX61ZTehLm90NG5q+qCIPljY5nYNmmkjvNKRIpx1bYIDjFflfXbSKn+opqBdpo5qQJwLQwO1xCvWfDsAO9YlriiqIZQuYXynAqe0hCqKkMn7OqTDR+rZuA+jl7t7LVwWhwbQ4+IiAC44d6CKIa1WPhmgy5dHxBKac=
+  matrix:
+  - TESTENV=default
+  - TESTENV=mysql,default
+  - TESTENV=postgresql,default
+  - TESTENV=ldap,default
+cache:
+  apt: true
+  directories:
+  - $HOME/.gradle
+services:
+- mysql
+- postgresql
+before_install:
+- cp $TRAVIS_BUILD_DIR/scripts/travis/init.gradle $HOME/.gradle
+- psql -c 'drop database if exists uaa;' -U postgres
+- psql -c 'create database uaa;' -U postgres
+- psql -c "drop user if exists root;" --dbname=uaa -U postgres
+- psql -c "create user root with superuser password 'changeme';" --dbname=uaa -U postgres
+- psql -c "show max_connections;" --dbname=uaa -U postgres
+- mysql -e 'drop database if exists uaa;'
+- mysql -e 'create database uaa;'
+- mysql -e "SET PASSWORD FOR 'root'@'localhost' = PASSWORD('changeme');"
+- mysql -e "SET PASSWORD FOR 'root'@'127.0.0.1' = PASSWORD('changeme');"
+install:
+- sudo chmod a+w `readlink -f $JAVA_HOME/jre/lib/security/cacerts`
+- scripts/travis/install-ldap-certs.sh
+- ./scripts/ldap/install-ldap.sh ssl
+- if [ "$TESTENV" = "keystone,default" ]; then ./scripts/keystone/install-keystone.sh;
+  fi
+- $TRAVIS_BUILD_DIR/scripts/travis/apply_spring_profiles_to_uaa_yaml.sh $TESTENV
+- if [ "$TESTENV" = "ldap,default" ]; then ./scripts/ldap/configure-manifest.sh; fi
+- if [ "$TESTENV" = "keystone,default" ]; then ./scripts/keystone/configure-manifest.sh;
+  fi
+- mkdir -p $HOME/build/cloudfoundry/uaa/uaa/build/reports/tests
+script:
+- ./gradlew -Dspring.profiles.active=$TESTENV jacocoRootReport
+after_success:
+- ./gradlew coveralls
+- for i in $(find $HOME/build/cloudfoundry/uaa/ -name reports -type d); do rm -rf $i; done
+- /bin/df -h
+- /usr/bin/du -sh *
+#- python scripts/travis/travis_after_all.py
+#- export $(cat .to_export_back)
+#- ! "if [ \"$BUILD_LEADER\" = \"YES\" ]; then\n  if [ \"$BUILD_AGGREGATE_STATUS\"
+#  = \"others_succeeded\" ]; then\n    echo \"All Succeeded!\"\n else\n    echo \"Some Failed\"\n  fi\nfi\n"
+#after_failure:
+#- python scripts/travis/travis_after_all.py
+#- export $(cat .to_export_back)
+#- ! "if [ \"$BUILD_LEADER\" = \"YES\" ]; then\n  if [ \"$BUILD_AGGREGATE_STATUS\"
+#  = \"others_failed\" ]; then\n    echo \"All Failed\"\n  else\n    echo \"Some Failed\"\n
+#  \ fi\nfi\n"
+#after_script:
+#- echo leader=$BUILD_LEADER status=$BUILD_AGGREGATE_STATUS
+
+after_failure:
+- /bin/df -h
+- /usr/bin/du -sh *
+addons:
+  hosts:
+    - testzone1.localhost
+    - testzone2.localhost
+    - testzone3.localhost
+    - testzone4.localhost
+    - testzonedoesnotexist.localhost
+  artifacts:
+    key:
+      secure: yRJd/NtH3uwSCtHLiJKt+X3ZPb57euSZA+gMG4/HkOTdkB0NuZnZaYb0GjKaLRbTAelqottjqPf5LVJXebBvjIAVH5R9C6yC1ghRYBPtHR3AJaod8ZTSUs+mLijvvhwfksKId4aZaF/GgNfPgFnC4IPybh21vTcAfrX4qS9FmN4=
+    secret:
+      secure: poV5WnsiLoks4bkd72cBOf/xbgWtD55e9tCodY5V8DFvdKUqxi8ty8ZrUbl54vsHcLcndP4Q0ByQqitkQ+xh+CbyTiBMqRK6mzn/HPuAmTjBXd8Lrc7PieXzKoPxrh0vMl1HtfBy/jii5zVPf2j5C2BxrDxlZCAGnZv+JSaOCKY=
+    bucket: cf-id-travis-failure-logs
+    debug: true
+    paths:
+    - $(find $HOME/build/cloudfoundry/uaa/ -name tests -type d | tr "\n" ":")

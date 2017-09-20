@@ -1,0 +1,50 @@
+// Whitelist network traffic.
+//
+// Outbound traffic is denied by default.
+//
+// > **TODO** Link to page explaining how networking works.
+//
+// ### Request
+//
+// * `handle`: Container handle.
+// * `network`: Network to whitelist (in the form `1.2.3.4/8`).
+// * `port`: Port to whitelist.
+// * `port_range`: Colon separated port range (in the form `8080:9080`).
+//    Note: port_range takes precedence over port
+// * `protocol`: Network protocol (`TCP`, `UDP` or `ICMP`). Defaults to `TCP` if not set.
+// * `icmp_type`: ICMP type (use -1 to specify all ICMP types).
+// * `icmp_code`: ICMP code (use -1 to specify all ICMP codes for the given type).
+//
+// ### Response
+//
+// Empty.
+//
+// ### Errors
+//
+// * When `handle` does not refer to a container.
+//
+// ### Definition
+//
+
+package warden;
+
+message NetOutRequest {
+  enum Protocol {
+    TCP = 0;
+    UDP = 1;
+    ICMP = 2;
+    ALL = 3;
+  }
+  required string handle     = 1;
+
+  optional string network    = 2;
+  optional uint32 port       = 3;
+  optional string port_range = 4;
+  optional Protocol protocol = 5;
+  optional int32 icmp_type   = 6;
+  optional int32 icmp_code   = 7;
+  optional bool log = 8;
+}
+
+message NetOutResponse {
+}

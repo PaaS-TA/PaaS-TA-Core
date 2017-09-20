@@ -1,0 +1,9 @@
+#!/bin/bash -exu
+
+CHECK_A_RECORD_DIRECTORY="$( cd "$( dirname "${BASH_SOURCE[0]}" )"/.. && pwd )"
+
+docker run \
+  --dns 127.0.0.1 \
+  -v "${CHECK_A_RECORD_DIRECTORY}":/check-a-record \
+  cfinfrastructure/golang \
+  /check-a-record/scripts/ci/test

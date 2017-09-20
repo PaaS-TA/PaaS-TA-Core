@@ -1,0 +1,15 @@
+foo: bar
+spring_profiles: hsqldb
+logging:
+  path: /tmp/uaa/logs
+oauth:
+  client:
+    autoapprove:
+      - cf
+      - my
+      - support
+scim:
+  username_pattern: '[a-z0-9+\-_.@]+'
+  users:
+    - paul|wombat|paul@test.org|Paul|Smith|uaa.admin
+    - stefan|wallaby|stefan@test.org|Stefan|Schmidt

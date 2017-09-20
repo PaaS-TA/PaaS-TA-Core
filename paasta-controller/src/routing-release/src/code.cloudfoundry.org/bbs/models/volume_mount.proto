@@ -1,0 +1,24 @@
+syntax = "proto2";
+
+package models;
+
+import "github.com/gogo/protobuf/gogoproto/gogo.proto";
+
+option (gogoproto.goproto_enum_prefix_all) = true;
+
+enum BindMountMode {
+  RO = 0;
+  RW = 1;
+}
+
+message VolumeMount {
+  optional string driver = 1 [(gogoproto.jsontag) = "driver"];
+  optional string volume_id = 2 [(gogoproto.jsontag) = "volume_id"];
+  optional string container_path = 3 [(gogoproto.jsontag) = "container_path"];
+  optional BindMountMode mode = 4 [(gogoproto.jsontag) = "mode"];
+  optional bytes config = 5 [(gogoproto.nullable) = true];
+}
+
+message VolumePlacement {
+  repeated string driver_names = 1 [(gogoproto.jsontag) = "driver_names"];
+}

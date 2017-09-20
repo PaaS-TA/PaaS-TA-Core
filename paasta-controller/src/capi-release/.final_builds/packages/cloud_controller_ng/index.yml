@@ -1,0 +1,43 @@
+---
+builds:
+  8deaa9c8f10fbda39953f692f6fbdf13415472d6:
+    version: 8deaa9c8f10fbda39953f692f6fbdf13415472d6
+    sha1: 988b6fc314fdd066d4719e085d82fb5dce6a1b66
+    blobstore_id: f2b2d73a-3658-491f-bc72-42d8a72f7441
+  2331eb764a94ea5c1397c7a66cd1482956372a8f:
+    version: 2331eb764a94ea5c1397c7a66cd1482956372a8f
+    sha1: bee4dfaf838606eb81cd2df84d66a70f5b4ec70b
+    blobstore_id: 5538f132-18ca-4cf8-9add-c693bbc34e8a
+  101f5dcdc3e53c8850855976ac8f320b9174d5c9:
+    version: 101f5dcdc3e53c8850855976ac8f320b9174d5c9
+    sha1: 340ac11e266a7f4bb38b354b21dffd8b312b0810
+    blobstore_id: f18d3935-f0fa-4617-b025-2b6b4c188ede
+  c0a03b6873a656c6fd7f3c8c3b28f913937869bd:
+    version: c0a03b6873a656c6fd7f3c8c3b28f913937869bd
+    sha1: c33c779a308497523fb29f0e6069817a56f55b22
+    blobstore_id: 2ba69acf-e819-4a50-9912-e028680c84ef
+  2a69b6ffea33761df8c8cd9c1d407259fee8fd07:
+    version: 2a69b6ffea33761df8c8cd9c1d407259fee8fd07
+    sha1: 59525dfba05300b783e2f8ebb85cc6016b529b6f
+    blobstore_id: 648318b9-05d2-4bc4-9539-eef8d167e60f
+  8c1ec2491124e0bcde0a5f0d268ff02a4b1e722b:
+    version: 8c1ec2491124e0bcde0a5f0d268ff02a4b1e722b
+    sha1: eb229c1efa89b93edc68dedfa6362a2f825f6651
+    blobstore_id: 67064057-13a5-42af-b28b-a9e3433f0d03
+  157ce50d0f829063bc8748b2ffc2a5fe5f4e116a:
+    version: 157ce50d0f829063bc8748b2ffc2a5fe5f4e116a
+    sha1: 6fb4abdff6a7296130b88feae85e84845a38fa20
+    blobstore_id: 283d65ed-eeb8-4f9e-a8db-7b5daa78acda
+  0281aec2c584f8e2d61bfb66cf920c48d10dcd7b:
+    version: 0281aec2c584f8e2d61bfb66cf920c48d10dcd7b
+    sha1: 95eaff60c19e7c5cc02041968e5a307b057b709e
+    blobstore_id: 65beabfa-56a7-4147-af1a-49a236f9006a
+  c988ee8edcf4152ffd82599870612c6272ecd676:
+    version: c988ee8edcf4152ffd82599870612c6272ecd676
+    sha1: 1b77cc41ebce52ed5cdf0342f56203e1967c3a2a
+    blobstore_id: 72e7b3d2-e70d-478c-bf13-e62dbbfd0d4b
+  ff0f687a10d3e3bf63ce07bcfc7a8ddd53f48537:
+    version: ff0f687a10d3e3bf63ce07bcfc7a8ddd53f48537
+    sha1: f1668f2436364948527ea70090ba0d6783289b89
+    blobstore_id: e598cfe6-69ea-43bb-8989-859fa1043f33
+format-version: '2'

@@ -1,0 +1,43 @@
+// Spawn a job inside a container.
+//
+// > **TODO** Talk about nomenclature (what is a job).
+//
+// ### Request
+//
+// The specified script is interpreted by `/bin/bash` inside the container.
+//
+// * `handle`: Container handle.
+// * `script`: Script to execute.
+// * `privileged`: Whether to run the script as root or not.
+// * `rlimits`: Resource limits (see `ResourceLimits`).
+//
+// ### Response
+//
+// * `job_id`: Job ID.
+//
+// ### Errors
+//
+// * When `handle` does not refer to a container.
+//
+// ### Definition
+//
+
+package warden;
+
+import "resource_limits.proto";
+
+message SpawnRequest {
+  required string handle = 1;
+
+  required string script = 2;
+  optional bool privileged = 3 [default = false];
+  optional ResourceLimits rlimits = 4;
+
+  optional bool discard_output = 5 [default = false];
+
+  optional string log_tag = 6;
+}
+
+message SpawnResponse {
+  required uint32 job_id = 1;
+}

@@ -1,0 +1,34 @@
+#!/bin/bash
+# vim: set ft=sh
+
+set -e
+
+export GIT_SSL_NO_VERIFY=true
+git config --global user.name "Paul Warren"
+git config --global user.email paul.warren@emc.com
+
+echo "diego-release (branch: cf_persistence): rebasing onto develop"
+echo "-------------------------------------------------------------"
+pushd diego-release-persi
+git remote add local ../diego-release-develop
+git fetch local develop
+git merge --ff --commit -m "Concourse merge onto diego-release/develop" local/develop
+
+echo ""
+echo "diego-release (branch: cf_persistence): submodule update volman"
+echo "---------------------------------------------------------------"
+#./scripts/update
+git submodule sync --recursive && git submodule foreach --recursive git submodule sync  && git submodule update --init --recursive
+git submodule update --remote --merge src/github.com/cloudfoundry-incubator/volman
+
+echo ""
+echo "volman (branch: master): run unit tests and gather coverage stats"
+echo "-----------------------------------------------------------------"
+./src/github.com/cloudfoundry-incubator/volman/scripts/ci/run_cover
+
+echo ""
+echo "diego-release (branch: cf_persistence): add changes and commit"
+echo "--------------------------------------------------------------"
+git add src/github.com/cloudfoundry-incubator/volman
+git commit -m "Concourse bump onto latest volman"
+popd

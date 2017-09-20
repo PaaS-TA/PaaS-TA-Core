@@ -1,0 +1,35 @@
+{
+    "name": "etcd",
+
+    "tags": {
+        "ip": "0.0.0.11"
+    },
+
+    "contexts": [
+        {
+            "name": "leader",
+            "metrics": [
+                { "name": "SomeValueA", "value": 40 },
+                { "name": "SomeValueB", "value": 41, "tags": { "foo": "bar" } }
+            ]
+        },
+        {
+            "name": "server",
+            "metrics": [
+                { "name": "SomeValueA", "value": 40 },
+                { "name": "SomeValueB", "value": 41, "tags": { "foo": "bar" } }
+            ]
+        },
+        {
+            "name": "null_metric",
+            "metrics": null
+        },
+        {
+            "name": "store",
+            "metrics": [
+                { "name": "SomeValueA", "value": 40 },
+                { "name": "SomeValueB", "value": 41, "tags": { "foo": "bar" } }
+            ]
+        }
+    ]
+}

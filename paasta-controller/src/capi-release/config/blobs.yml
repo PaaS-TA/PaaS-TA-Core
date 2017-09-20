@@ -1,0 +1,49 @@
+---
+debian_nfs_server/nfs-kernel-server_1%3a1.2.0-4ubuntu4.1_amd64.deb:
+  object_id: ba69b993-ec3f-47cf-9fb1-0fcb37212959
+  sha: a44b3f8319984bace61f21bb6d15cee1419e5bf3
+  size: 169618
+nginx/nginx-upload-module-2.2.tar.gz:
+  object_id: 161d5d5f-ffde-4e37-9b9f-151139fdc027
+  sha: 74ccd116525a155db76f92a1cd484d9516a70398
+  size: 28505
+libmariadb/libmariadb-5.5.36.tar.xz:
+  object_id: 4827612c-e535-408b-bf60-ba5f25690fdd
+  sha: 4985fd30ffd60de12770153346b4485cd5dcb7ad
+  size: 1260684
+nginx/newrelic_nginx_agent-1.2.1.tar.gz:
+  object_id: c63358f6-574a-4e20-9d2b-7e1450368b6d
+  sha: 98a1b10475371705932fea4769f8ac1b0451106f
+  size: 5222
+ruby-2.3/bundler-1.11.2.gem:
+  object_id: f1b1e5c1-5ff5-4346-bd82-e2aa4ee2f49c
+  sha: 8eb956dec72da753d3d2a2126c78508b17af434e
+  size: 263168
+ruby-2.3/ruby-2.3.1.tar.gz:
+  object_id: 654540b3-2f41-480f-b874-d74467856f27
+  sha: c39b4001f7acb4e334cb60a0f4df72d434bef711
+  size: 17797997
+ruby-2.3/rubygems-2.6.4.tgz:
+  object_id: 2c63b010-b055-4eb4-9371-5fba9a01e9a1
+  sha: 8ef39e536af2ecd20b0e7a95765fa6a485087ac8
+  size: 478582
+nginx/nginx-1.11.1.tar.gz:
+  object_id: 53e21bda-b6b2-4d6a-9d6e-1fbfa1f63ecd
+  sha: 6b6172b26628b95c4ad0d6cb5b11eb4aa59c2a83
+  size: 913417
+nginx/headers-more-nginx-module-0.30.tar.gz:
+  object_id: c9069331-8ff2-4b2f-b663-45d7230c5a39
+  sha: a188a399f3e365a0831585a9d7aa0e6ed1a75f0d
+  size: 27793
+nginx/pcre-8.39.tar.gz:
+  object_id: 0bea0468-82a8-4349-8444-2e8674a8bdfb
+  sha: b3aec1f643d9701841e2f9d57ac121a7ff448fc8
+  size: 2062258
+postgres/postgresql-9.4.9.tar.gz:
+  object_id: 412b77c8-966c-463e-84e1-e5fc47e47269
+  sha: c9d641eb69885672e5aacee413cd778d88b8420d
+  size: 23300245
+golang/go1.7.3.linux-amd64.tar.gz:
+  object_id: 2af021d2-ad99-4078-91e5-e2a7af4ab8c6
+  sha: ead40e884ad4d6512bcf7b3c7420dd7fa4a96140
+  size: 82565628

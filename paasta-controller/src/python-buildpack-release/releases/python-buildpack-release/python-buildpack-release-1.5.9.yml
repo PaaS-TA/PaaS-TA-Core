@@ -1,0 +1,20 @@
+---
+packages:
+- name: python-buildpack
+  version: 981c2ca0fa93b2097c81c47c437b646d2fb1f8f2
+  fingerprint: 981c2ca0fa93b2097c81c47c437b646d2fb1f8f2
+  sha1: a66c5d643338425e950763b7f2c44e7e1f875a02
+  dependencies: []
+jobs:
+- name: python-buildpack
+  version: c3ebd738c93c1dba9274c435022da84377f23639
+  fingerprint: c3ebd738c93c1dba9274c435022da84377f23639
+  sha1: f80fb8c5bac17abded5557d1111d420ede7f33b9
+license:
+  version: e6c4ccc65c76e75e2338d1edabdcf264d37ee663
+  fingerprint: e6c4ccc65c76e75e2338d1edabdcf264d37ee663
+  sha1: 3787636fc01d985a9e4895f6b26c14fcdc2751d4
+commit_hash: 02c6608e
+uncommitted_changes: true
+name: python-buildpack-release
+version: 1.5.9

@@ -1,0 +1,26 @@
+#!/bin/bash
+# vim: set ft=sh
+
+set -e
+
+# script assumes $PWD is diego-release-persi/
+
+export GOROOT=/usr/local/go
+export PATH=$GOROOT/bin:$PATH
+
+export GOPATH=$PWD
+export PATH=$GOPATH/bin:$PATH
+
+#go get golang.org/x/tools/cmd/cover
+go get github.com/onsi/ginkgo/ginkgo
+
+cd src/github.com/cloudfoundry-incubator/volman
+
+ginkgo -cover -r
+
+profiles=$(su diego -c "find . -name '*.coverprofile' | grep -v fake")
+
+echo mode: set > all.coverprofile
+cat $profiles | grep -v mode: >> all.coverprofile
+
+cat all.coverprofile

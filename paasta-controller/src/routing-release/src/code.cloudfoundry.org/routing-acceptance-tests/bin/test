@@ -1,0 +1,7 @@
+#!/bin/bash
+
+set -e -x
+
+go vet ./...
+go install -v github.com/onsi/ginkgo/ginkgo
+ginkgo -r -slowSpecThreshold=120 $@ tcp_routing http_routes

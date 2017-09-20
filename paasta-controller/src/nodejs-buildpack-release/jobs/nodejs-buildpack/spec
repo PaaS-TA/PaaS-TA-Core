@@ -1,0 +1,8 @@
+---
+name: nodejs-buildpack
+templates: {}
+
+packages:
+- nodejs-buildpack
+
+properties: {}

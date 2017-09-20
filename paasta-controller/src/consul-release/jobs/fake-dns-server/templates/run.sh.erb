@@ -1,0 +1,32 @@
+#!/bin/bash -exu
+
+LOG_DIR="/var/vcap/sys/log/fake-dns-server"
+PKG_DIR="/var/vcap/packages/acceptance-tests"
+PIDFILE="/var/vcap/sys/run/fake-dns-server/fake-dns-server.pid"
+
+function main() {
+  case "${1}" in
+    "start")
+      "${PKG_DIR}/bin/fake-dns-server" \
+        2> >(tee -a ${LOG_DIR}/fake-dns-server.stderr.log | logger -p user.error -t vcap.fake-dns-server) \
+        1> >(tee -a ${LOG_DIR}/fake-dns-server.stdout.log | logger -p user.info  -t vcap.fake-dns-server) &
+
+      echo "${!}" > "${PIDFILE}"
+      ;;
+
+    "stop")
+      local pid
+      pid="$(cat "${PIDFILE}")"
+
+      kill -9 "${pid}"
+      rm "${PIDFILE}"
+      ;;
+
+    *)
+      echo "Usage: $0 {start|stop}"
+      ;;
+
+  esac
+}
+
+main ${@}

@@ -1,0 +1,27 @@
+---
+packages:
+- name: etcd-common
+  version: a5492fb0ad41a80d2fa083172c0430073213a296
+  fingerprint: a5492fb0ad41a80d2fa083172c0430073213a296
+  sha1: 5d757aa40c466350edbaae17119a295763437557
+  dependencies: []
+- name: etcd
+  version: b38616a5b7e6cff0f1db95facb6b2e729fba0c30
+  fingerprint: b38616a5b7e6cff0f1db95facb6b2e729fba0c30
+  sha1: ac551ef80b768f1ce6eeb22de325f27ec263a5b7
+  dependencies:
+  - golang1.4
+- name: golang1.4
+  version: 714698bc352d2a1dbe321376f0676037568147bb
+  fingerprint: 714698bc352d2a1dbe321376f0676037568147bb
+  sha1: 019dc48e7a1857563960f0cb20667d5cd55c53c6
+  dependencies: []
+jobs:
+- name: etcd
+  version: 16acd9a31c516c81cbc1523bae889a5e07398f83
+  fingerprint: 16acd9a31c516c81cbc1523bae889a5e07398f83
+  sha1: 8c6c2d504a441e8fd8c5bc7375a245037d8c746d
+commit_hash: ff7e7cf2
+uncommitted_changes: false
+name: etcd
+version: '9'

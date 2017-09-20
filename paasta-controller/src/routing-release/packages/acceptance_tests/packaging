@@ -1,0 +1,13 @@
+set -e -x
+
+export GOROOT=$(readlink -nf /var/vcap/packages/golang1.6)
+export PATH=${GOROOT}/bin:${PATH}
+
+export GOPATH=$BOSH_INSTALL_TARGET
+
+mkdir -p ${GOPATH}/src
+cp -a . ${GOPATH}/src
+
+cd ${GOPATH}/src/code.cloudfoundry.org/routing-acceptance-tests
+
+go install github.com/onsi/ginkgo/ginkgo

@@ -1,0 +1,66 @@
+---
+name: stager
+
+dependencies:
+  - golang1.7
+
+files:
+  - capi-release/src/code.cloudfoundry.org/bbs/*.go # gosub
+  - capi-release/src/code.cloudfoundry.org/bbs/encryption/*.go # gosub
+  - capi-release/src/code.cloudfoundry.org/bbs/events/*.go # gosub
+  - capi-release/src/code.cloudfoundry.org/bbs/format/*.go # gosub
+  - capi-release/src/code.cloudfoundry.org/bbs/models/*.go # gosub
+  - capi-release/src/code.cloudfoundry.org/buildpackapplifecycle/*.go # gosub
+  - capi-release/src/code.cloudfoundry.org/cc-uploader/*.go # gosub
+  - capi-release/src/code.cloudfoundry.org/cfhttp/*.go # gosub
+  - capi-release/src/code.cloudfoundry.org/cfhttp/unix_transport/*.go # gosub
+  - capi-release/src/code.cloudfoundry.org/cflager/*.go # gosub
+  - capi-release/src/code.cloudfoundry.org/clock/*.go # gosub
+  - capi-release/src/code.cloudfoundry.org/consuladapter/*.go # gosub
+  - capi-release/src/code.cloudfoundry.org/debugserver/*.go # gosub
+  - capi-release/src/code.cloudfoundry.org/lager/*.go # gosub
+  - capi-release/src/code.cloudfoundry.org/locket/*.go # gosub
+  - capi-release/src/code.cloudfoundry.org/runtimeschema/cc_messages/*.go # gosub
+  - capi-release/src/code.cloudfoundry.org/runtimeschema/cc_messages/flags/*.go # gosub
+  - capi-release/src/code.cloudfoundry.org/runtimeschema/metric/*.go # gosub
+  - capi-release/src/code.cloudfoundry.org/stager/*.go # gosub
+  - capi-release/src/code.cloudfoundry.org/stager/backend/*.go # gosub
+  - capi-release/src/code.cloudfoundry.org/stager/cc_client/*.go # gosub
+  - capi-release/src/code.cloudfoundry.org/stager/cmd/stager/*.go # gosub
+  - capi-release/src/code.cloudfoundry.org/stager/diego_errors/*.go # gosub
+  - capi-release/src/code.cloudfoundry.org/stager/handlers/*.go # gosub
+  - capi-release/src/code.cloudfoundry.org/stager/vars/*.go # gosub
+  - capi-release/src/code.cloudfoundry.org/urljoiner/*.go # gosub
+  - capi-release/src/github.com/bmizerany/pat/*.go # gosub
+  - capi-release/src/github.com/cloudfoundry/dropsonde/*.go # gosub
+  - capi-release/src/github.com/cloudfoundry/dropsonde/emitter/*.go # gosub
+  - capi-release/src/github.com/cloudfoundry/dropsonde/envelope_sender/*.go # gosub
+  - capi-release/src/github.com/cloudfoundry/dropsonde/envelopes/*.go # gosub
+  - capi-release/src/github.com/cloudfoundry/dropsonde/factories/*.go # gosub
+  - capi-release/src/github.com/cloudfoundry/dropsonde/instrumented_handler/*.go # gosub
+  - capi-release/src/github.com/cloudfoundry/dropsonde/instrumented_round_tripper/*.go # gosub
+  - capi-release/src/github.com/cloudfoundry/dropsonde/log_sender/*.go # gosub
+  - capi-release/src/github.com/cloudfoundry/dropsonde/logs/*.go # gosub
+  - capi-release/src/github.com/cloudfoundry/dropsonde/metric_sender/*.go # gosub
+  - capi-release/src/github.com/cloudfoundry/dropsonde/metricbatcher/*.go # gosub
+  - capi-release/src/github.com/cloudfoundry/dropsonde/metrics/*.go # gosub
+  - capi-release/src/github.com/cloudfoundry/dropsonde/runtime_stats/*.go # gosub
+  - capi-release/src/github.com/cloudfoundry/gosteno/*.go # gosub
+  - capi-release/src/github.com/cloudfoundry/gosteno/syslog/*.go # gosub
+  - capi-release/src/github.com/cloudfoundry/sonde-go/events/*.go # gosub
+  - capi-release/src/github.com/gogo/protobuf/gogoproto/*.go # gosub
+  - capi-release/src/github.com/gogo/protobuf/proto/*.go # gosub
+  - capi-release/src/github.com/gogo/protobuf/protoc-gen-gogo/descriptor/*.go # gosub
+  - capi-release/src/github.com/gogo/protobuf/sortkeys/*.go # gosub
+  - capi-release/src/github.com/hashicorp/consul/api/*.go # gosub
+  - capi-release/src/github.com/hashicorp/consul/vendor/github.com/hashicorp/go-cleanhttp/*.go # gosub
+  - capi-release/src/github.com/hashicorp/consul/vendor/github.com/hashicorp/serf/coordinate/*.go # gosub
+  - capi-release/src/github.com/nu7hatch/gouuid/*.go # gosub
+  - capi-release/src/github.com/tedsuo/ifrit/*.go # gosub
+  - capi-release/src/github.com/tedsuo/ifrit/grouper/*.go # gosub
+  - capi-release/src/github.com/tedsuo/ifrit/http_server/*.go # gosub
+  - capi-release/src/github.com/tedsuo/ifrit/sigmon/*.go # gosub
+  - capi-release/src/github.com/tedsuo/rata/*.go # gosub
+  - capi-release/src/github.com/vito/go-sse/sse/*.go # gosub
+  - capi-release/src/github.com/shirou/gopsutil/**/*.go
+  - capi-release/src/github.com/bradfitz/**/*.go

@@ -1,0 +1,5 @@
+---
+builds:
+  0acc0ad8-2509-4037-b583-ce21981e521b:
+    version: 1.5.22
+format-version: '2'

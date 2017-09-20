@@ -1,0 +1,10 @@
+---
+name: fake-dns-server
+templates:
+  pre-start.erb: bin/pre-start
+  run.sh.erb: bin/run
+
+packages:
+  - acceptance-tests
+
+properties: {}

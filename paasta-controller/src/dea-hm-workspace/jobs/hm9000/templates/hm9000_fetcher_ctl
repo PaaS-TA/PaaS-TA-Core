@@ -1,0 +1,35 @@
+#!/bin/bash
+
+RUN_DIR=/var/vcap/sys/run/hm9000
+PIDFILE=$RUN_DIR/hm9000_fetcher.pid
+
+source /var/vcap/packages/common/utils.sh
+
+
+case $1 in
+
+  start)
+    pid_guard $PIDFILE "hm9000_fetcher"
+
+    mkdir -p ${RUN_DIR}
+    chown -R vcap:vcap ${RUN_DIR}
+
+    echo $$ > $PIDFILE
+
+    # wait forever
+    kill -STOP $$
+
+    ;;
+
+  stop)
+    # wake up ctl script so it exits
+    kill_and_wait $PIDFILE
+
+    ;;
+
+  *)
+    echo "Usage: hm9000_fetcher_ctl {start|stop}"
+
+    ;;
+
+esac

@@ -1,0 +1,471 @@
+{
+    "type": "DEA",
+    "index": 0,
+    "uuid": "0-8e1b2e0db73172fe61f9c27e5bb26638",
+    "host": "10.10.17.11:53736",
+    "credentials": [
+        "CREDENTIAL_0",
+        "CREDENTIAL_1"
+    ],
+    "start": "2013-07-02 17:28:03 +0000",
+    "num_cores": 2,
+    "log_counts": {"off":0,"fatal":0,"error":0,"warn":0,"info":20,"debug":44,"debug1":0,"debug2":0,"all":0},
+    "stacks": [
+        "cflinuxfs2"
+    ],
+    "can_stage": 1,
+    "reservable_stagers": 28,
+    "available_memory_ratio": 5.678,
+    "available_disk_ratio": 1.234,
+    "total_warden_response_time_in_ms": 1010,
+    "warden_request_count": 49,
+    "warden_error_response_count": 3,
+    "instance_registry": {
+      "723fe875-e797-47a3-a323-born": {
+        "af6c8fc752993310ba9404a55a27a294": {
+          "executableFile": "deprecated",
+          "services": [
+
+          ],
+          "limits": {
+            "mem": 256,
+            "disk": 1024,
+            "fds": 16384
+          },
+          "cc_partition": "default",
+          "console": true,
+          "debug": null,
+          "instance_index": 0,
+          "application_id": "723fe875-e797-47a3-a323-62f0ee265945",
+          "application_version": "62580f12-1ead-417e-ad04-4cea80a88cdb",
+          "application_name": "dea0",
+          "application_uris": [
+            "dea0.pasadena.cf-app.com"
+          ],
+          "application_prod": false,
+          "droplet_sha1": "b959f94dcda8fae634b8002f43131d610c19d813",
+          "droplet_uri": "https://d3peaniaojsbh4.cloudfront.net/72/3f/723fe875-e797-47a3-a323-62f0ee265945/b959f94dcda8fae634b8002f43131d610c19d813?Expires=1372786723&Signature=CoElGJqCgV-jN89zGcnn74mYysc5nMpuomvB5NsIBD6CI30Zq3OFY~k6cORC16h2pD0LN74cYLUc6R5J~3MpD-L92dJbV24~Vs4wUkyoTVvA-NqCopdlAj4dH4tLynJseoxNXUUGtS4PwlLmz23go03rdthiNPw30STIMK0MQjY_&Key-Pair-Id=APKAIDAP77W7KFOLWBUA",
+          "environment": {
+
+          },
+          "instance_id": "af6c8fc752993310ba9404a55a27a294",
+          "private_instance_id": "27026107596f6ca80f21b7c59bf98a90a9724d9602cccd887432c7bfd7884b02",
+          "state": "BORN",
+          "state_timestamp": 1372786130.4734926,
+          "state_born_timestamp": 1372786123.070984,
+          "state_starting_timestamp": 1372786123.0731447,
+          "warden_handle": "170hamjgi6o",
+          "instance_host_port": 61011,
+          "instance_container_port": 61011,
+          "instance_console_host_port": 61012,
+          "instance_console_container_port": 61012,
+          "warden_job_id": 9,
+          "warden_container_path": "/var/vcap/data/warden/depot/170hamjgi6o",
+          "warden_host_ip": "10.254.0.1",
+          "state_running_timestamp": 1372786130.4735036
+        }
+      },
+      "723fe875-e797-47a3-a323-running": {
+        "af6c8fc752993310ba9404a55a27a294": {
+          "executableFile": "deprecated",
+          "services": [
+
+          ],
+          "limits": {
+            "mem": 256,
+            "disk": 1024,
+            "fds": 16384
+          },
+          "cc_partition": "default",
+          "console": true,
+          "debug": null,
+          "instance_index": 0,
+          "application_id": "723fe875-e797-47a3-a323-62f0ee265945",
+          "application_version": "62580f12-1ead-417e-ad04-4cea80a88cdb",
+          "application_name": "dea0",
+          "application_uris": [
+            "dea0.pasadena.cf-app.com"
+          ],
+          "application_prod": false,
+          "droplet_sha1": "b959f94dcda8fae634b8002f43131d610c19d813",
+          "droplet_uri": "https://d3peaniaojsbh4.cloudfront.net/72/3f/723fe875-e797-47a3-a323-62f0ee265945/b959f94dcda8fae634b8002f43131d610c19d813?Expires=1372786723&Signature=CoElGJqCgV-jN89zGcnn74mYysc5nMpuomvB5NsIBD6CI30Zq3OFY~k6cORC16h2pD0LN74cYLUc6R5J~3MpD-L92dJbV24~Vs4wUkyoTVvA-NqCopdlAj4dH4tLynJseoxNXUUGtS4PwlLmz23go03rdthiNPw30STIMK0MQjY_&Key-Pair-Id=APKAIDAP77W7KFOLWBUA",
+          "environment": {
+
+          },
+          "instance_id": "af6c8fc752993310ba9404a55a27a294",
+          "private_instance_id": "27026107596f6ca80f21b7c59bf98a90a9724d9602cccd887432c7bfd7884b02",
+          "state": "RUNNING",
+          "state_timestamp": 1372786130.4734926,
+          "state_born_timestamp": 1372786123.070984,
+          "state_starting_timestamp": 1372786123.0731447,
+          "warden_handle": "170hamjgi6o",
+          "instance_host_port": 61011,
+          "instance_container_port": 61011,
+          "instance_console_host_port": 61012,
+          "instance_console_container_port": 61012,
+          "warden_job_id": 9,
+          "warden_container_path": "/var/vcap/data/warden/depot/170hamjgi6o",
+          "warden_host_ip": "10.254.0.1",
+          "state_running_timestamp": 1372786130.4735036
+        }
+      },
+      "54795a54-679f-4e94-998a-running": {
+        "f2e2961b01ee5a67349b9d045eb7f2e0": {
+          "executableFile": "deprecated",
+          "services": [
+
+          ],
+          "limits": {
+            "mem": 256,
+            "disk": 1024,
+            "fds": 16384
+          },
+          "cc_partition": "default",
+          "console": true,
+          "debug": null,
+          "instance_index": 0,
+          "application_id": "54795a54-679f-4e94-998a-67165a5c546e",
+          "application_version": "f5a592b9-53e4-4df4-b360-4c04f49b412d",
+          "application_name": "dea1",
+          "application_uris": [
+            "dea1.pasadena.cf-app.com"
+          ],
+          "application_prod": false,
+          "droplet_sha1": "92633f28038d6691bbfebfb7d22bd2aeaddad813",
+          "droplet_uri": "https://d3peaniaojsbh4.cloudfront.net/54/79/54795a54-679f-4e94-998a-67165a5c546e/92633f28038d6691bbfebfb7d22bd2aeaddad813?Expires=1372786723&Signature=wget7OM4hS1AYCqoY4OSFEyxuo-DJPzTbiTeOKZtx~DBKcNdmN15zMY4JPN39rQZ4wP1bym7a06Ro-x6allF4v1E9myG1IdWIYF61rTHWa0xie7b57aunt40tWYSDpEj60XaloGWEuxxZo27ePWdQx6qkZ~8RTYhlwi8CW-VotY_&Key-Pair-Id=APKAIDAP77W7KFOLWBUA",
+          "environment": {
+
+          },
+          "instance_id": "f2e2961b01ee5a67349b9d045eb7f2e0",
+          "private_instance_id": "19f2b93a199991667464f75420c069764b9a3fd683942b92b166be98cff355bd",
+          "state": "RUNNING",
+          "state_timestamp": 1372786130.7060971,
+          "state_born_timestamp": 1372786123.0842838,
+          "state_starting_timestamp": 1372786123.0855696,
+          "warden_handle": "170hamjgi6p",
+          "instance_host_port": 61009,
+          "instance_container_port": 61009,
+          "instance_console_host_port": 61010,
+          "instance_console_container_port": 61010,
+          "warden_job_id": 8,
+          "warden_container_path": "/var/vcap/data/warden/depot/170hamjgi6p",
+          "warden_host_ip": "10.254.0.5",
+          "state_running_timestamp": 1372786130.706106
+        }
+      },
+      "26784aa4-0176-4cf8-82d3-starting": {
+        "4add0d0d57841ec60b3044efa67cd55a": {
+          "executableFile": "deprecated",
+          "services": [
+
+          ],
+          "limits": {
+            "mem": 256,
+            "disk": 1024,
+            "fds": 16384
+          },
+          "cc_partition": "default",
+          "console": true,
+          "debug": null,
+          "instance_index": 0,
+          "application_id": "26784aa4-0176-4cf8-82d3-142e24cc8d34",
+          "application_version": "6662946e-e96e-4869-8a88-42e0b4a14013",
+          "application_name": "dea2",
+          "application_uris": [
+            "dea2.pasadena.cf-app.com"
+          ],
+          "application_prod": false,
+          "droplet_sha1": "75660e8b35bcd25b702d933cfa9a16c886107413",
+          "droplet_uri": "https://d3peaniaojsbh4.cloudfront.net/26/78/26784aa4-0176-4cf8-82d3-142e24cc8d34/75660e8b35bcd25b702d933cfa9a16c886107413?Expires=1372786723&Signature=E0QunCmI77mzI0uEj9TbUi2F8dcmaWT-WUCtp3rKN~WzZAlYYMvp5rK3rCHenomp4xWvzMtouu73skos1XGGXwoG-ATrcwFqJwSQlG4Cqbi2kOm7oOXJHwxgPMj9HoeixjulF6MKMrGj8xuMH5MWWqp6E9CbLv45W6NgneYXUbM_&Key-Pair-Id=APKAIDAP77W7KFOLWBUA",
+          "environment": {
+
+          },
+          "instance_id": "4add0d0d57841ec60b3044efa67cd55a",
+          "private_instance_id": "7195e4ebd03b5e1d0b2b237fce38cc7addc3d8ed19b9ea07c142d042b6733cfb",
+          "state": "STARTING",
+          "state_timestamp": 1372786130.0925922,
+          "state_born_timestamp": 1372786123.089229,
+          "state_starting_timestamp": 1372786123.0903242,
+          "warden_handle": "170hamjgi6q",
+          "instance_host_port": 61007,
+          "instance_container_port": 61007,
+          "instance_console_host_port": 61008,
+          "instance_console_container_port": 61008,
+          "warden_job_id": 7,
+          "warden_container_path": "/var/vcap/data/warden/depot/170hamjgi6q",
+          "warden_host_ip": "10.254.0.9",
+          "state_running_timestamp": 1372786130.092604
+        }
+      },
+      "26784aa4-0176-4cf8-82d3-stopped": {
+        "4add0d0d57841ec60b3044efa67cd55a": {
+          "executableFile": "deprecated",
+          "services": [
+
+          ],
+          "limits": {
+            "mem": 256,
+            "disk": 1024,
+            "fds": 16384
+          },
+          "cc_partition": "default",
+          "console": true,
+          "debug": null,
+          "instance_index": 0,
+          "application_id": "26784aa4-0176-4cf8-82d3-142e24cc8d34",
+          "application_version": "6662946e-e96e-4869-8a88-42e0b4a14013",
+          "application_name": "dea2",
+          "application_uris": [
+            "dea2.pasadena.cf-app.com"
+          ],
+          "application_prod": false,
+          "droplet_sha1": "75660e8b35bcd25b702d933cfa9a16c886107413",
+          "droplet_uri": "https://d3peaniaojsbh4.cloudfront.net/26/78/26784aa4-0176-4cf8-82d3-142e24cc8d34/75660e8b35bcd25b702d933cfa9a16c886107413?Expires=1372786723&Signature=E0QunCmI77mzI0uEj9TbUi2F8dcmaWT-WUCtp3rKN~WzZAlYYMvp5rK3rCHenomp4xWvzMtouu73skos1XGGXwoG-ATrcwFqJwSQlG4Cqbi2kOm7oOXJHwxgPMj9HoeixjulF6MKMrGj8xuMH5MWWqp6E9CbLv45W6NgneYXUbM_&Key-Pair-Id=APKAIDAP77W7KFOLWBUA",
+          "environment": {
+
+          },
+          "instance_id": "4add0d0d57841ec60b3044efa67cd55a",
+          "private_instance_id": "7195e4ebd03b5e1d0b2b237fce38cc7addc3d8ed19b9ea07c142d042b6733cfb",
+          "state": "STOPPED",
+          "state_timestamp": 1372786130.0925922,
+          "state_born_timestamp": 1372786123.089229,
+          "state_starting_timestamp": 1372786123.0903242,
+          "warden_handle": "170hamjgi6q",
+          "instance_host_port": 61007,
+          "instance_container_port": 61007,
+          "instance_console_host_port": 61008,
+          "instance_console_container_port": 61008,
+          "warden_job_id": 7,
+          "warden_container_path": "/var/vcap/data/warden/depot/170hamjgi6q",
+          "warden_host_ip": "10.254.0.9",
+          "state_running_timestamp": 1372786130.092604
+        }
+      },
+      "26784aa4-0176-4cf8-82d3-stopping": {
+        "4add0d0d57841ec60b3044efa67cd55a": {
+          "executableFile": "deprecated",
+          "services": [
+
+          ],
+          "limits": {
+            "mem": 256,
+            "disk": 1024,
+            "fds": 16384
+          },
+          "cc_partition": "default",
+          "console": true,
+          "debug": null,
+          "instance_index": 0,
+          "application_id": "26784aa4-0176-4cf8-82d3-142e24cc8d34",
+          "application_version": "6662946e-e96e-4869-8a88-42e0b4a14013",
+          "application_name": "dea2",
+          "application_uris": [
+            "dea2.pasadena.cf-app.com"
+          ],
+          "application_prod": false,
+          "droplet_sha1": "75660e8b35bcd25b702d933cfa9a16c886107413",
+          "droplet_uri": "https://d3peaniaojsbh4.cloudfront.net/26/78/26784aa4-0176-4cf8-82d3-142e24cc8d34/75660e8b35bcd25b702d933cfa9a16c886107413?Expires=1372786723&Signature=E0QunCmI77mzI0uEj9TbUi2F8dcmaWT-WUCtp3rKN~WzZAlYYMvp5rK3rCHenomp4xWvzMtouu73skos1XGGXwoG-ATrcwFqJwSQlG4Cqbi2kOm7oOXJHwxgPMj9HoeixjulF6MKMrGj8xuMH5MWWqp6E9CbLv45W6NgneYXUbM_&Key-Pair-Id=APKAIDAP77W7KFOLWBUA",
+          "environment": {
+
+          },
+          "instance_id": "4add0d0d57841ec60b3044efa67cd55a",
+          "private_instance_id": "7195e4ebd03b5e1d0b2b237fce38cc7addc3d8ed19b9ea07c142d042b6733cfb",
+          "state": "STOPPING",
+          "state_timestamp": 1372786130.0925922,
+          "state_born_timestamp": 1372786123.089229,
+          "state_starting_timestamp": 1372786123.0903242,
+          "warden_handle": "170hamjgi6q",
+          "instance_host_port": 61007,
+          "instance_container_port": 61007,
+          "instance_console_host_port": 61008,
+          "instance_console_container_port": 61008,
+          "warden_job_id": 7,
+          "warden_container_path": "/var/vcap/data/warden/depot/170hamjgi6q",
+          "warden_host_ip": "10.254.0.9",
+          "state_running_timestamp": 1372786130.092604
+        }
+      },
+      "26784aa4-0176-4cf8-82d3-crashed": {
+        "4add0d0d57841ec60b3044efa67cd55a": {
+          "executableFile": "deprecated",
+          "services": [
+
+          ],
+          "limits": {
+            "mem": 256,
+            "disk": 1024,
+            "fds": 16384
+          },
+          "cc_partition": "default",
+          "console": true,
+          "debug": null,
+          "instance_index": 0,
+          "application_id": "26784aa4-0176-4cf8-82d3-142e24cc8d34",
+          "application_version": "6662946e-e96e-4869-8a88-42e0b4a14013",
+          "application_name": "dea2",
+          "application_uris": [
+            "dea2.pasadena.cf-app.com"
+          ],
+          "application_prod": false,
+          "droplet_sha1": "75660e8b35bcd25b702d933cfa9a16c886107413",
+          "droplet_uri": "https://d3peaniaojsbh4.cloudfront.net/26/78/26784aa4-0176-4cf8-82d3-142e24cc8d34/75660e8b35bcd25b702d933cfa9a16c886107413?Expires=1372786723&Signature=E0QunCmI77mzI0uEj9TbUi2F8dcmaWT-WUCtp3rKN~WzZAlYYMvp5rK3rCHenomp4xWvzMtouu73skos1XGGXwoG-ATrcwFqJwSQlG4Cqbi2kOm7oOXJHwxgPMj9HoeixjulF6MKMrGj8xuMH5MWWqp6E9CbLv45W6NgneYXUbM_&Key-Pair-Id=APKAIDAP77W7KFOLWBUA",
+          "environment": {
+
+          },
+          "instance_id": "4add0d0d57841ec60b3044efa67cd55a",
+          "private_instance_id": "7195e4ebd03b5e1d0b2b237fce38cc7addc3d8ed19b9ea07c142d042b6733cfb",
+          "state": "CRASHED",
+          "state_timestamp": 1372786130.0925922,
+          "state_born_timestamp": 1372786123.089229,
+          "state_starting_timestamp": 1372786123.0903242,
+          "warden_handle": "170hamjgi6q",
+          "instance_host_port": 61007,
+          "instance_container_port": 61007,
+          "instance_console_host_port": 61008,
+          "instance_console_container_port": 61008,
+          "warden_job_id": 7,
+          "warden_container_path": "/var/vcap/data/warden/depot/170hamjgi6q",
+          "warden_host_ip": "10.254.0.9",
+          "state_running_timestamp": 1372786130.092604
+        }
+      },
+      "26784aa4-0176-4cf8-82d3-deleted": {
+        "4add0d0d57841ec60b3044efa67cd55a": {
+          "executableFile": "deprecated",
+          "services": [
+
+          ],
+          "limits": {
+            "mem": 256,
+            "disk": 1024,
+            "fds": 16384
+          },
+          "cc_partition": "default",
+          "console": true,
+          "debug": null,
+          "instance_index": 0,
+          "application_id": "26784aa4-0176-4cf8-82d3-142e24cc8d34",
+          "application_version": "6662946e-e96e-4869-8a88-42e0b4a14013",
+          "application_name": "dea2",
+          "application_uris": [
+            "dea2.pasadena.cf-app.com"
+          ],
+          "application_prod": false,
+          "droplet_sha1": "75660e8b35bcd25b702d933cfa9a16c886107413",
+          "droplet_uri": "https://d3peaniaojsbh4.cloudfront.net/26/78/26784aa4-0176-4cf8-82d3-142e24cc8d34/75660e8b35bcd25b702d933cfa9a16c886107413?Expires=1372786723&Signature=E0QunCmI77mzI0uEj9TbUi2F8dcmaWT-WUCtp3rKN~WzZAlYYMvp5rK3rCHenomp4xWvzMtouu73skos1XGGXwoG-ATrcwFqJwSQlG4Cqbi2kOm7oOXJHwxgPMj9HoeixjulF6MKMrGj8xuMH5MWWqp6E9CbLv45W6NgneYXUbM_&Key-Pair-Id=APKAIDAP77W7KFOLWBUA",
+          "environment": {
+
+          },
+          "instance_id": "4add0d0d57841ec60b3044efa67cd55a",
+          "private_instance_id": "7195e4ebd03b5e1d0b2b237fce38cc7addc3d8ed19b9ea07c142d042b6733cfb",
+          "state": "DELETED",
+          "state_timestamp": 1372786130.0925922,
+          "state_born_timestamp": 1372786123.089229,
+          "state_starting_timestamp": 1372786123.0903242,
+          "warden_handle": "170hamjgi6q",
+          "instance_host_port": 61007,
+          "instance_container_port": 61007,
+          "instance_console_host_port": 61008,
+          "instance_console_container_port": 61008,
+          "warden_job_id": 7,
+          "warden_container_path": "/var/vcap/data/warden/depot/170hamjgi6q",
+          "warden_host_ip": "10.254.0.9",
+          "state_running_timestamp": 1372786130.092604
+        }
+      },
+      "26784aa4-0176-4cf8-82d3-resuming": {
+        "4add0d0d57841ec60b3044efa67cd55a": {
+          "executableFile": "deprecated",
+          "services": [
+
+          ],
+          "limits": {
+            "mem": 256,
+            "disk": 1024,
+            "fds": 16384
+          },
+          "cc_partition": "default",
+          "console": true,
+          "debug": null,
+          "instance_index": 0,
+          "application_id": "26784aa4-0176-4cf8-82d3-142e24cc8d34",
+          "application_version": "6662946e-e96e-4869-8a88-42e0b4a14013",
+          "application_name": "dea2",
+          "application_uris": [
+            "dea2.pasadena.cf-app.com"
+          ],
+          "application_prod": false,
+          "droplet_sha1": "75660e8b35bcd25b702d933cfa9a16c886107413",
+          "droplet_uri": "https://d3peaniaojsbh4.cloudfront.net/26/78/26784aa4-0176-4cf8-82d3-142e24cc8d34/75660e8b35bcd25b702d933cfa9a16c886107413?Expires=1372786723&Signature=E0QunCmI77mzI0uEj9TbUi2F8dcmaWT-WUCtp3rKN~WzZAlYYMvp5rK3rCHenomp4xWvzMtouu73skos1XGGXwoG-ATrcwFqJwSQlG4Cqbi2kOm7oOXJHwxgPMj9HoeixjulF6MKMrGj8xuMH5MWWqp6E9CbLv45W6NgneYXUbM_&Key-Pair-Id=APKAIDAP77W7KFOLWBUA",
+          "environment": {
+
+          },
+          "instance_id": "4add0d0d57841ec60b3044efa67cd55a",
+          "private_instance_id": "7195e4ebd03b5e1d0b2b237fce38cc7addc3d8ed19b9ea07c142d042b6733cfb",
+          "state": "RESUMING",
+          "state_timestamp": 1372786130.0925922,
+          "state_born_timestamp": 1372786123.089229,
+          "state_starting_timestamp": 1372786123.0903242,
+          "warden_handle": "170hamjgi6q",
+          "instance_host_port": 61007,
+          "instance_container_port": 61007,
+          "instance_console_host_port": 61008,
+          "instance_console_container_port": 61008,
+          "warden_job_id": 7,
+          "warden_container_path": "/var/vcap/data/warden/depot/170hamjgi6q",
+          "warden_host_ip": "10.254.0.9",
+          "state_running_timestamp": 1372786130.092604
+        }
+      },
+      "26784aa4-0176-4cf8-82d8-evacuating": {
+        "4add0d0d57841ec60b3044efa67cd55a": {
+          "executableFile": "deprecated",
+          "services": [
+
+          ],
+          "limits": {
+            "mem": 256,
+            "disk": 1024,
+            "fds": 16384
+          },
+          "cc_partition": "default",
+          "console": true,
+          "debug": null,
+          "instance_index": 0,
+          "application_id": "26784aa4-0176-4cf8-82d3-142e24cc8d34",
+          "application_version": "6662946e-e96e-4869-8a88-42e0b4a14013",
+          "application_name": "dea2",
+          "application_uris": [
+            "dea2.pasadena.cf-app.com"
+          ],
+          "application_prod": false,
+          "droplet_sha1": "75660e8b35bcd25b702d933cfa9a16c886107413",
+          "droplet_uri": "https://d3peaniaojsbh4.cloudfront.net/26/78/26784aa4-0176-4cf8-82d3-142e24cc8d34/75660e8b35bcd25b702d933cfa9a16c886107413?Expires=1372786723&Signature=E0QunCmI77mzI0uEj9TbUi2F8dcmaWT-WUCtp3rKN~WzZAlYYMvp5rK3rCHenomp4xWvzMtouu73skos1XGGXwoG-ATrcwFqJwSQlG4Cqbi2kOm7oOXJHwxgPMj9HoeixjulF6MKMrGj8xuMH5MWWqp6E9CbLv45W6NgneYXUbM_&Key-Pair-Id=APKAIDAP77W7KFOLWBUA",
+          "environment": {
+
+          },
+          "instance_id": "4add0d0d57841ec60b3044efa67cd55a",
+          "private_instance_id": "7195e4ebd03b5e1d0b2b237fce38cc7addc3d8ed19b9ea07c142d042b6733cfb",
+          "state": "EVACUATING",
+          "state_timestamp": 1372786130.0925922,
+          "state_born_timestamp": 1372786123.089229,
+          "state_starting_timestamp": 1372786123.0903242,
+          "warden_handle": "170hamjgi6q",
+          "instance_host_port": 61007,
+          "instance_container_port": 61007,
+          "instance_console_host_port": 61008,
+          "instance_console_container_port": 61008,
+          "warden_job_id": 7,
+          "warden_container_path": "/var/vcap/data/warden/depot/170hamjgi6q",
+          "warden_host_ip": "10.254.0.9",
+          "state_running_timestamp": 1372786130.092604
+        }
+      }
+    },
+    "uptime": "3d:3h:3m:56s",
+    "mem": 41336,
+    "cpu": 2.5,
+    "mem_used_bytes": 1278885888,
+    "mem_free_bytes": 6550331392,
+    "cpu_load_avg": 0.4
+}

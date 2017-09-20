@@ -1,0 +1,8 @@
+---
+name: go-buildpack
+templates: {}
+
+packages:
+- go-buildpack
+
+properties: {}

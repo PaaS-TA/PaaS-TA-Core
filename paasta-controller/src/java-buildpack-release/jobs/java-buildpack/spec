@@ -1,0 +1,8 @@
+---
+name: java-buildpack
+templates: {}
+
+packages:
+- java-buildpack
+
+properties: {}

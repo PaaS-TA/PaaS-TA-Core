@@ -1,0 +1,7 @@
+language: ruby
+rvm:
+  - 1.9.3-p547
+  - 2.0
+env:
+  global:
+    secure: "LVWU9dm+dRsAOBfn03dxjgfEMBf2e0JVOe+bd7XG1/wCWpoDo40e9DSIhUegAeRNJJbBUeZVxgEbM9CGJEtUo1e4BjwyX0EmhrK49svyyOvw+mntrEOwypXuq5Clx3w2WgEAB8eTRgxXtG5gIaAN3hXsamhestWLtQ1XOEIwWus="

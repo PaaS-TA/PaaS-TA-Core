@@ -1,0 +1,11 @@
+set -e
+
+mkdir -p ${BOSH_INSTALL_TARGET}/bin
+
+unzip consul/consul_0.7.0_linux_amd64.zip -d ${BOSH_INSTALL_TARGET}/bin
+chmod +x ${BOSH_INSTALL_TARGET}/bin/consul
+
+unzip consul/consul-template_0.14.0_linux_amd64.zip -d /tmp/consul-template_0.14.0_linux_amd64
+mv /tmp/consul-template_0.14.0_linux_amd64/consul-template ${BOSH_INSTALL_TARGET}/bin/
+chmod +x ${BOSH_INSTALL_TARGET}/bin/consul-template
+

@@ -1,0 +1,56 @@
+---
+name: haproxy
+
+description: "The HAProxy server can be used to terminate SSL in front of the Routers. Each HAProxy instance should point to multiple Routers."
+
+packages:
+- common
+- haproxy
+
+templates:
+  haproxy.conf.erb:          config/haproxy.conf
+  haproxy.ctmpl.erb:         config/haproxy.ctmpl
+  haproxy_syslog.conf.erb:   config/haproxy_syslog.conf
+  haproxy_ctl:               bin/haproxy_ctl
+  consul_template_ctl:       bin/consul_template_ctl
+  cert.pem.erb:              config/cert.pem
+
+properties:
+  ha_proxy.ssl_pem:
+    description: "SSL certificate (PEM file)"
+    default: ~
+  ha_proxy.disable_http:
+    description: "Disable port 80 traffic"
+    default: false
+  ha_proxy.ssl_ciphers:
+    default: ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-RSA-AES128-CBC-SHA256:ECDHE-RSA-AES256-CBC-SHA384:ECDHE-RSA-AES128-CBC-SHA:ECDHE-RSA-AES256-CBC-SHA:AES128-SHA256:AES128-SHA
+    description: "List of SSL Ciphers that are passed to HAProxy"
+  ha_proxy.log_to_file:
+    description: "Whether to send logs to a file instead of the default syslog"
+    default: false
+  ha_proxy.dontlognull:
+    description: "Whether to disable logging of requests with no traffic (usually load-balancer TCP checks)"
+    default: false
+  ha_proxy.buffer_size_bytes:
+    description: "Buffer size to use for requests, any requests larger than this (large cookies or query strings) will result in a gateway error"
+    default: 16384
+  ha_proxy.enable_stats_socket:
+    description: "Whether to enable a socket that can be used to query errors and status"
+    default: false
+  request_timeout_in_seconds:
+    description: "Server and client timeouts in seconds"
+    default: 900
+  router.servers:
+    description: "Array of router IPs"
+    default: []
+  router.port:
+    description: "Listening port for Router"
+    default: 80
+
+  cc.allow_app_ssh_access:
+    default: true
+    description: "Allow users to change the value of the app-level allow_ssh attribute"
+
+  app_ssh.port:
+    description: "External port for SSH access to application instances"
+    default: 2222

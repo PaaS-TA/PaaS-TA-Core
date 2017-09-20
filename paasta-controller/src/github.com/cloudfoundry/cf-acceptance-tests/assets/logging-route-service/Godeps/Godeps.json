@@ -1,0 +1,11 @@
+{
+	"ImportPath": "github.com/cloudfoundry-samples/logging-route-service",
+	"GoVersion": "go1.5",
+	"Deps": [
+		{
+			"ImportPath": "github.com/elazarl/goproxy",
+			"Comment": "v1.0-61-g2624781",
+			"Rev": "2624781dc373cecd1136cafdaaaeba6c9bb90e96"
+		}
+	]
+}

@@ -1,0 +1,19 @@
+#!/bin/bash -exu
+
+mkdir -p "${BOSH_INSTALL_TARGET}/src/github.com/cloudfoundry-incubator/consul-release/src/acceptance-tests/"
+cp -R ${PWD}/acceptance-tests/* "${BOSH_INSTALL_TARGET}/src/github.com/cloudfoundry-incubator/consul-release/src/acceptance-tests/"
+
+mkdir -p "${BOSH_INSTALL_TARGET}/src/github.com/cloudfoundry-incubator/check-a-record"
+cp -R ${PWD}/acceptance-tests/vendor/github.com/cloudfoundry-incubator/check-a-record/ "${BOSH_INSTALL_TARGET}/src/github.com/cloudfoundry-incubator/"
+
+export GOROOT="$(readlink -nf /var/vcap/packages/golang1.7)"
+export GOPATH="${BOSH_INSTALL_TARGET}"
+export PATH="${GOROOT}/bin:${PATH}"
+
+go install "github.com/cloudfoundry-incubator/consul-release/src/acceptance-tests/testing/testconsumer"
+go install "github.com/cloudfoundry-incubator/consul-release/src/acceptance-tests/testing/fake-dns-server"
+go install "github.com/cloudfoundry-incubator/check-a-record"
+
+chown vcap:vcap "${BOSH_INSTALL_TARGET}/bin/testconsumer"
+chown vcap:vcap "${BOSH_INSTALL_TARGET}/bin/fake-dns-server"
+chown vcap:vcap "${BOSH_INSTALL_TARGET}/bin/check-a-record"

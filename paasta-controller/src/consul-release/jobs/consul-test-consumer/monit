@@ -1,0 +1,5 @@
+check process consul-test-consumer
+  with pidfile /var/vcap/sys/run/consul-test-consumer/consul-test-consumer.pid
+  start program "/var/vcap/jobs/consul-test-consumer/bin/run start" with timeout 60 seconds
+  stop program "/var/vcap/jobs/consul-test-consumer/bin/run stop"
+  group vcap

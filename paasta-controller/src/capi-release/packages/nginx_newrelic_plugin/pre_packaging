@@ -1,0 +1,16 @@
+set -e -x
+
+pushd ${BUILD_DIR}/nginx
+	tar zxvf newrelic_nginx_agent-1.2.1.tar.gz
+popd
+
+pushd ${BUILD_DIR}/nginx/newrelic_nginx_agent
+	# bundler 1.12.x has a bug with caching built-in libraries
+	# https://github.com/bundler/bundler/issues/4494
+	gem install bundler -v 1.11.2
+	BUNDLE_WITHOUT=development:test bundle _1.11.2_ package --all --no-install --path ./vendor/cache
+
+	rm -rf ./vendor/cache/ruby
+	rm -rf ./vendor/cache/vendor
+	bundle config --delete NO_INSTALL
+popd

@@ -1,0 +1,5 @@
+---
+hash: '3192112'
+offline: true
+remote: https://github.com/OpenPaaSRnD/egov-buildpack-v3.5.git
+version: egov3.5

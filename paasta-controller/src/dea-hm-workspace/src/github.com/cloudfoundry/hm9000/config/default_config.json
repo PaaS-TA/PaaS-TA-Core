@@ -1,0 +1,36 @@
+{
+    "heartbeat_period_in_seconds": 10,
+
+    "cc_auth_user": "mcat",
+    "cc_auth_password": "testing",
+    "cc_base_url": "http://127.0.0.1:6001",
+    "skip_cert_verify": true,
+    "desired_state_batch_size": 500,
+    "fetcher_network_timeout_in_seconds": 10,
+
+    "store_schema_version": 1,
+    "store_type": "etcd",
+    "store_urls": ["http://127.0.0.1:4001"],
+
+    "metrics_server_port": 7879,
+    "metrics_server_user": "metrics_server_user",
+    "metrics_server_password": "canHazMetrics?",
+
+    "log_level": "INFO",
+
+    "ssl":{
+        "key_file": "/var/vcap/jobs/hm9000/config/certs/server.key",
+        "cert_file": "/var/vcap/jobs/hm9000/config/certs/server.crt",
+        "ca_file": "/var/vcap/jobs/hm9000/config/certs/ca.crt"
+    },
+
+    "nats_client_ping_interval": 30,
+    "nats": [{
+        "host": "127.0.0.1",
+        "port": 4222,
+        "user": "",
+        "password": ""
+    }],
+
+    "dropsonde_port": 12345
+}

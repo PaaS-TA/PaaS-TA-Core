@@ -1,0 +1,37 @@
+#!/bin/bash -exu
+
+RUN_DIR="/var/vcap/sys/run/fake-dns-server"
+LOG_DIR="/var/vcap/sys/log/fake-dns-server"
+PKG_DIR="/var/vcap/packages/acceptance-tests"
+
+function create_directories() {
+  mkdir -p "${RUN_DIR}"
+  chown -R vcap:vcap "${RUN_DIR}"
+
+  mkdir -p "${LOG_DIR}"
+  chown -R vcap:vcap "${LOG_DIR}"
+}
+
+function setup_resolvconf() {
+  local resolvconf_file
+  resolvconf_file=/etc/resolvconf/resolv.conf.d/head
+
+  if ! grep -qE '127.0.0.1\b' "${resolvconf_file}"; then
+          if [[ "$(stat -c "%s" "${resolvconf_file}")" = "0" ]]; then
+                  echo 'nameserver 127.0.0.1' > "${resolvconf_file}"
+          else
+                  sed -i -e '1i nameserver 127.0.0.1' "${resolvconf_file}"
+          fi
+  fi
+
+  resolvconf -u
+}
+
+function main() {
+  create_directories
+  setup_resolvconf
+
+  setcap cap_net_bind_service=+ep ${PKG_DIR}/bin/fake-dns-server
+}
+
+main ${@}
