@@ -14,34 +14,40 @@ import (
 	"code.cloudfoundry.org/gorouter/access_log"
 	"code.cloudfoundry.org/gorouter/common/schema"
 	cfg "code.cloudfoundry.org/gorouter/config"
-	"code.cloudfoundry.org/gorouter/metrics/reporter/fakes"
+	"code.cloudfoundry.org/gorouter/logger"
+	"code.cloudfoundry.org/gorouter/mbus"
+	"code.cloudfoundry.org/gorouter/metrics"
+	"code.cloudfoundry.org/gorouter/metrics/fakes"
+	fakeMetrics "code.cloudfoundry.org/gorouter/metrics/fakes"
 	"code.cloudfoundry.org/gorouter/proxy"
 	rregistry "code.cloudfoundry.org/gorouter/registry"
 	"code.cloudfoundry.org/gorouter/route"
 	"code.cloudfoundry.org/gorouter/router"
+	"code.cloudfoundry.org/gorouter/routeservice"
 	"code.cloudfoundry.org/gorouter/test/common"
 	"code.cloudfoundry.org/gorouter/test_util"
 	vvarz "code.cloudfoundry.org/gorouter/varz"
-	"code.cloudfoundry.org/lager"
-	"code.cloudfoundry.org/lager/lagertest"
 	"github.com/nats-io/nats"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/tedsuo/ifrit"
 )
 
 var _ = Describe("Router", func() {
 	var (
-		logger     lager.Logger
+		logger     logger.Logger
 		natsRunner *test_util.NATSRunner
 		config     *cfg.Config
 		p          proxy.Proxy
 
-		mbusClient  *nats.Conn
-		registry    *rregistry.RouteRegistry
-		varz        vvarz.Varz
-		rtr         *router.Router
-		natsPort    uint16
-		healthCheck int32
+		combinedReporter metrics.CombinedReporter
+		mbusClient       *nats.Conn
+		registry         *rregistry.RouteRegistry
+		varz             vvarz.Varz
+		rtr              *router.Router
+		subscriber       ifrit.Process
+		natsPort         uint16
+		healthCheck      int32
 	)
 
 	testAndVerifyRouterStopsNoDrain := func(signals chan os.Signal, closeChannel chan struct{}, sigs ...os.Signal) {
@@ -182,7 +188,7 @@ var _ = Describe("Router", func() {
 	}
 
 	BeforeEach(func() {
-		logger = lagertest.NewTestLogger("test")
+		logger = test_util.NewTestZapLogger("test")
 		natsPort = test_util.NextAvailPort()
 		natsRunner = test_util.NewNATSRunner(int(natsPort))
 		natsRunner.Start()
@@ -204,29 +210,38 @@ var _ = Describe("Router", func() {
 
 		mbusClient = natsRunner.MessageBus
 		registry = rregistry.NewRouteRegistry(logger, config, new(fakes.FakeRouteRegistryReporter))
-		varz = vvarz.NewVarz(registry)
 		logcounter := schema.NewLogCounter()
 		atomic.StoreInt32(&healthCheck, 0)
-		p = proxy.NewProxy(proxy.ProxyArgs{
-			Logger:               logger,
-			EndpointTimeout:      config.EndpointTimeout,
-			Ip:                   config.Ip,
-			TraceKey:             config.TraceKey,
-			Registry:             registry,
-			Reporter:             varz,
-			AccessLogger:         &access_log.NullAccessLogger{},
-			HealthCheckUserAgent: "HTTP-Monitor/1.1",
-			HeartbeatOK:          &healthCheck,
-		})
+
+		varz = vvarz.NewVarz(registry)
+		sender := new(fakeMetrics.MetricSender)
+		batcher := new(fakeMetrics.MetricBatcher)
+		metricReporter := metrics.NewMetricsReporter(sender, batcher)
+		combinedReporter = metrics.NewCompositeReporter(varz, metricReporter)
+		config.HealthCheckUserAgent = "HTTP-Monitor/1.1"
+		p = proxy.NewProxy(logger, &access_log.NullAccessLogger{}, config, registry, combinedReporter,
+			&routeservice.RouteServiceConfig{}, &tls.Config{}, &healthCheck)
 
 		errChan := make(chan error, 2)
 		rtr, err = router.NewRouter(logger, config, p, mbusClient, registry, varz, &healthCheck, logcounter, errChan)
 		Expect(err).ToNot(HaveOccurred())
+
+		opts := &mbus.SubscriberOpts{
+			ID: "test",
+			MinimumRegisterIntervalInSeconds: int(config.StartResponseDelayInterval.Seconds()),
+			PruneThresholdInSeconds:          int(config.DropletStaleThreshold.Seconds()),
+		}
+		subscriber = ifrit.Background(mbus.NewSubscriber(logger.Session("subscriber"), mbusClient, registry, nil, opts))
+		<-subscriber.Ready()
 	})
 
 	AfterEach(func() {
 		if natsRunner != nil {
 			natsRunner.Stop()
+		}
+		if subscriber != nil {
+			subscriber.Signal(os.Interrupt)
+			<-subscriber.Wait()
 		}
 	})
 
@@ -442,134 +457,6 @@ var _ = Describe("Router", func() {
 		})
 	})
 
-	Context("healthcheck with endpoint", func() {
-		Context("when load balancer threshold is greater than start delay ", func() {
-			var errChan chan error
-
-			BeforeEach(func() {
-				var err error
-				logcounter := schema.NewLogCounter()
-
-				errChan = make(chan error, 2)
-				config.LoadBalancerHealthyThreshold = 2 * time.Second
-				config.Port = 8347
-				rtr, err = router.NewRouter(logger, config, p, mbusClient, registry, varz, &healthCheck, logcounter, errChan)
-				Expect(err).ToNot(HaveOccurred())
-				runRouterHealthcheck := func(r *router.Router) {
-					signals := make(chan os.Signal)
-					readyChan := make(chan struct{})
-					go func() {
-						r.Run(signals, readyChan)
-					}()
-
-					Eventually(func() int {
-						return healthCheckWithEndpointReceives()
-					}, time.Second).Should(Equal(http.StatusOK))
-					select {
-					case <-readyChan:
-					}
-				}
-				runRouterHealthcheck(rtr)
-			})
-
-			It("should return valid healthchecks", func() {
-				app := common.NewTestApp([]route.Uri{"drain.vcap.me"}, config.Port, mbusClient, nil, "")
-				blocker := make(chan bool)
-				serviceUnavailable := make(chan bool)
-
-				app.AddHandler("/", func(w http.ResponseWriter, r *http.Request) {
-					blocker <- true
-
-					_, err := ioutil.ReadAll(r.Body)
-					defer r.Body.Close()
-					Expect(err).ToNot(HaveOccurred())
-
-					<-blocker
-
-					w.WriteHeader(http.StatusNoContent)
-				})
-
-				app.Listen()
-
-				Eventually(func() bool {
-					return appRegistered(registry, app)
-				}).Should(BeTrue())
-
-				drainWait := 1 * time.Second
-				drainTimeout := 2 * time.Second
-
-				go func() {
-					defer GinkgoRecover()
-					req, err := http.NewRequest("GET", app.Endpoint(), nil)
-					Expect(err).ToNot(HaveOccurred())
-
-					client := http.Client{}
-					resp, err := client.Do(req)
-					Expect(err).ToNot(HaveOccurred())
-					Expect(resp).ToNot(BeNil())
-					defer resp.Body.Close()
-				}()
-
-				// check for ok health
-				Consistently(func() int {
-					return healthCheckWithEndpointReceives()
-				}, 2*time.Second, 100*time.Millisecond).Should(Equal(http.StatusOK))
-
-				// wait for app to receive request
-				<-blocker
-
-				go func() {
-					err := rtr.Drain(drainWait, drainTimeout)
-					Expect(err).ToNot(HaveOccurred())
-				}()
-				blocker <- false
-				// check drain makes gorouter returns service unavailable
-				go func() {
-					defer GinkgoRecover()
-					Eventually(func() int {
-						result := healthCheckWithEndpointReceives()
-						if result == http.StatusServiceUnavailable {
-							serviceUnavailable <- true
-						}
-						return result
-					}, 100*time.Millisecond, drainTimeout).Should(Equal(http.StatusServiceUnavailable))
-				}()
-
-			})
-		})
-
-		Context("when the load balancer delay is less than the start repsonse delay ", func() {
-			BeforeEach(func() {
-				var err error
-				logcounter := schema.NewLogCounter()
-
-				errChan := make(chan error, 2)
-				config.LoadBalancerHealthyThreshold = 2 * time.Second
-				config.StartResponseDelayInterval = 4 * time.Second
-				config.Port = 9348
-				rtr, err = router.NewRouter(logger, config, p, mbusClient, registry, varz, &healthCheck, logcounter, errChan)
-				Expect(err).ToNot(HaveOccurred())
-
-				signals := make(chan os.Signal)
-				readyChan := make(chan struct{})
-				go func() {
-					rtr.Run(signals, readyChan)
-				}()
-			})
-
-			It("does not immediately make the health check endpoint available", func() {
-				Consistently(func() int {
-					return healthCheckWithEndpointReceives()
-				}, time.Second).Should(Equal(http.StatusServiceUnavailable))
-				Eventually(func() int {
-					return healthCheckWithEndpointReceives()
-				}, 4*time.Second).Should(Equal(http.StatusOK))
-
-			})
-		})
-
-	})
-
 	Context("OnErrOrSignal", func() {
 		Context("when an error is received in the error channel", func() {
 			var errChan chan error
@@ -578,17 +465,9 @@ var _ = Describe("Router", func() {
 				logcounter := schema.NewLogCounter()
 				var healthCheck int32
 				healthCheck = 0
-				proxy := proxy.NewProxy(proxy.ProxyArgs{
-					Logger:               logger,
-					EndpointTimeout:      config.EndpointTimeout,
-					Ip:                   config.Ip,
-					TraceKey:             config.TraceKey,
-					Registry:             registry,
-					Reporter:             varz,
-					AccessLogger:         &access_log.NullAccessLogger{},
-					HealthCheckUserAgent: "HTTP-Moniter/1.1",
-					HeartbeatOK:          &healthCheck,
-				})
+				config.HealthCheckUserAgent = "HTTP-Monitor/1.1"
+				proxy := proxy.NewProxy(logger, &access_log.NullAccessLogger{}, config, registry, combinedReporter,
+					&routeservice.RouteServiceConfig{}, &tls.Config{}, &healthCheck)
 
 				errChan = make(chan error, 2)
 				var err error

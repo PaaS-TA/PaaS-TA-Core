@@ -583,6 +583,14 @@ var _ = Describe("DB", func() {
 				})
 			})
 
+			Describe("ReadFilteredTcpRouteMappings", func() {
+				It("Returns an error", func() {
+					_, err := etcd.ReadFilteredTcpRouteMappings("foo", []string{"1"})
+					Expect(err).To(HaveOccurred())
+					Expect(err.Error()).To(ContainSubstring("Database misconfigured"))
+				})
+			})
+
 			Describe("WatchChanges with tcp events", func() {
 				Context("when a tcp route is upserted", func() {
 					It("should return an create watch event", func() {
@@ -762,6 +770,14 @@ var _ = Describe("DB", func() {
 			})
 		})
 
+		Describe("ReadRouterGroupByName", func() {
+			It("returns an error", func() {
+				_, err := etcd.ReadRouterGroupByName("foobar")
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("Database misconfigured"))
+			})
+		})
+
 		Describe("SaveRouterGroup", func() {
 			Context("when router group is missing a guid", func() {
 				It("does not save the router group", func() {
@@ -866,13 +882,29 @@ var _ = Describe("DB", func() {
 					Expect(err).To(HaveOccurred())
 					Expect(err.Error()).To(ContainSubstring("Name cannot be updated"))
 				})
+
+				It("allows reservable ports to be empty", func() {
+					routerGroup.ReservablePorts = ""
+					err := etcd.SaveRouterGroup(routerGroup)
+
+					node, err := etcdClient.Get(db.ROUTER_GROUP_BASE_KEY + "/" + guid)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(node.TTL).To(Equal(uint64(0)))
+					expected := `{
+							"name": "router-group-1",
+							"type": "tcp",
+							"guid": "` + guid + `",
+							"reservable_ports": ""
+						}`
+					Expect(node.Value).To(MatchJSON(expected))
+				})
 			})
 		})
 	})
 })
 
 func setupFakeEtcd(keys client.KeysAPI) db.DB {
-	nodeURLs := []string{"127.0.0.1:5000"}
+	nodeURLs := []string{"http://127.0.0.1:5000"}
 
 	cfg := client.Config{
 		Endpoints: nodeURLs,

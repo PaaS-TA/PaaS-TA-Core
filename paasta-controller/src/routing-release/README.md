@@ -86,6 +86,12 @@ branch.
 
 1. Choose a domain name for developer to create TCP route from and configure
    DNS to resolve it to your load balancer; see [Domain Names](#domain-names).
+   
+### Warning!
+
+This release previously supported etcd as a data store for Routing API, however it was unreliable for persistent data. On upgrading from an older release that was configured to use etcd, data will automatically be migrated to the relational database. 
+
+If the etcd cluster used by an older deployment of this release is configured to require TLS before Routing API data is migrated to a relational database, TCP Routing functionality will fail until Routing API can reconnect to etcd and access the same persistent data. If your strategy for enabling TLS in etcd involves destroying the etcd cluster, TCP Routing will fail. Before configuring etcd to require TLS or destroying etcd, upgrade this release and configure it to use a relational database using the two-phase process described in [Migrating from etcd](#migrating-from-etcd). Once the datastore for Routing API is configured to use a relational database, you can require TLS for etcd. 
 
 ### CF-Release
 
@@ -102,12 +108,12 @@ for you automatically.
     ```
     properties:
       uaa:
-	ssl:
-	  port: <choose a port for UAA to listen to SSL on; e.g. 8443>
-	sslCertificate: |
-	  <insert certificate>
-	sslPrivateKey: |
-	  <insert private key>
+        ssl:
+          port: <choose a port for UAA to listen to SSL on; e.g. 8443>
+        sslCertificate: |
+          <insert certificate>
+        sslPrivateKey: |
+          <insert private key>
     ```
 1. You must add the `routing.router_groups.read` and
   `routing.router_groups.write` scopes to your admin user.
@@ -115,9 +121,20 @@ for you automatically.
     ```
     properties:
       uaa:
-      scim:
-	  users:
-	  - admin|PASSWORD|scim.write,scim.read,openid,cloud_controller.admin,clients.read,clients.write,doppler.firehose,routing.router_groups.read,routing.router_groups.write
+        scim:
+          users:
+          - name: admin
+            password: PASSWORD
+            groups:
+            - scim.write
+            - scim.read
+            - openid
+            - cloud_controller.admin
+            - clients.read
+            - clients.write
+            - doppler.firehose
+            - routing.router_groups.read
+            - routing.router_groups.write
     ```
 
 1. The following OAuth clients must be configured for UAA. All but the `cf`
@@ -130,30 +147,30 @@ for you automatically.
     ```
     properties:
       uaa:
-	clients:
-	  cc_routing:
-	    authorities: routing.router_groups.read
-	    authorized-grant-types: client_credentials
-	    secret: <your-secret>
-	  cf:
-	    override: true
-	    authorized-grant-types: password,refresh_token
-	    scope: cloud_controller.read,cloud_controller.write,openid,password.write,cloud_controller.admin,cloud_controller.admin_read_only,scim.read,scim.write,doppler.firehose,uaa.user,routing.router_groups.read,routing.router_groups.write
-	    authorities: uaa.none
-	    access-token-validity: 600
-	    refresh-token-validity: 2592000
-	  gorouter:
-	    authorities: routing.routes.read
-	    authorized-grant-types: client_credentials,refresh_token
-	    secret: <your-secret>
-	  tcp_emitter:
-	    authorities: routing.routes.write,routing.routes.read
-	    authorized-grant-types: client_credentials,refresh_token
-	    secret: <your-secret>
-	  tcp_router:
-	    authorities: routing.routes.read
-	    authorized-grant-types: client_credentials,refresh_token
-	    secret: <your-secret>
+        clients:
+          cc_routing:
+            authorities: routing.router_groups.read
+            authorized-grant-types: client_credentials
+            secret: <your-secret>
+          cf:
+            override: true
+            authorized-grant-types: password,refresh_token
+            scope: cloud_controller.read,cloud_controller.write,openid,password.write,cloud_controller.admin,cloud_controller.admin_read_only,scim.read,scim.write,doppler.firehose,uaa.user,routing.router_groups.read,routing.router_groups.write
+            authorities: uaa.none
+            access-token-validity: 600
+            refresh-token-validity: 2592000
+          gorouter:
+            authorities: routing.routes.read
+            authorized-grant-types: client_credentials,refresh_token
+            secret: <your-secret>
+          tcp_emitter:
+            authorities: routing.routes.write,routing.routes.read
+            authorized-grant-types: client_credentials,refresh_token
+            secret: <your-secret>
+          tcp_router:
+            authorities: routing.routes.read
+            authorized-grant-types: client_credentials,refresh_token
+            secret: <your-secret>
     ```
 1. UAA must be configured to accept requests using an internal hostname. The
    manifest generation scripts for cf-release will do this for you (both BOSH
@@ -170,11 +187,13 @@ for you automatically.
            - uaa.service.cf.internal
    ```
 
-### Relational Database
+### Relational Database Prerequisites
 
-This release supports a relational database as a data store for the Routing API; MySQL and PostgreSQL are supported. BOSH Lite deployments will use the PostgreSQL database that comes with cf-release by default. For other IaaS we recommend the [CF MySQL Release](https://github.com/cloudfoundry/cf-mysql-release). For any deployment, you can also provide your own MySQL or PostgreSQL database. Routing API does not create the database on deployment of routing-release; you must create a database schema in advance and then provide the credentials for it in the deployment manifest for this release (see [Deploying routing-release](#deploying-routing-release)). 
+This release requires a relational database as a data store for the Routing API; MySQL and PostgreSQL are supported. Routing API does not create the database on deployment of routing-release; you must create a database in advance and then provide the credentials for it in the deployment manifest for this release (see [Deploying routing-release](#relational-database-1)). 
 
-For the CF MySQL Release, you can seed the required database on deploy using the manifest property `cf_mysql.mysql.seeded_databases`. We recommend you do not use a deployment of cf-mysql-release that is exposed as a CF marketplace service. Instead, use a deployment intended for internal platform use; for these deployments you should set broker instances to zero. After generating your manifest for cf-mysql-release, update the following manifest properties before deploying.
+BOSH Lite deployments will use the PostgreSQL database that comes with cf-release by default. For other IaaS we recommend the [CF MySQL Release](https://github.com/cloudfoundry/cf-mysql-release). For any deployment, you can also provide your own MySQL or PostgreSQL database. 
+
+If you use the CF MySQL Release, you can seed the required database on deploy using the manifest property `cf_mysql.mysql.seeded_databases`. We recommend you do not use a deployment of cf-mysql-release that is exposed as a CF marketplace service. Instead, use a deployment intended for internal platform use; for these deployments you should set broker instances to zero. After generating your manifest for cf-mysql-release, update the following manifest properties before deploying.
 
 ```
 properties:
@@ -246,7 +265,7 @@ directly to a single TCP router instance.
 
       ```
       cd ~/workspace/routing-release
-      bosh -n upload release releases/routing-<lastest_version>.yml
+      bosh upload release releases/routing-<lastest_version>.yml
       ```
 
     - The `release-candidate` branch can be considered "edge" as it has passed
@@ -257,8 +276,8 @@ directly to a single TCP router instance.
       cd ~/workspace/routing-release
       git checkout release-candidate
       ./scripts/update
-      bosh create release --force
-      bosh -n upload release
+      bosh create release
+      bosh upload release
       ```
 
 1. Generate a Deployment Manifest
@@ -286,6 +305,8 @@ directly to a single TCP router instance.
 
 ### Ports
 
+If you are using the manifest generation script for BOSH Lite, you can skip this step. 
+
 If you configured your load balancer to forward a range other than
 1024-1123 (see [Ports](#ports)), you must configure this release with the
 same port range using deployment manifest property
@@ -306,8 +327,10 @@ properties:
 ```
 
 ### Relational Database
+
+If you are using the manifest generation script for BOSH Lite, you can skip this step; routing-api will be configured to use the PostgreSQL database that comes with cf-release. 
 	
-The routing-release now supports a relational database for the Routing API. We recommend this instead of etcd. To opt into this feature you can configure your manifest stub with the following `sqldb` properties. To migrate existing deployments to use a relational database see [Migrating from ETCD](#Migrating from ETCD)
+The routing-release now requires a relational database for the Routing API. Configure the properties for `sqldb` below with credentials Routing API requires to connect to the database. To migrate existing deployments to use a relational database see [Migrating from etcd](#Migrating from etcd).
 
 ```
 properties:
@@ -321,10 +344,7 @@ properties:
 	  password: <Password for SQL DB>
 ```
 
-If you are using
-[cf-mysql-release](https://github.com/cloudfoundry/cf-mysql-release), then
-the values for these properties can be obtained from properties that
-manifest.
+If you are using [cf-mysql-release](https://github.com/cloudfoundry/cf-mysql-release), then the values for these properties can be obtained from the following properties in the manifest for that release.
   - `type` should be `mysql`
   - `host` corresponds to the IP address of the `proxy_z1` job
   - `port` is `3306`
@@ -332,14 +352,41 @@ manifest.
   - `username` corresponds to `cf_mysql.mysql.seeded_databases[].username`
   - `password` corresponds to `cf_mysql.mysql.seeded_databases[].password`
 
-### Migrating from etcd
+#### Migrating from etcd
 
-For existing deployments that use etcd, there is a two-phase upgrade process
-to migrate to a relational database.
-1. Deploy the most recent version of routing-release. The migration depends on a recent change to routing-api whereby only one instance is active at a time; this is achieved using a lock in Consul.
-1. Configure your manifest with the `routing_api.sqldb` property and redeploy routing-release.
+For existing deployments of routing-release on versions prior to 0.141.0, there is a two-phase upgrade process to ensure a zero-downtime migration from etcd to a relational database.
 
-This process should ensure a migration with zero downtime to application backends.
+1. Upgrade to routing-release some version between 0.141.0 and 0.146.0, inclusive, but do not add the `routing_api.sqldb` properties which would trigger a migration. The migration depends on a change to routing-api whereby only one instance is active at a time; this is achieved using a lock in Consul.
+1. Then configure your manifest with the `routing_api.sqldb` property and redeploy routing-release. You may upgrade to the latest release version at the same time.
+
+### Validation of TLS Certificates from Route Services and UAA
+
+If you are using the manifest generation script for BOSH Lite, you can skip this step; certificate validation will be disabled.
+
+The following components communicate with UAA via TLS:
+- Routing API
+- Gorouter
+- TCP Router
+- TCP Emitter
+
+Additionally, gorouter communicates with [Route Services](http://docs.cloudfoundry.org/services/route-services.html) via TLS. 
+
+In all cases, these components will validate that certs are signed by a known CA and that the cert is for the requested domain. To disable this validation, as when deploying the routing subsystem to an environment with self-signed certs, configure the following property in routing-release:
+
+```
+properties:
+  skip_ssl_validation: true
+  router:
+    ssl_skip_validation: true
+```
+
+To disable validation of certs by Gorouter, configure the following property in the deployment manifest for cf-release:
+
+```
+properties:
+  router:
+    ssl_skip_validation: true
+```
 
 ## Post Deploy Steps
 
@@ -364,6 +411,9 @@ This process should ensure a migration with zero downtime to application backend
   Though not strictly required, we recommend configuring Diego as your default
   backend (as configured with `default_to_diego_backend: true` above, as TCP
   Routing is only supported for Diego).
+
+  **Note**: If changing the default `routing_api.port`, then you will want to
+  update this property in the cf-release deployment manifest.
 
   Then generate a new manifest for cf-release and re-deploy it.
 
@@ -400,8 +450,8 @@ This process should ensure a migration with zero downtime to application backend
   Create a shared-domain for the TCP router group
 
   ```
-  $ cf create-shared-domain tcp.bosh-lite.com --router-group default-tcp
-  Creating shared domain tcp.bosh-lite.com as admin...
+  $ cf create-shared-domain tcp-apps-domain.com --router-group default-tcp
+  Creating shared domain tcp-apps-domain.com as admin...
   OK
   ```
 
@@ -414,17 +464,46 @@ This process should ensure a migration with zero downtime to application backend
   route ports; required for creation of TCP routes. The final step to enabling
   TCP routing is to modify quotas to set the maximum number of TCP routes that
   may be created by each organization or space.
+  
+  Determine whether your default org quota allows TCP Routes:
+  
+  ```
+  $ cf quota default
+Getting quota default info as admin...
+OK
 
-  Get the guid of the default org quota
+Total Memory           10G
+Instance Memory        unlimited
+Routes                 -1
+Services               100
+Paid service plans     allowed
+App instance limit     unlimited
+Reserved Route Ports   0
+  ```
+
+  If `Reserved Route Ports` is greater than zero, you can skip the following step, as this attribute determines how many TCP routes can be created within each organization assigned this quota.
+  
+  If `Reserved Route Ports` is zero, you can update the quota with the following command:
 
   ```
-  $ cf curl /v2/quota_definitions?q=name:default
-  ```
-  Update this quota definition to set `"total_reserved_route_ports": -1`
+  $ cf update-quota default --reserved-route-ports 2
+Updating quota default as admin...
+OK
 
+  $ cf quota default
+Getting quota default info as admin...
+OK
+
+Total Memory           10G
+Instance Memory        unlimited
+Routes                 -1
+Services               100
+Paid service plans     allowed
+App instance limit     unlimited
+Reserved Route Ports   2
   ```
-  $ cf curl /v2/quota_definitions/44dff27d-96a2-44ed-8904-fb5ca8cbb298 -X PUT -d '{"total_reserved_route_ports": -1}'
-  ```
+  
+  Configuring `Reserved Route Ports` to `-1` sets the quota attribute to unlimited. For more information on configuring quotas for TCP Routing, see [Enabling TCP Routing](https://docs.cloudfoundry.org/adminguide/enabling-tcp-routing.html#configure-quota).
 
 ## Creating a TCP Route
 
@@ -436,14 +515,26 @@ SpaceDeveloper role.
    the TCP domain and including the `--random-route` option, a TCP route will
    be created with a reserved port and the route mapped to your app.
 
-    `$ cf p myapp -d tcp.bosh-lite.com --random-route`
+    `$ cf p myapp -d tcp-apps-domain.com --random-route`
 
-1. Send a request to your app using the TCP shared domain and the port reserved for your route.
+1. Send a request to your app using the TCP shared domain and the port reserved for your route. 
 
     ```
-    $ curl tcp.bosh-lite.com:60073
+    $ curl tcp-apps-domain.com:60073
     OK!
     ```
+    
+**Note:** 
+On a BOSH deployed environment, you would configure DNS to resolve the TCP shared domain to a load balancer in front of the TCP Routers. However BOSH Lite does not expose ports used by TCP Router. To test TCP Routing against a local BOSH Lite, you can use its curl its IP directly using the route port (assumes route port is 60073):
+```
+$ curl 10.244.14.2:60073
+```
+Or you could add an entry to `/etc/hosts` and curl the domain and port: 
+```
+10.244.14.2 tcp-apps-domain.com
+```
+
+To test this against a remote BOSH Lite, you must ssh into a job (like the TCP Router itself) and curl the IP of the router and the route port.
 
 ### TCP Router demo
 For step by step instructions on TCP router demo done at Cloud Foundry Summit
@@ -537,18 +628,6 @@ Steps for enabling PROXY Protocol on the GoRouter can be found
   `router.drain_wait` expires, Gorouter will stop accepting connections and the
   process will gracefully stop.
 
-- On startup:
-  - If `router.load_balancer_healthy_threshold` ==
-    `router.requested_route_registration_interval_in_seconds`, then healthcheck
-    endpoint will return 200 immediately on start and server accept connections
-    after a delay equal to either of these properties
-  - If `router.load_balancer_healthy_threshold` <
-    `router.requested_route_registration_interval_in_seconds`, then healthcheck
-    will return 200 immediately on start and server will accept connections
-    after a delay equal to `load_balancer_healthy_threshold`
-  - If `router.load_balancer_healthy_threshold` >
-    `router.requested_route_registration_interval_in_seconds`, then healthcheck
-    will return 503 on start, then 200 OK after a delay equal to
-    `requested_route_registration_interval_in_seconds -
-    load_balancer_healthy_threshold`. Server will begin accepting connections
-    after an additional delay equal to `load_balancer_healthy_threshold`.
+- On startup, the healthcheck endpoint will return 200 immediately after the
+  gorouter comes up. The gorouter will then wait for a delay equal to
+  `router.load_balancer_healthy_threshold` before accepting connections.

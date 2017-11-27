@@ -28,10 +28,13 @@ type Client interface {
 	Routes() ([]models.Route, error)
 	DeleteRoutes([]models.Route) error
 	RouterGroups() ([]models.RouterGroup, error)
+	RouterGroupWithName(string) (models.RouterGroup, error)
 	UpdateRouterGroup(models.RouterGroup) error
+	CreateRouterGroup(models.RouterGroup) error
 	UpsertTcpRouteMappings([]models.TcpRouteMapping) error
 	DeleteTcpRouteMappings([]models.TcpRouteMapping) error
 	TcpRouteMappings() ([]models.TcpRouteMapping, error)
+	FilteredTcpRouteMappings([]string) ([]models.TcpRouteMapping, error)
 
 	SubscribeToEvents() (EventSource, error)
 	SubscribeToEventsWithMaxRetries(retries uint16) (EventSource, error)
@@ -101,10 +104,23 @@ func (c *client) UpdateRouterGroup(group models.RouterGroup) error {
 	return c.doRequest(UpdateRouterGroup, rata.Params{"guid": group.Guid}, nil, group, nil)
 }
 
+func (c *client) CreateRouterGroup(group models.RouterGroup) error {
+	return c.doRequest(CreateRouterGroup, nil, nil, group, nil)
+}
+
 func (c *client) RouterGroups() ([]models.RouterGroup, error) {
 	var routerGroups []models.RouterGroup
 	err := c.doRequest(ListRouterGroups, nil, nil, nil, &routerGroups)
 	return routerGroups, err
+}
+
+func (c *client) RouterGroupWithName(name string) (models.RouterGroup, error) {
+	var routerGroups []models.RouterGroup
+	err := c.doRequest(ListRouterGroups, nil, url.Values{"name": []string{name}}, nil, &routerGroups)
+	if err != nil {
+		return models.RouterGroup{}, err
+	}
+	return routerGroups[0], err
 }
 
 func (c *client) DeleteRoutes(routes []models.Route) error {
@@ -118,6 +134,12 @@ func (c *client) UpsertTcpRouteMappings(tcpRouteMappings []models.TcpRouteMappin
 func (c *client) TcpRouteMappings() ([]models.TcpRouteMapping, error) {
 	var tcpRouteMappings []models.TcpRouteMapping
 	err := c.doRequest(ListTcpRouteMapping, nil, nil, nil, &tcpRouteMappings)
+	return tcpRouteMappings, err
+}
+
+func (c *client) FilteredTcpRouteMappings(isolationSegments []string) ([]models.TcpRouteMapping, error) {
+	var tcpRouteMappings []models.TcpRouteMapping
+	err := c.doRequest(ListTcpRouteMapping, nil, url.Values{"isolation_segment": isolationSegments}, nil, &tcpRouteMappings)
 	return tcpRouteMappings, err
 }
 

@@ -175,7 +175,7 @@ var _ = Describe("Runner", func() {
 		Context("when the PID file contains nonsense", func() {
 			It("returns an error", func() {
 				Expect(ioutil.WriteFile(runner.PIDFile, []byte("nonsense"), 0644)).To(Succeed())
-				Expect(runner.Stop()).To(MatchError(ContainSubstring("ParseInt")))
+				Expect(runner.Stop()).To(MatchError(ContainSubstring("invalid syntax")))
 			})
 		})
 
@@ -275,7 +275,7 @@ var _ = Describe("Runner", func() {
 		Context("when the PID file contains nonsense", func() {
 			It("returns an error", func() {
 				Expect(ioutil.WriteFile(runner.PIDFile, []byte("nonsense"), 0644)).To(Succeed())
-				Expect(runner.Wait()).To(MatchError(ContainSubstring("ParseInt")))
+				Expect(runner.Wait()).To(MatchError(ContainSubstring("invalid syntax")))
 			})
 		})
 	})

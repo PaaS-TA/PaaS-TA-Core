@@ -6,7 +6,6 @@ import (
 	"github.com/cloudfoundry-incubator/consul-release/src/confab/chaperon"
 	"github.com/cloudfoundry-incubator/consul-release/src/confab/config"
 	"github.com/cloudfoundry-incubator/consul-release/src/confab/fakes"
-	consulagent "github.com/hashicorp/consul/command/agent"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -20,9 +19,6 @@ var _ = Describe("Client", func() {
 		keyringRemover *fakes.KeyringRemover
 		configWriter   *fakes.ConfigWriter
 		cfg            config.Config
-
-		rpcClient   *consulagent.RPCClient
-		rpcEndpoint string
 	)
 
 	BeforeEach(func() {
@@ -37,13 +33,7 @@ var _ = Describe("Client", func() {
 			},
 		}
 
-		rpcClient = &consulagent.RPCClient{}
-		rpcClientConstructor := func(endpoint string) (*consulagent.RPCClient, error) {
-			rpcEndpoint = endpoint
-			return rpcClient, nil
-		}
-
-		client = chaperon.NewClient(controller, rpcClientConstructor, keyringRemover, configWriter)
+		client = chaperon.NewClient(controller, keyringRemover, configWriter)
 	})
 
 	It("writes the consul configuration file", func() {
@@ -125,26 +115,9 @@ var _ = Describe("Client", func() {
 	})
 
 	Describe("Stop", func() {
-		It("sets up an RPC client", func() {
-			err := client.Stop()
-			Expect(err).NotTo(HaveOccurred())
+		It("calls stop agent", func() {
+			client.Stop()
 			Expect(controller.StopAgentCall.CallCount).To(Equal(1))
-			Expect(controller.StopAgentCall.Receives.RPCClient).To(Equal(rpcClient))
-			Expect(rpcEndpoint).To(Equal("localhost:8400"))
-		})
-
-		Context("failure cases", func() {
-			Context("when constructing an RPC client fails", func() {
-				It("returns an error", func() {
-					client = chaperon.NewClient(controller, func(string) (*consulagent.RPCClient, error) {
-						return nil, errors.New("failed to create rpc client")
-					}, keyringRemover, configWriter)
-
-					err := client.Stop()
-					Expect(err).To(MatchError(errors.New("failed to create rpc client")))
-					Expect(controller.StopAgentCall.CallCount).To(Equal(1))
-				})
-			})
 		})
 	})
 })

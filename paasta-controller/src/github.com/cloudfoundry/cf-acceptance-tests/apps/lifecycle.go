@@ -18,6 +18,7 @@ import (
 	"github.com/cloudfoundry/cf-acceptance-tests/helpers/app_helpers"
 	"github.com/cloudfoundry/cf-acceptance-tests/helpers/assets"
 	"github.com/cloudfoundry/cf-acceptance-tests/helpers/random_name"
+	"github.com/cloudfoundry/cf-acceptance-tests/helpers/skip_messages"
 )
 
 type AppUsageEvent struct {
@@ -49,10 +50,17 @@ func lastAppUsageEvent(appName string, state string) (bool, AppUsageEvent) {
 }
 
 var _ = AppsDescribe("Application Lifecycle", func() {
-	var appName string
+	var (
+		appName              string
+		expectedNullResponse string
+	)
 
 	BeforeEach(func() {
 		appName = random_name.CATSRandomName("APP")
+
+		appUrl := "https://" + appName + "." + Config.GetAppsDomain()
+		nullSession := helpers.CurlSkipSSL(Config.GetSkipSSLValidation(), appUrl).Wait(Config.DefaultTimeoutDuration())
+		expectedNullResponse = string(nullSession.Buffer().Contents())
 	})
 
 	AfterEach(func() {
@@ -135,7 +143,7 @@ var _ = AppsDescribe("Application Lifecycle", func() {
 
 		Context("multiple instances", func() {
 			BeforeEach(func() {
-				Expect(cf.Cf("push", appName, "--no-start", "-b", Config.GetRubyBuildpackName(), "-m", DEFAULT_MEMORY_LIMIT, "-p", assets.NewAssets().Dora, "-d", Config.GetAppsDomain()).Wait(Config.DefaultTimeoutDuration())).To(Exit(0))
+				Expect(cf.Cf("push", appName, "--no-start", "-b", Config.GetRubyBuildpackName(), "-m", DEFAULT_MEMORY_LIMIT, "-p", assets.NewAssets().Dora, "-d", Config.GetAppsDomain()).Wait(Config.CfPushTimeoutDuration())).To(Exit(0))
 				app_helpers.SetBackend(appName)
 				Expect(cf.Cf("scale", appName, "-i", "2").Wait(Config.DefaultTimeoutDuration())).To(Exit(0))
 			})
@@ -154,6 +162,9 @@ var _ = AppsDescribe("Application Lifecycle", func() {
 		})
 
 		It("makes system environment variables available", func() {
+			if Config.GetBackend() != "diego" {
+				Skip(skip_messages.SkipDiegoMessage)
+			}
 			Expect(cf.Cf("push",
 				appName,
 				"--no-start",
@@ -171,6 +182,7 @@ var _ = AppsDescribe("Application Lifecycle", func() {
 				return envOutput
 			}, Config.DefaultTimeoutDuration()).Should(ContainSubstring(`"CF_INSTANCE_INDEX"=>"0"`))
 			Expect(envOutput).To(MatchRegexp(`"CF_INSTANCE_IP"=>"[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+"`))
+			Expect(envOutput).To(MatchRegexp(`"CF_INSTANCE_INTERNAL_IP"=>"[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+"`))
 			Expect(envOutput).To(MatchRegexp(`"CF_INSTANCE_PORT"=>"[0-9]+"`))
 			Expect(envOutput).To(MatchRegexp(`"CF_INSTANCE_ADDR"=>"[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+:[0-9]+"`))
 			Expect(envOutput).To(MatchRegexp(`"CF_INSTANCE_PORTS"=>"\[(\{\\"external\\":[0-9]+,\\"internal\\":[0-9]+\},?)+\]"`))
@@ -221,7 +233,7 @@ var _ = AppsDescribe("Application Lifecycle", func() {
 
 			Eventually(func() string {
 				return helpers.CurlAppRoot(Config, appName)
-			}, Config.DefaultTimeoutDuration()).Should(ContainSubstring("404"))
+			}, Config.DefaultTimeoutDuration()).Should(ContainSubstring(expectedNullResponse))
 		})
 
 		It("generates an app usage 'stopped' event", func() {
@@ -279,7 +291,13 @@ var _ = AppsDescribe("Application Lifecycle", func() {
 	})
 
 	Describe("deleting", func() {
+		var expectedNullResponse string
+
 		BeforeEach(func() {
+			appUrl := "https://" + appName + "." + Config.GetAppsDomain()
+			nullSession := helpers.CurlSkipSSL(Config.GetSkipSSLValidation(), appUrl).Wait(Config.DefaultTimeoutDuration())
+			expectedNullResponse = string(nullSession.Buffer().Contents())
+
 			Expect(cf.Cf("push", appName, "--no-start", "-b", Config.GetRubyBuildpackName(), "-m", DEFAULT_MEMORY_LIMIT, "-p", assets.NewAssets().Dora, "-d", Config.GetAppsDomain()).Wait(Config.DefaultTimeoutDuration())).To(Exit(0))
 			app_helpers.SetBackend(appName)
 
@@ -289,9 +307,8 @@ var _ = AppsDescribe("Application Lifecycle", func() {
 		It("removes the application", func() {
 			Expect(cf.Cf("delete", appName, "-f", "-r").Wait(Config.DefaultTimeoutDuration())).To(Exit(0))
 
-			app := cf.Cf("app", appName).Wait(Config.DefaultTimeoutDuration())
-			Expect(app).To(Exit(1))
-			Expect(app).To(Say("not found"))
+			app := cf.Cf("apps").Wait(Config.DefaultTimeoutDuration())
+			Consistently(app).ShouldNot(Say(appName))
 		})
 
 		It("makes the app unreachable", func() {
@@ -299,7 +316,7 @@ var _ = AppsDescribe("Application Lifecycle", func() {
 
 			Eventually(func() string {
 				return helpers.CurlAppRoot(Config, appName)
-			}, Config.DefaultTimeoutDuration()).Should(ContainSubstring("404"))
+			}, Config.DefaultTimeoutDuration()).Should(ContainSubstring(expectedNullResponse))
 		})
 
 		It("generates an app usage 'stopped' event", func() {

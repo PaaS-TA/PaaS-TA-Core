@@ -3,12 +3,13 @@ require 'actions/app_delete'
 
 module VCAP::CloudController
   RSpec.describe AppDelete do
-    subject(:app_delete) { AppDelete.new(user.guid, user_email) }
+    subject(:app_delete) { AppDelete.new(user_audit_info) }
     let(:user) { User.make }
     let(:user_email) { 'user@example.com' }
+    let(:user_audit_info) { UserAuditInfo.new(user_guid: user.guid, user_email: user_email) }
 
     let!(:app) { AppModel.make }
-    let!(:app_dataset) { app }
+    let!(:app_dataset) { [app] }
 
     describe '#delete' do
       it 'deletes the app record' do
@@ -22,8 +23,7 @@ module VCAP::CloudController
         expect_any_instance_of(Repositories::AppEventRepository).to receive(:record_app_delete_request).with(
           app,
           app.space,
-          user.guid,
-          user_email
+          user_audit_info
         )
 
         app_delete.delete(app_dataset)
@@ -40,8 +40,18 @@ module VCAP::CloudController
           expect(app.exists?).to be_falsey
         end
 
+        it 'deletes associated builds' do
+          build = BuildModel.make(app: app)
+
+          expect {
+            app_delete.delete(app_dataset)
+          }.to change { BuildModel.count }.by(-1)
+          expect(build.exists?).to be_falsey
+          expect(app.exists?).to be_falsey
+        end
+
         it 'deletes associated droplets' do
-          droplet = DropletModel.make(:staged, app: app)
+          droplet = DropletModel.make(app: app)
 
           expect {
             app_delete.delete(app_dataset)
@@ -51,11 +61,11 @@ module VCAP::CloudController
         end
 
         it 'deletes associated processes' do
-          process = App.make(app: app)
+          process = ProcessModel.make(app: app)
 
           expect {
             app_delete.delete(app_dataset)
-          }.to change { App.count }.by(-1)
+          }.to change { ProcessModel.count }.by(-1)
           expect(process.exists?).to be_falsey
           expect(app.exists?).to be_falsey
         end
@@ -81,7 +91,7 @@ module VCAP::CloudController
         end
 
         it 'deletes the buildpack caches' do
-          delete_buildpack_cache_jobs = Delayed::Job.where("handler like '%BuildpackCacheDelete%'")
+          delete_buildpack_cache_jobs = Delayed::Job.where(Sequel.lit("handler like '%BuildpackCacheDelete%'"))
           expect { app_delete.delete(app_dataset) }.to change { delete_buildpack_cache_jobs.count }.by(1)
           job = delete_buildpack_cache_jobs.last
 
@@ -90,16 +100,30 @@ module VCAP::CloudController
           expect(app.exists?).to be_falsey
         end
 
-        it 'deletes associated service bindings' do
-          allow_any_instance_of(VCAP::Services::ServiceBrokers::V2::Client).to receive(:unbind)
+        describe 'deleting service bindings' do
+          it 'deletes associated service bindings' do
+            allow_any_instance_of(VCAP::Services::ServiceBrokers::V2::Client).to receive(:unbind)
 
-          binding = ServiceBinding.make(app: app, service_instance: ManagedServiceInstance.make(space: app.space))
+            binding = ServiceBinding.make(app: app, service_instance: ManagedServiceInstance.make(space: app.space))
 
-          expect {
-            app_delete.delete(app_dataset)
-          }.to change { ServiceBinding.count }.by(-1)
-          expect(binding.exists?).to be_falsey
-          expect(app.exists?).to be_falsey
+            expect {
+              app_delete.delete(app_dataset)
+            }.to change { ServiceBinding.count }.by(-1)
+            expect(binding.exists?).to be_falsey
+            expect(app.exists?).to be_falsey
+          end
+
+          context 'when service binding delete returns errors' do
+            before do
+              allow_any_instance_of(ServiceBindingDelete).to receive(:delete).and_return([StandardError.new('first'), StandardError.new('second')])
+            end
+
+            it 'raises the first error in the list' do
+              expect {
+                app_delete.delete(app_dataset)
+              }.to raise_error(StandardError, 'first')
+            end
+          end
         end
       end
     end

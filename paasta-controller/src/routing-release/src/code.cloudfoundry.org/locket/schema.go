@@ -5,8 +5,11 @@ import (
 	"time"
 )
 
-const LockTTL = 10 * time.Second
+const DefaultSessionTTL = 15 * time.Second
+const DefaultSessionTTLInSeconds int64 = 15
+const MonitorRetryTime = 2 * time.Second
 const RetryInterval = 5 * time.Second
+const SQLRetryInterval = time.Second
 
 const LockSchemaRoot = "v1/locks"
 

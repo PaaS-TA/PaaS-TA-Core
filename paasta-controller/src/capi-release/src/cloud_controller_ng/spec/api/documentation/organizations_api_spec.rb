@@ -91,52 +91,6 @@ RSpec.resource 'Organizations', type: [:api, :legacy_api] do
       end
     end
 
-    describe 'Isolation Segments (experimental)' do
-      let(:isolation_segment_model) { VCAP::CloudController::IsolationSegmentModel.make }
-
-      before do
-        organization.add_manager(everything_user)
-        isolation_segment_model.add_organization(organization)
-      end
-
-      get '/v2/organizations/:guid/isolation_segments (experimental)' do
-        let(:scheme) { TestConfig.config[:external_protocol] }
-        let(:host) { TestConfig.config[:external_domain] }
-        let(:link_prefix) { "#{scheme}://#{host}" }
-
-        example 'get the associated Isolation Segments for the Organization' do
-          client.get "v2/organizations/#{organization.guid}/isolation_segments", {}, headers
-          expect(status).to eq(200)
-
-          expected_response = {
-            'pagination' => {
-              'total_results' =>  1,
-              'total_pages'   =>  1,
-              'first'         =>  { 'href' => "#{link_prefix}/v2/organizations/#{organization.guid}/isolation_segments?page=1&per_page=50" },
-              'last'          =>  { 'href' => "#{link_prefix}/v2/organizations/#{organization.guid}/isolation_segments?page=1&per_page=50" },
-              'next'          =>  nil,
-              'previous'      =>  nil
-            },
-            'resources' => [
-              {
-                'name'        => isolation_segment_model.name,
-                'guid'        => isolation_segment_model.guid,
-                'created_at'  => iso8601,
-                'updated_at'  => iso8601,
-                'links'       => {
-                  'self'          => { 'href' => "#{link_prefix}/v3/isolation_segments/#{isolation_segment_model.guid}" },
-                  'organizations' => { 'href' => "#{link_prefix}/v3/isolation_segments/#{isolation_segment_model.guid}/relationships/organizations" },
-                  'spaces'        => { 'href' => "#{link_prefix}/v3/isolation_segments/#{isolation_segment_model.guid}/relationships/spaces" },
-                }
-              }
-            ]
-          }
-
-          expect(parsed_response).to be_a_response_like(expected_response)
-        end
-      end
-    end
-
     describe 'Spaces' do
       before do
         VCAP::CloudController::Space.make(organization: organization)
@@ -210,7 +164,7 @@ RSpec.resource 'Organizations', type: [:api, :legacy_api] do
         put 'v2/organizations/:guid/users' do
           example 'Associate User with the Organization by Username' do
             uaa_client = double(:uaa_client)
-            allow(CloudController::DependencyLocator.instance).to receive(:username_lookup_uaa_client).and_return(uaa_client)
+            allow(CloudController::DependencyLocator.instance).to receive(:uaa_client).and_return(uaa_client)
             allow(uaa_client).to receive(:id_for_username).and_return('user-guid')
 
             client.put "v2/organizations/#{organization.guid}/users", MultiJson.dump({ username: 'user@example.com' }, pretty: true), headers
@@ -223,7 +177,7 @@ RSpec.resource 'Organizations', type: [:api, :legacy_api] do
         delete 'v2/organizations/:guid/users' do
           example 'Remove User with the Organization by Username' do
             uaa_client = double(:uaa_client)
-            allow(CloudController::DependencyLocator.instance).to receive(:username_lookup_uaa_client).and_return(uaa_client)
+            allow(CloudController::DependencyLocator.instance).to receive(:uaa_client).and_return(uaa_client)
             allow(uaa_client).to receive(:id_for_username).and_return(associated_user.guid)
 
             client.delete "v2/organizations/#{organization.guid}/users", MultiJson.dump({ username: 'user@example.com' }, pretty: true), headers
@@ -263,7 +217,7 @@ RSpec.resource 'Organizations', type: [:api, :legacy_api] do
         put 'v2/organizations/:guid/managers' do
           example 'Associate Manager with the Organization by Username' do
             uaa_client = double(:uaa_client)
-            allow(CloudController::DependencyLocator.instance).to receive(:username_lookup_uaa_client).and_return(uaa_client)
+            allow(CloudController::DependencyLocator.instance).to receive(:uaa_client).and_return(uaa_client)
             allow(uaa_client).to receive(:id_for_username).and_return('user-guid')
 
             client.put "v2/organizations/#{organization.guid}/managers", MultiJson.dump({ username: 'user@example.com' }, pretty: true), headers
@@ -276,7 +230,7 @@ RSpec.resource 'Organizations', type: [:api, :legacy_api] do
         delete 'v2/organizations/:guid/managers' do
           example 'Remove Manager with the Organization by Username' do
             uaa_client = double(:uaa_client)
-            allow(CloudController::DependencyLocator.instance).to receive(:username_lookup_uaa_client).and_return(uaa_client)
+            allow(CloudController::DependencyLocator.instance).to receive(:uaa_client).and_return(uaa_client)
             allow(uaa_client).to receive(:id_for_username).and_return(associated_manager_guid)
 
             client.delete "v2/organizations/#{organization.guid}/managers", MultiJson.dump({ username: 'manage@example.com' }, pretty: true), headers
@@ -315,7 +269,7 @@ RSpec.resource 'Organizations', type: [:api, :legacy_api] do
         put 'v2/organizations/:guid/billing_managers' do
           example 'Associate Billing Manager with the Organization by Username' do
             uaa_client = double(:uaa_client)
-            allow(CloudController::DependencyLocator.instance).to receive(:username_lookup_uaa_client).and_return(uaa_client)
+            allow(CloudController::DependencyLocator.instance).to receive(:uaa_client).and_return(uaa_client)
             allow(uaa_client).to receive(:id_for_username).and_return('user-guid')
 
             client.put "v2/organizations/#{organization.guid}/billing_managers", MultiJson.dump({ username: 'user@example.com' }, pretty: true), headers
@@ -328,7 +282,7 @@ RSpec.resource 'Organizations', type: [:api, :legacy_api] do
         delete 'v2/organizations/:guid/billing_managers' do
           example 'Remove Billing Manager with the Organization by Username' do
             uaa_client = double(:uaa_client)
-            allow(CloudController::DependencyLocator.instance).to receive(:username_lookup_uaa_client).and_return(uaa_client)
+            allow(CloudController::DependencyLocator.instance).to receive(:uaa_client).and_return(uaa_client)
             allow(uaa_client).to receive(:id_for_username).and_return(associated_billing_manager_guid)
 
             client.delete "v2/organizations/#{organization.guid}/billing_managers", MultiJson.dump({ username: 'billing_manager@example.com' }, pretty: true), headers
@@ -367,7 +321,7 @@ RSpec.resource 'Organizations', type: [:api, :legacy_api] do
         put 'v2/organizations/:guid/auditors' do
           example 'Associate Auditor with the Organization by Username' do
             uaa_client = double(:uaa_client)
-            allow(CloudController::DependencyLocator.instance).to receive(:username_lookup_uaa_client).and_return(uaa_client)
+            allow(CloudController::DependencyLocator.instance).to receive(:uaa_client).and_return(uaa_client)
             allow(uaa_client).to receive(:id_for_username).and_return('user-guid')
 
             client.put "v2/organizations/#{organization.guid}/auditors", MultiJson.dump({ username: 'user@example.com' }, pretty: true), headers
@@ -380,7 +334,7 @@ RSpec.resource 'Organizations', type: [:api, :legacy_api] do
         delete 'v2/organizations/:guid/auditors' do
           example 'Remove Auditor with the Organization by Username' do
             uaa_client = double(:uaa_client)
-            allow(CloudController::DependencyLocator.instance).to receive(:username_lookup_uaa_client).and_return(uaa_client)
+            allow(CloudController::DependencyLocator.instance).to receive(:uaa_client).and_return(uaa_client)
             allow(uaa_client).to receive(:id_for_username).and_return(associated_auditor_guid)
 
             client.delete "v2/organizations/#{organization.guid}/auditors", MultiJson.dump({ username: 'auditor@example.com' }, pretty: true), headers
@@ -425,6 +379,28 @@ RSpec.resource 'Organizations', type: [:api, :legacy_api] do
           expect(status).to eq(200)
 
           expect(parsed_response['instance_usage']).to eq(3)
+        end
+      end
+    end
+
+    describe 'Isolation Segments (Experimental)' do
+      delete '/v2/organizations/:guid/default_isolation_segment' do
+        let(:isolation_segment) { VCAP::CloudController::IsolationSegmentModel.make }
+        let(:assigner) { VCAP::CloudController::IsolationSegmentAssign.new }
+
+        before do
+          assigner.assign(isolation_segment, [organization])
+          organization.default_isolation_segment_guid = isolation_segment.guid
+          organization.save
+        end
+
+        example 'Deleting the organization\'s default isolation segment' do
+          expect(organization.default_isolation_segment_guid).to eq(isolation_segment.guid)
+
+          client.delete "/v2/organizations/#{guid}/default_isolation_segment", {}, headers
+
+          expect(status).to eq 200
+          expect(parsed_response['default_isolation_segment']).to be_nil
         end
       end
     end

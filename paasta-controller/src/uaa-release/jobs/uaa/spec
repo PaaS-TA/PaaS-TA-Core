@@ -11,6 +11,8 @@ templates:
   install_uaa_crt: bin/install_uaa_crt
   pre-start: bin/pre-start
   post-start: bin/post-start
+  backup.erb: bin/bbr/backup
+  restore.erb: bin/bbr/restore
 
   uaa.yml.erb: config/uaa.yml
   newrelic.yml.erb: config/newrelic.yml
@@ -21,10 +23,16 @@ templates:
   tomcat.server.xml.erb: config/tomcat/server.xml
   tomcat.context.xml.erb: config/tomcat/context.xml
   ldap.crt.erb: config/ldap.crt
-  login.yml.erb: config/login.yml
   messages.properties.erb: config/messages.properties
   uaa.crt.erb: config/uaa.crt
 
+consumes:
+- name: router
+  type: http-router
+  optional: true
+- name: database
+  type: database
+  optional: true
 
 packages:
   - uaa_utils
@@ -160,16 +168,41 @@ properties:
     default: /resources/oss
   login.links:
     description: "A hash of home/passwd/signup URLS (see commented examples below)"
+  login.links.global.passwd:
+    description: |
+      URL for requesting password reset. Displayed on the home page of the UAA.
+      This is set globally for all identity zones but can be overridden via Identity Zone API.
+      The links also support two variables: {zone.id} and {zone.subdomain}
+    default: '/forgot_password'
+    example: https://{zone.subdomain}.myaccountmanager.domain.com/z/{zone.id}/forgot_password
+  login.links.global.signup:
+    description: |
+      URL for requesting to signup/register for an account
+      This is set globally for all identity zones but can be overridden via Identity Zone API.
+      The links also support two variables: {zone.id} and {zone.subdomain}
+    default: '/create_account'
+    example: https://{zone.subdomain}.myaccountmanager.domain.com/z/{zone.id}/create_account
+  login.links.global.homeRedirect:
+    description: |
+      Landing URL after successful authentication via UI
+      This is set globally for all identity zones but can be overridden via Identity Zone API.
+      The links also support two variables: {zone.id} and {zone.subdomain}
+    default: '/'
+    example: https://{zone.subdomain}.myaccountmanager.domain.com/z/{zone.id}/success
   login.links.passwd:
-    description: URL for requesting password reset
+    description: URL for requesting password reset for the default zone
     default: '/forgot_password'
   login.links.signup:
     description: URL for requesting to signup/register for an account
     default: '/create_account'
+  login.links.homeRedirect:
+    description: Landing URL after successful authentication via UI
+    default: '/'
   login.home_redirect:
-    description: URL for configuring a custom home page
+    description: Deprecated. May 09, 2017. Please use login.links.homeRedirect
   login.self_service_links_enabled:
     description: "Enable self-service account creation and password resets links."
+    default: true
   login.analytics.code:
     description: "Google analytics code. If Google Analytics is desired set both login.analytics.code and login.analytics.domain"
   login.analytics.domain:
@@ -230,6 +263,20 @@ properties:
   login.smtp.starttls:
     description: "If true, send STARTTLS command before login to server. https://javamail.java.net/nonav/docs/api/com/sun/mail/smtp/package-summary.html"
     default: false
+
+  # Delete actions
+  uaa.delete:
+    description: |
+      Contains a map of actions, each with a list of IDs. Possible delete actions are 'users' and 'clients'.
+      These will be deleted in the database (default zone).
+      Unrecognized map keys will be ignored
+    example: |
+      clients:
+        - client-to-be-deleted-1
+        - client-to-be-deleted-2
+      users:
+        - user-to-be-deleted-1
+        - user-to-be-deleted-2
 
   # Clients
   uaa.clients:
@@ -319,6 +366,9 @@ properties:
       - roles
       - user_attributes
       - uaa.offline_token
+  uaa.jwt.queryString.enabled:
+    default: true
+    description: "If set to true, the /oauth/token and /check_token endpoints accept GET and query string parameters"
   uaa.jwt.revocable:
     default: false
     description: "Set to true if you wish that even JWT tokens become individually revocable and stored in the UAA token storage. This setting applies to the default zone only."
@@ -332,7 +382,7 @@ properties:
     description: "The ID of the JWT signing key to be used when signing tokens."
     example: "key-1"
   uaa.jwt.policy.keys:
-    description: "Map of key IDs and signing keys, each defined with a property `signingKey`"
+    description: "Map of key IDs and signing keys, each defined with a property `signingKey`."
     example:
       key-1:
         signingKey: |
@@ -352,16 +402,22 @@ properties:
           waZKhM1W0oB8MX78M+0fG3xGUtywTx0D4N7pr1Tk2GTgNw==
           -----END RSA PRIVATE KEY-----
   uaa.jwt.signing_key:
-    description: "Deprecated. Use uaa.jwt.policy.keys. The key used to sign the JWT-based OAuth2 tokens"
+    description: "Deprecated. Use uaa.jwt.policy.keys. The key used to sign the JWT-based OAuth2 tokens."
   uaa.jwt.verification_key:
-    description: "Deprecated. Use uaa.jwt.policy.keys. The key used to verify JWT-based OAuth2 tokens"
+    description: "Deprecated. The key used to verify JWT-based OAuth2 tokens. If you are specifying your signing key(s) under uaa.jwt.policy.keys, the verification key does not need to be specified."
   uaa.jwt.claims.exclude:
-    description: "List of claims to exclude from the JWT-based OAuth2 tokens"
+    description: "List of claims to exclude from the JWT-based OAuth2 tokens."
     example:
      - authorities
   uaa.jwt.refresh.restrict_grant:
     description: "Disallows refresh-token grant for any client for which the user has not approved the `uaa.offline_token` scope"
     default: false
+  uaa.jwt.refresh.unique:
+      description: "If true, uaa will only issue one refresh token per client_id/user_id combination"
+      default: false
+  uaa.jwt.refresh.format:
+      description: "The format for the refresh token. Allowed values are `jwt`, `opaque`"
+      default: jwt
 
   # Global security policies (for all zones)
   uaa.authentication.policy.global.lockoutAfterFailures:
@@ -473,6 +529,9 @@ properties:
     description: "Database scheme for UAA DB"
   uaadb.port:
     description: "The UAA database Port"
+  uaadb.tls_enabled :
+    description: "Use TLS connection for UAA database"
+    default: false
   uaadb.roles:
     description: "The list of database Roles used in UAA database including tag/name/password"
   uaa.database.max_connections:
@@ -588,6 +647,9 @@ properties:
       phone_number: telephoneNumber
       user.attribute.name-of-attribute-in-uaa-id-token: name-of-attribute-in-ldap-record
       user.attribute.name-of-other-attribute-in-uaa-id-token: name-of-other-attribute-in-ldap-record
+  uaa.ldap.storeCustomAttributes:
+    description: "Stores custom attribute mappings from the attributeMappings configuration in the database so that they can be retrieved using the /userinfo endpoint"
+    default: true
   uaa.ldap.externalGroupsWhitelist:
     description: "Whitelist of external groups from LDAP that get added as roles in the ID Token"
     example:
@@ -603,7 +665,7 @@ properties:
     description: "Contains a hash of OpenID Connect/Oauth Identity Providers, the key will be used as the origin key for that provider, followed by key/value pairs. Presence of the userInfoUrl will mark it as an OpenID provider instead of OAuth."
     example:
       my-oauth-provider:
-        type: oidc1.0
+        type: oauth2.0
         authUrl: <URL to the authorize endpoint of the provider>
         tokenUrl: <URL to the token endpoint of the provider>
         tokenKey: <Token verification key>
@@ -615,9 +677,37 @@ properties:
         linkText: My Oauth Provider
         showLinkText: true
         addShadowUserOnLogin: true
+        relyingPartyId: <OAuth Client ID>
+        relyingPartySecret: <OAuth Client secret>
+        skipSslValidation: false
+        storeCustomAttributes: true
+        attributeMappings:
+          given_name: <Attribute holding given name in the OAuth if an ID Token is present or the access token has claims>
+          family_name: <Attribute holding family name in the OAuth if an ID Token is present or the access token has claims>
+          user_name: <Attribute holding username in the OAuth if an ID Token is present or the access token has claims>
+          external_groups:
+            - <attribute holding roles or group memberships in the OAuth if an ID Token is present or the access token has claims>
+            - <other attribute holding roles or group memberships in the OAuth if an ID Token is present or the access token has claims>
+          user:
+            attribute:
+              name-of-attribute-in-uaa-id-token: name-of-attribute-in-provider-token
+              name-of-other-attribute-in-uaa-id-token: name-of-other-attribute-in-provider-token
+      my-oidc-provider:
+        type: oidc1.0
+        discoveryUrl: |
+          <URL for OpenID Connect Identity Provider discovery, example: https://accounts.google.com/.well-known/openid-configuration>
+          Using this automatic discovery and you can omit several attributes like issuer, auth endpoint,
+          token endpoint, userinfo endpoint, token key url
+        scopes:
+          - openid
+          - <other scope>
+        linkText: My Oauth Provider
+        showLinkText: true
+        addShadowUserOnLogin: true
         relyingPartyId: <OIDC Client ID>
         relyingPartySecret: <OIDC Client secret>
         skipSslValidation: false
+        storeCustomAttributes: true
         attributeMappings:
           given_name: <Attribute holding given name in the OIDC ID Token>
           family_name: <Attribute holding family name in the OIDC ID Token>
@@ -644,8 +734,128 @@ properties:
       The schema is derived by #{login.protocol} property.
       The default value is #{uaa.url}.replaceFirst('uaa','login'), typically login.example.com
       The UAA will display this link in the cf --sso call if there is a SAML provider enabled.
+  login.saml.activeKeyId:
+    description: |
+      The active key to be used for signing messages and the key to be used to encrypt messages.
+      See login.saml.keys
+  login.saml.keys:
+    description: |
+      A map of keys where each map key is the name of the key. The login.saml.activeKeyId must match
+      one of the keys in the map.
+      To rotate keys, simply add keys. To activate a key, add it as the login.saml.activeKeyId
+    example: |
+      activeKeyId: key1
+      keys:
+        key1:
+          key: |
+            -----BEGIN RSA PRIVATE KEY-----
+            MIIEogIBAAKCAQEArRkvkddLUoNyuvu0ktkcLL0CyGG8Drh9oPsaVOLVHJqB1Ebr
+            oNMTPbY0HPjuD5WBDZTi3ftNLp1mPn9wFy6FhMTvIYeQmTskH8m/kyVReXG/zfWq
+            a4+V6UW4nmUcvfF3YNrHvN5VPTWTJrc2KBzseWQ70OaBNfBi6z4XbdOF45dDfck2
+            oRnasinUv+rG+PUl7x8OjgdVyyen6qeCQ6xt8W9fHg//Nydlfwb3/L+syPoBujdu
+            Hai7GoLUzm/zqOM9dhlR5mjuEJ3QUvnmGKrGDoeHFog0CMgLC+C0Z4ZANB6GbjlM
+            bsQczsaYxHMqAMOnOe6xIXUrPOoc7rclwZeHMQIDAQABAoIBAAFB2ZKZmbZztfWd
+            tmYKpaW9ibOi4hbJSEBPEpXjP+EBTkgYa8WzQsSD+kTrme8LCvDqT+uE076u7fsu
+            OcYxVE7ujz4TGf3C7DQ+5uFOuBTFurroOeCmHlSfaQPdgCPxCQjvDdxVUREsvnDd
+            i8smyqDnFXgi9HVL1awXu1vU2XgZshfl6wBOCNomVMCN8mVcBQ0KM88SUvoUwM7i
+            sSdj1yQV16Za8+nVnMW41FMHegVRd3Y5EsXJfwGuXnZMIG87PavH1nUqn9NOFq9Y
+            kb4SeOO47PaMxv7jMaXltVVokdGH8L/BY4we8tBL+wVeUJ94aYx/Q/LUAtRPbKPS
+            ZSEi/7ECgYEA3dUg8DXzo59zl5a8kfz3aoLl8RqRYzuf8F396IuiVcqYlwlWOkZW
+            javwviEOEdZhUZPxK1duXKTvYw7s6eDFwV+CklTZu4A8M3Os0D8bSL/pIKqcadt5
+            JClIRmOmmQpj9AYhSdBTdQtJGjVDaDXJBb7902pDm9I4jMFbjAKLZNsCgYEAx8J3
+            Y1c7GwHw6dxvTywrw3U6z1ILbx2olVLY6DIgZaMVT4EKTAv2Ke4xF4OZYG+lLRbt
+            hhOHYzRMYC38MNl/9RXHBgUlQJXOQb9u644motl5dcMvzIIuWFCn5vXxR2C3McNy
+            vPdzYS2M64xRGy+IENtPSCcUs9C99bEajRcuG+MCgYAONabEfFA8/OvEnA08NL4M
+            fpIIHbGOb7VRClRHXxpo8G9RzXFOjk7hCFCFfUyPa/IT7awXIKSbHp2O9NfMK2+/
+            cUTF5tWDozU3/oLlXAV9ZX2jcApQ5ZQe8t4EVEHJr9azPOlI9yVBbBWkriDBPiDA
+            U3mi3z2xb4fbzE726vrO3QKBgA6PfTZPgG5qiM3zFGX3+USpAd1kxJKX3dbskAT0
+            ymm+JmqCJGcApDPQOeHV5NMjsC2GM1AHkmHHyR1lnLFO2UXbDYPB0kJP6RXfx00C
+            MozCP1k3Hf/RKWGkl2h9WtXyFchZz744Zz+ZG2F7+9l4cHmSEshWmOq2d3I2M5I/
+            M0wzAoGAa2oM4Q6n+FMHl9e8H+2O4Dgm7wAdhuZI1LhnLL6GLVC1JTmGrz/6G2TX
+            iNFhc0lnDcVeZlwg4i7M7MH8UFdWj3ZEylsXjrjIspuAJg7a/6qmP9s2ITVffqYk
+            2slwG2SIQchM5/0uOiP9W0YIjYEe7hgHUmL9Rh8xFuo9y72GH8c=
+            -----END RSA PRIVATE KEY-----
+          passphrase: password
+          certificate: |
+            -----BEGIN CERTIFICATE-----
+            MIID0DCCArgCCQDBRxU0ucjw6DANBgkqhkiG9w0BAQsFADCBqTELMAkGA1UEBhMC
+            VVMxCzAJBgNVBAgTAkNBMRYwFAYDVQQHEw1TYW4gRnJhbmNpc2NvMR8wHQYDVQQK
+            ExZDbG91ZCBGb3VuZHJ5IElkZW50aXR5MQ4wDAYDVQQLEwVLZXkgMTEiMCAGA1UE
+            AxMZbG9naW4uaWRlbnRpdHkuY2YtYXBwLmNvbTEgMB4GCSqGSIb3DQEJARYRZmhh
+            bmlrQHBpdm90YWwuaW8wHhcNMTcwNDEwMTkxMTIyWhcNMTgwNDEwMTkxMTIyWjCB
+            qTELMAkGA1UEBhMCVVMxCzAJBgNVBAgTAkNBMRYwFAYDVQQHEw1TYW4gRnJhbmNp
+            c2NvMR8wHQYDVQQKExZDbG91ZCBGb3VuZHJ5IElkZW50aXR5MQ4wDAYDVQQLEwVL
+            ZXkgMTEiMCAGA1UEAxMZbG9naW4uaWRlbnRpdHkuY2YtYXBwLmNvbTEgMB4GCSqG
+            SIb3DQEJARYRZmhhbmlrQHBpdm90YWwuaW8wggEiMA0GCSqGSIb3DQEBAQUAA4IB
+            DwAwggEKAoIBAQCtGS+R10tSg3K6+7SS2RwsvQLIYbwOuH2g+xpU4tUcmoHURuug
+            0xM9tjQc+O4PlYENlOLd+00unWY+f3AXLoWExO8hh5CZOyQfyb+TJVF5cb/N9apr
+            j5XpRbieZRy98Xdg2se83lU9NZMmtzYoHOx5ZDvQ5oE18GLrPhdt04Xjl0N9yTah
+            GdqyKdS/6sb49SXvHw6OB1XLJ6fqp4JDrG3xb18eD/83J2V/Bvf8v6zI+gG6N24d
+            qLsagtTOb/Oo4z12GVHmaO4QndBS+eYYqsYOh4cWiDQIyAsL4LRnhkA0HoZuOUxu
+            xBzOxpjEcyoAw6c57rEhdSs86hzutyXBl4cxAgMBAAEwDQYJKoZIhvcNAQELBQAD
+            ggEBAB72QKF9Iri+UdCGAIok/qIeKw5AwZ0wtiONa+DF4B80/yAA1ObpuO3eeeka
+            t0s4wtCRflE08zLrwqHlvKQAGKmJkfRLfEqfKStIUOTHQxE6wOaBtfW41M9ZF1hX
+            NHpnkfmSQjaHVNTRbABiFH6eTq8J6CuO12PyDf7lW3EofvcTU3ulsDhuMAz02ypJ
+            BgcOufnl+qP/m/BhVQsRD5mtJ56uJpHvri1VR2kj8N59V8f6KPO2m5Q6MulEhWml
+            TsxyxUl03oyICDP1cbpYtDk2VddVNWipHHPH/mBVW41EBVv0VDV03LH3RfS9dXiK
+            ynuP3shhqhFvaaiUTZP4l5yF/GQ=
+            -----END CERTIFICATE-----
+        key2:
+          key: |
+            -----BEGIN RSA PRIVATE KEY-----
+            MIIEpAIBAAKCAQEAwt7buITRZhXX98apcgJbiHhrPkrgn5MCsCphRQ89oWPUHWjN
+            j9Kz2m9LaKgq9DnNLl22U4e6/LUQToBCLxkIqwaobZKjIUjNAmNomqbNO7AD2+K7
+            RCiQ2qijWUwXGu+5+fSmF/MOermNKUDiQnRJSSSAPObAHOI980zTWVsApKpcFVaV
+            vk/299L/0rk8I/mNvf63cdw4Nh3xn4Ct+oCnTaDg5OtpGz8sHlocOAti+LdrtNzH
+            uBWq8q2sdhFQBRGe1MOeH8CAEHgKYwELTBCJEyLhykdRgxXJHSaL56+mb6HQvGO/
+            oyZHn+qHsCCjcdR1L/U4qt4m7HBimv0qbvApQwIDAQABAoIBAQCftmmcnHbG1WZR
+            NChSQa5ldlRnFJVvE90jJ0jbgfdAHAKQLAI2Ozme8JJ8bz/tNKZ+tt2lLlxJm9iG
+            jkYwNbNOAMHwNDuxHuqvZ2wnPEh+/+7Zu8VBwoGeRJLEsEFLmWjyfNnYTSPz37nb
+            Mst+LbKW2OylfXW89oxRqQibdqNbULpcU4NBDkMjToH1Z4dUFx3X2R2AAwgDz4Ku
+            HN4HoxbsbUCI5wLDJrTGrJgEntMSdsSdOY48YOMBnHqqfw7KoJ0sGjrPUy0vOGq2
+            CeP3uqbXX/mJpvJ+jg3Y2b1Zeu2I+vAnZrxlaZ+hYnZfoNqVjBZ/EEq/lmEovMvr
+            erP8FYI5AoGBAOrlmMZYdhW0fRzfpx6WiBJUkFfmit4qs9nQRCouv+jHS5QL9aM9
+            c+iKeP6kWuxBUYaDBmf5J1OBW4omNd384NX5PCiL/Fs/lxgdMZqEhnhT4Dj4Q6m6
+            ZXUuY6hamoF5+z2mtkZzRyvD1LUAARKJw6ggUtcH28cYC3RkZ5P6SWHVAoGBANRg
+            scI9pF2VUrmwpgIGhynLBEO26k8j/FyE3S7lPcUZdgPCUZB0/tGklSo183KT/KQY
+            TgO2mqb8a8xKCz41DTnUPqJWZzBOFw5QaD2i9O6soXUAKqaUm3g40/gyWX1hUtHa
+            K0Kw5z1Sf3MoCpW0Ozzn3znYbAoSvBRr53d0EVK3AoGAOD1ObbbCVwIGroIR1i3+
+            WD0s7g7Bkt2wf+bwWxUkV4xX2RNf9XyCItv8iiM5rbUZ2tXGE+DAfKrNCu+JGCQy
+            hKiOsbqKaiJ4f4qF1NQECg0y8xDlyl5Zakv4ClffBD77W1Bt9cIl+SGC7O8aUqDv
+            WnKawucbxLhKDcz4S6KyLR0CgYEAhuRrw24XqgEgLCVRK9QtoZP7P28838uBjNov
+            Cow8caY8WSLhX5mQCGQ7AjaGTG5Gd4ugcadYD1wgs/8LqRVVMzfmGII8xGe1KThV
+            HWEVpUssuf3DGU8meHPP3sNMJ+DbE8M42wE1vrNZlDEImBGD1qmIFVurM7K2l1n6
+            CNtF7X0CgYBuFf0A0cna8LnxOAPm8EPHgFq4TnDU7BJzzcO/nsORDcrh+dZyGJNS
+            fUTMp4k+AQCm9UwJAiSf4VUwCbhXUZ3S+xB55vrH+Yc2OMtsIYhzr3OCkbgKBMDn
+            nBVKSGAomYD2kCUmSbg7bUrFfGntmvOLqTHtVfrCyE5i8qS63RbHlA==
+            -----END RSA PRIVATE KEY-----
+          passphrase: password
+          certificate: |
+            -----BEGIN CERTIFICATE-----
+            MIID0DCCArgCCQDqnPTUvA17+TANBgkqhkiG9w0BAQsFADCBqTELMAkGA1UEBhMC
+            VVMxCzAJBgNVBAgTAkNBMRYwFAYDVQQHEw1TYW4gRnJhbmNpc2NvMR8wHQYDVQQK
+            ExZDbG91ZCBGb3VuZHJ5IElkZW50aXR5MQ4wDAYDVQQLEwVLZXkgMjEiMCAGA1UE
+            AxMZbG9naW4uaWRlbnRpdHkuY2YtYXBwLmNvbTEgMB4GCSqGSIb3DQEJARYRZmhh
+            bmlrQHBpdm90YWwuaW8wHhcNMTcwNDEwMTkxNTAyWhcNMTgwNDEwMTkxNTAyWjCB
+            qTELMAkGA1UEBhMCVVMxCzAJBgNVBAgTAkNBMRYwFAYDVQQHEw1TYW4gRnJhbmNp
+            c2NvMR8wHQYDVQQKExZDbG91ZCBGb3VuZHJ5IElkZW50aXR5MQ4wDAYDVQQLEwVL
+            ZXkgMjEiMCAGA1UEAxMZbG9naW4uaWRlbnRpdHkuY2YtYXBwLmNvbTEgMB4GCSqG
+            SIb3DQEJARYRZmhhbmlrQHBpdm90YWwuaW8wggEiMA0GCSqGSIb3DQEBAQUAA4IB
+            DwAwggEKAoIBAQDC3tu4hNFmFdf3xqlyAluIeGs+SuCfkwKwKmFFDz2hY9QdaM2P
+            0rPab0toqCr0Oc0uXbZTh7r8tRBOgEIvGQirBqhtkqMhSM0CY2iaps07sAPb4rtE
+            KJDaqKNZTBca77n59KYX8w56uY0pQOJCdElJJIA85sAc4j3zTNNZWwCkqlwVVpW+
+            T/b30v/SuTwj+Y29/rdx3Dg2HfGfgK36gKdNoODk62kbPyweWhw4C2L4t2u03Me4
+            Faryrax2EVAFEZ7Uw54fwIAQeApjAQtMEIkTIuHKR1GDFckdJovnr6ZvodC8Y7+j
+            Jkef6oewIKNx1HUv9Tiq3ibscGKa/Spu8ClDAgMBAAEwDQYJKoZIhvcNAQELBQAD
+            ggEBAKzeh/bRDEEP/WGsiYhCCfvESyt0QeKwUk+Hfl0/oP4m9pXNrnMRApyoi7FB
+            owpmXIeqDqGigPai6pJ3xCO94P+Bz7WTk0+jScYm/hGpcIOeKh8FBfW0Fddu9Otn
+            qVk0FdRSCTjUZKQlNOqVTjBeKOjHmTkgh96IR3EP2/hp8Ym4HLC+w265V7LnkqD2
+            SoMez7b2V4NmN7z9OxTALUbTzmFG77bBDExHvfbiFlkIptx8+IloJOCzUsPEg6Ur
+            kueuR7IB1S4q6Ja7Gb9b9NYQDFt4hjb5mC9aPxaX+KK2JlZg4cTFVCdkIyp2/fHI
+            iQpMzNWb7zZWlCfDL4dJZHYoNfg=
+            -----END CERTIFICATE-----
   login.saml.serviceProviderKey:
-    description: "Private key for the service provider certificate."
+    description: "Deprecated. Use login.saml.keys. Private key for the service provider certificate."
     example: |
       -----BEGIN RSA PRIVATE KEY-----
       MIICXgIBAAKBgQDfTLadf6QgJeS2XXImEHMsa+1O7MmIt44xaL77N2K+J/JGpfV3
@@ -663,10 +873,11 @@ properties:
       waZKhM1W0oB8MX78M+0fG3xGUtywTx0D4N7pr1Tk2GTgNw==
       -----END RSA PRIVATE KEY-----
   login.saml.serviceProviderKeyPassword:
-    description: "Password to protect the service provider private key."
+    description: "Deprecated. Use login.saml.keys. Passphrase for the service provider private key."
     example: ""
+    default: ""
   login.saml.serviceProviderCertificate:
-    description: "Service provider certificate."
+    description: "Deprecated. Use login.saml.keys. Service provider certificate."
     example: |
       -----BEGIN CERTIFICATE-----
       MIIEJTCCA46gAwIBAgIJANIqfxWTfhpkMA0GCSqGSIb3DQEBBQUAMIG+MQswCQYD
@@ -708,6 +919,7 @@ properties:
         linkText: Log in with My Saml Identity Provider
         groupMappingMode: AS_SCOPES
         skipSslValidation: false
+        storeCustomAttributes: true
   login.saml.socket.connectionManagerTimeout:
     description: "Timeout in milliseconds for connection pooling for SAML metadata HTTP requests"
     default: 10000

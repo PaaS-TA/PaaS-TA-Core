@@ -2,6 +2,7 @@ require 'cloudfront-signer'
 require 'cloud_controller/blobstore/client'
 require 'presenters/api/staging_job_presenter'
 require 'utils/hash_utils'
+require 'actions/droplet_create'
 
 module VCAP::CloudController
   class StagingsController < RestController::BaseController
@@ -25,7 +26,13 @@ module VCAP::CloudController
     get '/staging/jobs/:guid', :find_job
     def find_job(guid)
       job = Delayed::Job[guid: guid]
-      StagingJobPresenter.new(job).to_json
+      StagingJobPresenter.new(job, 'http').to_json
+    end
+
+    get '/internal/v4/staging_jobs/:guid', :find_job_mtls
+    def find_job_mtls(guid)
+      job = Delayed::Job[guid: guid]
+      StagingJobPresenter.new(job, 'https').to_json
     end
 
     get '/staging/packages/:guid', :download_package
@@ -59,21 +66,18 @@ module VCAP::CloudController
 
     post '/staging/v3/droplets/:guid/upload', :upload_package_droplet
     def upload_package_droplet(guid)
-      droplet = DropletModel.find(guid: guid)
+      job = upload_droplet(guid)
+      [HTTP::OK, StagingJobPresenter.new(job, 'http').to_json]
+    end
 
-      raise ApiError.new_from_details('NotFound', guid) if droplet.nil?
-      raise ApiError.new_from_details('StagingError', "malformed droplet upload request for #{guid}") unless upload_path
-      check_file_md5
-
-      logger.info 'v3-droplet.begin-upload', droplet_guid: guid
-
-      droplet_upload_job = Jobs::V3::DropletUpload.new(upload_path, guid)
-
-      job = Jobs::Enqueuer.new(droplet_upload_job, queue: Jobs::LocalQueue.new(config)).enqueue
-      [HTTP::OK, StagingJobPresenter.new(job).to_json]
+    post '/internal/v4/droplets/:guid/upload', :upload_package_droplet_mtls
+    def upload_package_droplet_mtls(guid)
+      job = upload_droplet(guid)
+      [HTTP::OK, StagingJobPresenter.new(job, 'https').to_json]
     end
 
     post '/staging/v3/buildpack_cache/:stack_name/:guid/upload', :upload_v3_app_buildpack_cache
+    post '/internal/v4/buildpack_cache/:stack_name/:guid/upload', :upload_v3_app_buildpack_cache
     def upload_v3_app_buildpack_cache(stack_name, guid)
       app_model = AppModel.find(guid: guid)
 
@@ -81,10 +85,9 @@ module VCAP::CloudController
       raise ApiError.new_from_details('StagingError', "malformed buildpack cache upload request for #{guid}") unless upload_path
       check_file_md5
 
-      cache_key = Presenters::V3::CacheKeyPresenter.cache_key(guid: guid, stack_name: stack_name)
+      upload_job = Jobs::V3::BuildpackCacheUpload.new(local_path: upload_path, app_guid: guid, stack_name: stack_name)
+      Jobs::Enqueuer.new(upload_job, queue: Jobs::LocalQueue.new(config)).enqueue
 
-      blobstore_upload = Jobs::Runtime::BlobstoreUpload.new(upload_path, cache_key, :buildpack_cache_blobstore)
-      Jobs::Enqueuer.new(blobstore_upload, queue: Jobs::LocalQueue.new(config)).enqueue
       HTTP::OK
     end
 
@@ -115,9 +118,38 @@ module VCAP::CloudController
       @blob_sender = dependencies.fetch(:blob_sender)
     end
 
+    def upload_droplet(guid)
+      build = BuildModel.find(guid: guid)
+
+      droplet = droplet_from_build(build, guid)
+
+      raise ApiError.new_from_details('StagingError', "malformed droplet upload request for #{droplet.guid}") unless upload_path
+      check_file_md5
+
+      logger.info 'v3-droplet.begin-upload', droplet_guid: droplet.guid
+
+      droplet_upload_job = Jobs::V3::DropletUpload.new(upload_path, droplet.guid)
+
+      Jobs::Enqueuer.new(droplet_upload_job, queue: Jobs::LocalQueue.new(config)).enqueue
+    end
+
+    def droplet_from_build(build, guid)
+      if build.nil?
+        droplet = DropletModel.find(guid: guid)
+        raise ApiError.new_from_details('NotFound', guid) if droplet.nil?
+        droplet
+      else
+        create_droplet_from_build(build)
+      end
+    end
+
+    def create_droplet_from_build(build)
+      DropletCreate.new.create_buildpack_droplet(build)
+    end
+
     def upload_path
       @upload_path ||=
-        if HashUtils.dig(config, :nginx, :use_nginx)
+        if HashUtils.dig(params, 'droplet_path') # passed from nginx
           params['droplet_path']
         elsif (tempfile = HashUtils.dig(params, 'file', :tempfile))
           tempfile.path
@@ -127,6 +159,8 @@ module VCAP::CloudController
     end
 
     def check_file_md5
+      return if Rails.env.local?
+
       digester = Digester.new(algorithm: Digest::MD5, type: :base64digest)
       file_md5 = digester.digest_path(upload_path)
       header_md5 = env['HTTP_CONTENT_MD5']

@@ -26,24 +26,6 @@ var _ = Describe("EventFormatter", func() {
 			origin = "testEventFormatter/42"
 		})
 
-		It("works with HttpStart events", func() {
-			id, _ := uuid.NewV4()
-			testEvent := &events.HttpStart{RequestId: factories.NewUUID(id)}
-
-			envelope, _ := emitter.Wrap(testEvent, origin)
-			Expect(envelope.GetEventType()).To(Equal(events.Envelope_HttpStart))
-			Expect(envelope.GetHttpStart()).To(Equal(testEvent))
-		})
-
-		It("works with HttpStop events", func() {
-			id, _ := uuid.NewV4()
-			testEvent := &events.HttpStop{RequestId: factories.NewUUID(id)}
-
-			envelope, _ := emitter.Wrap(testEvent, origin)
-			Expect(envelope.GetEventType()).To(Equal(events.Envelope_HttpStop))
-			Expect(envelope.GetHttpStop()).To(Equal(testEvent))
-		})
-
 		It("works with ValueMetric events", func() {
 			testEvent := &events.ValueMetric{Name: proto.String("test-name")}
 
@@ -92,7 +74,7 @@ var _ = Describe("EventFormatter", func() {
 		It("checks that origin is non-empty", func() {
 			id, _ := uuid.NewV4()
 			malformedOrigin := ""
-			testEvent := &events.HttpStart{RequestId: factories.NewUUID(id)}
+			testEvent := &events.HttpStartStop{RequestId: factories.NewUUID(id)}
 			envelope, err := emitter.Wrap(testEvent, malformedOrigin)
 
 			Expect(err).To(HaveOccurred())
@@ -105,7 +87,7 @@ var _ = Describe("EventFormatter", func() {
 
 			BeforeEach(func() {
 				id, _ := uuid.NewV4()
-				testEvent = &events.HttpStop{RequestId: factories.NewUUID(id)}
+				testEvent = &events.HttpStartStop{RequestId: factories.NewUUID(id)}
 			})
 
 			It("contains the origin", func() {

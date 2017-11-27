@@ -32,7 +32,13 @@ func (w ConfigWriter) Write(cfg config.Config) error {
 	nodeName := cfg.Consul.Agent.NodeName
 
 	if nodeName == "" {
-		nodeName, err = nodeNameFor(cfg.Path.DataDir, cfg.Node)
+		nodeName, err = getNodeName(cfg.Path.DataDir, cfg.Node.Name, cfg.Node.Index)
+		if err != nil {
+			w.logger.Error("config-writer.write.determine-node-name.failed", err)
+			return err
+		}
+	} else {
+		nodeName, err = getNodeName(cfg.Path.DataDir, nodeName, cfg.Node.Index)
 		if err != nil {
 			w.logger.Error("config-writer.write.determine-node-name.failed", err)
 			return err
@@ -64,12 +70,12 @@ func (w ConfigWriter) Write(cfg config.Config) error {
 	return nil
 }
 
-type nodeName struct {
+type node struct {
 	NodeName string `json:"node_name"`
 }
 
-func nodeNameFor(dataDir string, node config.ConfigNode) (string, error) {
-	var oldNodeName nodeName
+func getNodeName(dataDir string, nodeName string, nodeIndex int) (string, error) {
+	var oldNode node
 	var name string
 
 	_, err := os.Stat(dataDir)
@@ -80,16 +86,16 @@ func nodeNameFor(dataDir string, node config.ConfigNode) (string, error) {
 	buf, err := ioutil.ReadFile(filepath.Join(dataDir, "node-name.json"))
 	switch {
 	case err == nil:
-		err = json.Unmarshal(buf, &oldNodeName)
+		err = json.Unmarshal(buf, &oldNode)
 		if err != nil {
 			return "", err
 		}
-		name = oldNodeName.NodeName
+		name = oldNode.NodeName
 	case os.IsNotExist(err):
-		name = strings.Replace(node.Name, "_", "-", -1)
-		name = fmt.Sprintf("%s-%d", name, node.Index)
+		name = strings.Replace(nodeName, "_", "-", -1)
+		name = fmt.Sprintf("%s-%d", name, nodeIndex)
 
-		nodeNameJSON, err := json.Marshal(nodeName{NodeName: name})
+		nodeNameJSON, err := json.Marshal(node{NodeName: name})
 		if err != nil {
 			return "", err
 		}

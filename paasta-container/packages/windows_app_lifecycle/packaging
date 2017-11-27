@@ -1,2 +1,0 @@
-set -e
-cp lifecycles/windows_app_lifecycle-*.tgz ${BOSH_INSTALL_TARGET}/windows_app_lifecycle.tgz

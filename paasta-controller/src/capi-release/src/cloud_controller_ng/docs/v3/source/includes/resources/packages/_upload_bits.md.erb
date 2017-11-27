@@ -1,0 +1,40 @@
+### Upload package bits
+
+```
+Example Request
+```
+
+```shell
+curl "https://api.example.org/v3/packages/[guid]/upload" \
+  -F bits=@"package.zip" \
+  -X POST \
+  -H "Authorization: bearer [token]"
+```
+
+```
+Example Response
+```
+
+```http
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+<%= yield_content :single_bits_package %>
+```
+
+Upload file for a package of type `bits`. The file must be sent as part of a multi-part form.
+
+#### Definition
+`POST /v3/packages/:guid/upload`
+
+#### Required Parameters
+
+Name | Type | Description
+---- | ---- | -----------
+**bits** | _form field_ | A binary zip file containing the package bits.
+
+#### Permitted Roles
+ |
+--- | ---
+Space Developer |
+Admin |

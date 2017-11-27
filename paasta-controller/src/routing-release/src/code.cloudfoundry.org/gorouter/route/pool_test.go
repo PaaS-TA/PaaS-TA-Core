@@ -28,16 +28,20 @@ var _ = Describe("Pool", func() {
 		})
 
 		It("handles duplicate endpoints", func() {
-			endpoint := &route.Endpoint{}
-
+			endpoint := route.NewEndpoint("", "1.2.3.4", 5678, "", "", nil, 1, "", modTag, "")
 			pool.Put(endpoint)
+			pool.MarkUpdated(time.Now().Add(-(10 * time.Minute)))
+
 			b := pool.Put(endpoint)
-			Expect(b).To(BeFalse())
+			Expect(b).To(BeTrue())
+
+			prunedEndpoints := pool.PruneEndpoints(time.Second)
+			Expect(prunedEndpoints).To(BeEmpty())
 		})
 
 		It("handles equivalent (duplicate) endpoints", func() {
-			endpoint1 := route.NewEndpoint("", "1.2.3.4", 5678, "", "", nil, -1, "", modTag)
-			endpoint2 := route.NewEndpoint("", "1.2.3.4", 5678, "", "", nil, -1, "", modTag)
+			endpoint1 := route.NewEndpoint("", "1.2.3.4", 5678, "", "", nil, -1, "", modTag, "")
+			endpoint2 := route.NewEndpoint("", "1.2.3.4", 5678, "", "", nil, -1, "", modTag, "")
 
 			pool.Put(endpoint1)
 			Expect(pool.Put(endpoint2)).To(BeTrue())
@@ -48,12 +52,12 @@ var _ = Describe("Pool", func() {
 
 			BeforeEach(func() {
 				modTag2 = models.ModificationTag{Guid: "abc"}
-				endpoint1 := route.NewEndpoint("", "1.2.3.4", 5678, "", "", nil, -1, "", modTag)
+				endpoint1 := route.NewEndpoint("", "1.2.3.4", 5678, "", "", nil, -1, "", modTag, "")
 				Expect(pool.Put(endpoint1)).To(BeTrue())
 			})
 
 			It("updates an endpoint with modification tag", func() {
-				endpoint := route.NewEndpoint("", "1.2.3.4", 5678, "", "", nil, -1, "", modTag2)
+				endpoint := route.NewEndpoint("", "1.2.3.4", 5678, "", "", nil, -1, "", modTag2, "")
 				Expect(pool.Put(endpoint)).To(BeTrue())
 				Expect(pool.Endpoints("", "").Next().ModificationTag).To(Equal(modTag2))
 			})
@@ -61,13 +65,13 @@ var _ = Describe("Pool", func() {
 			Context("when modification_tag is older", func() {
 				BeforeEach(func() {
 					modTag.Increment()
-					endpoint := route.NewEndpoint("", "1.2.3.4", 5678, "", "", nil, -1, "", modTag2)
+					endpoint := route.NewEndpoint("", "1.2.3.4", 5678, "", "", nil, -1, "", modTag2, "")
 					pool.Put(endpoint)
 				})
 
 				It("doesnt update an endpoint", func() {
 					olderModTag := models.ModificationTag{Guid: "abc"}
-					endpoint := route.NewEndpoint("", "1.2.3.4", 5678, "", "", nil, -1, "", olderModTag)
+					endpoint := route.NewEndpoint("", "1.2.3.4", 5678, "", "", nil, -1, "", olderModTag, "")
 
 					Expect(pool.Put(endpoint)).To(BeFalse())
 					Expect(pool.Endpoints("", "").Next().ModificationTag).To(Equal(modTag2))
@@ -120,24 +124,24 @@ var _ = Describe("Pool", func() {
 		Context("with modification tags", func() {
 			BeforeEach(func() {
 				modTag = models.ModificationTag{Guid: "abc"}
-				endpoint1 := route.NewEndpoint("", "1.2.3.4", 5678, "", "", nil, -1, "", modTag)
+				endpoint1 := route.NewEndpoint("", "1.2.3.4", 5678, "", "", nil, -1, "", modTag, "")
 				Expect(pool.Put(endpoint1)).To(BeTrue())
 			})
 
 			It("removes an endpoint with modification tag", func() {
-				endpoint := route.NewEndpoint("", "1.2.3.4", 5678, "", "", nil, -1, "", modTag)
+				endpoint := route.NewEndpoint("", "1.2.3.4", 5678, "", "", nil, -1, "", modTag, "")
 				Expect(pool.Remove(endpoint)).To(BeTrue())
 				Expect(pool.IsEmpty()).To(BeTrue())
 			})
 
 			Context("when modification_tag is the same", func() {
 				BeforeEach(func() {
-					endpoint := route.NewEndpoint("", "1.2.3.4", 5678, "", "", nil, -1, "", modTag)
+					endpoint := route.NewEndpoint("", "1.2.3.4", 5678, "", "", nil, -1, "", modTag, "")
 					pool.Put(endpoint)
 				})
 
 				It("removes an endpoint", func() {
-					endpoint := route.NewEndpoint("", "1.2.3.4", 5678, "", "", nil, -1, "", modTag)
+					endpoint := route.NewEndpoint("", "1.2.3.4", 5678, "", "", nil, -1, "", modTag, "")
 
 					Expect(pool.Remove(endpoint)).To(BeTrue())
 					Expect(pool.IsEmpty()).To(BeTrue())
@@ -147,13 +151,13 @@ var _ = Describe("Pool", func() {
 			Context("when modification_tag is older", func() {
 				BeforeEach(func() {
 					modTag.Increment()
-					endpoint := route.NewEndpoint("", "1.2.3.4", 5678, "", "", nil, -1, "", modTag)
+					endpoint := route.NewEndpoint("", "1.2.3.4", 5678, "", "", nil, -1, "", modTag, "")
 					pool.Put(endpoint)
 				})
 
 				It("doesnt remove an endpoint", func() {
 					olderModTag := models.ModificationTag{Guid: "abc"}
-					endpoint := route.NewEndpoint("", "1.2.3.4", 5678, "", "", nil, -1, "", olderModTag)
+					endpoint := route.NewEndpoint("", "1.2.3.4", 5678, "", "", nil, -1, "", olderModTag, "")
 
 					Expect(pool.Remove(endpoint)).To(BeFalse())
 					Expect(pool.IsEmpty()).To(BeFalse())
@@ -190,7 +194,7 @@ var _ = Describe("Pool", func() {
 			Context("when custom stale threshold is greater than default threshold", func() {
 				It("prunes the endpoint", func() {
 					customThreshold := int(defaultThreshold.Seconds()) + 20
-					e1 := route.NewEndpoint("", "1.2.3.4", 5678, "", "", nil, customThreshold, "", modTag)
+					e1 := route.NewEndpoint("", "1.2.3.4", 5678, "", "", nil, customThreshold, "", modTag, "")
 					pool.Put(e1)
 
 					updateTime, _ := time.ParseDuration(fmt.Sprintf("%ds", customThreshold-10))
@@ -205,7 +209,7 @@ var _ = Describe("Pool", func() {
 
 			Context("and it has passed the stale threshold", func() {
 				It("prunes the endpoint", func() {
-					e1 := route.NewEndpoint("", "1.2.3.4", 5678, "", "", nil, 20, "", modTag)
+					e1 := route.NewEndpoint("", "1.2.3.4", 5678, "", "", nil, 20, "", modTag, "")
 
 					pool.Put(e1)
 					pool.MarkUpdated(time.Now().Add(-25 * time.Second))
@@ -219,7 +223,7 @@ var _ = Describe("Pool", func() {
 
 			Context("and it has not passed the stale threshold", func() {
 				It("does NOT prune the endpoint", func() {
-					e1 := route.NewEndpoint("", "1.2.3.4", 5678, "", "", nil, 20, "", modTag)
+					e1 := route.NewEndpoint("", "1.2.3.4", 5678, "", "", nil, 20, "", modTag, "")
 
 					pool.Put(e1)
 					pool.MarkUpdated(time.Now())
@@ -237,8 +241,8 @@ var _ = Describe("Pool", func() {
 			Context("and they both pass the stale threshold", func() {
 				It("prunes the endpoints", func() {
 					customThreshold := int(30 * time.Second)
-					e1 := route.NewEndpoint("", "1.2.3.4", 5678, "", "", nil, -1, "", modTag)
-					e2 := route.NewEndpoint("", "1.2.3.4", 1234, "", "", nil, customThreshold, "", modTag)
+					e1 := route.NewEndpoint("", "1.2.3.4", 5678, "", "", nil, -1, "", modTag, "")
+					e2 := route.NewEndpoint("", "1.2.3.4", 1234, "", "", nil, customThreshold, "", modTag, "")
 
 					pool.Put(e1)
 					pool.Put(e2)
@@ -252,8 +256,8 @@ var _ = Describe("Pool", func() {
 			})
 			Context("and only one passes the stale threshold", func() {
 				It("prunes the endpoints", func() {
-					e1 := route.NewEndpoint("", "1.2.3.4", 5678, "", "", nil, -1, "", modTag)
-					e2 := route.NewEndpoint("", "1.2.3.4", 1234, "", "", nil, 30, "", modTag)
+					e1 := route.NewEndpoint("", "1.2.3.4", 5678, "", "", nil, -1, "", modTag, "")
+					e2 := route.NewEndpoint("", "1.2.3.4", 1234, "", "", nil, 30, "", modTag, "")
 
 					pool.Put(e1)
 					pool.Put(e2)
@@ -270,7 +274,7 @@ var _ = Describe("Pool", func() {
 		Context("when an endpoint does NOT have a custom stale time", func() {
 			Context("and it has passed the stale threshold", func() {
 				It("prunes the endpoint", func() {
-					e1 := route.NewEndpoint("", "1.2.3.4", 5678, "", "", nil, -1, "", modTag)
+					e1 := route.NewEndpoint("", "1.2.3.4", 5678, "", "", nil, -1, "", modTag, "")
 
 					pool.Put(e1)
 					pool.MarkUpdated(time.Now().Add(-(defaultThreshold + 1)))
@@ -284,7 +288,7 @@ var _ = Describe("Pool", func() {
 
 			Context("and it has not passed the stale threshold", func() {
 				It("does NOT prune the endpoint", func() {
-					e1 := route.NewEndpoint("", "1.2.3.4", 5678, "", "", nil, -1, "", modTag)
+					e1 := route.NewEndpoint("", "1.2.3.4", 5678, "", "", nil, -1, "", modTag, "")
 
 					pool.Put(e1)
 					pool.MarkUpdated(time.Now())
@@ -300,7 +304,7 @@ var _ = Describe("Pool", func() {
 
 	Context("MarkUpdated", func() {
 		It("updates all endpoints", func() {
-			e1 := route.NewEndpoint("", "1.2.3.4", 5678, "", "", nil, -1, "", modTag)
+			e1 := route.NewEndpoint("", "1.2.3.4", 5678, "", "", nil, -1, "", modTag, "")
 
 			pool.Put(e1)
 
@@ -321,8 +325,8 @@ var _ = Describe("Pool", func() {
 
 	Context("Each", func() {
 		It("applies a function to each endpoint", func() {
-			e1 := route.NewEndpoint("", "1.2.3.4", 5678, "", "", nil, -1, "", modTag)
-			e2 := route.NewEndpoint("", "5.6.7.8", 1234, "", "", nil, -1, "", modTag)
+			e1 := route.NewEndpoint("", "1.2.3.4", 5678, "", "", nil, -1, "", modTag, "")
+			e2 := route.NewEndpoint("", "5.6.7.8", 1234, "", "", nil, -1, "", modTag, "")
 			pool.Put(e1)
 			pool.Put(e2)
 
@@ -339,8 +343,8 @@ var _ = Describe("Pool", func() {
 	Context("Stats", func() {
 		Context("NumberConnections", func() {
 			It("increments number of connections", func() {
-				e1 := route.NewEndpoint("", "1.2.3.4", 5678, "", "", nil, -1, "", modTag)
-				e2 := route.NewEndpoint("", "5.6.7.8", 5678, "", "", nil, -1, "", modTag)
+				e1 := route.NewEndpoint("", "1.2.3.4", 5678, "", "", nil, -1, "", modTag, "")
+				e2 := route.NewEndpoint("", "5.6.7.8", 5678, "", "", nil, -1, "", modTag, "")
 
 				// endpoint 1
 				e1.Stats.NumberConnections.Increment()
@@ -356,7 +360,7 @@ var _ = Describe("Pool", func() {
 			})
 
 			It("decrements number of connections", func() {
-				e1 := route.NewEndpoint("", "1.2.3.4", 5678, "", "", nil, -1, "", modTag)
+				e1 := route.NewEndpoint("", "1.2.3.4", 5678, "", "", nil, -1, "", modTag, "")
 
 				e1.Stats.NumberConnections.Increment()
 				Expect(e1.Stats.NumberConnections.Count()).To(Equal(int64(1)))
@@ -367,14 +371,43 @@ var _ = Describe("Pool", func() {
 	})
 
 	It("marshals json", func() {
-		e := route.NewEndpoint("", "1.2.3.4", 5678, "", "", nil, -1, "https://my-rs.com", modTag)
-		e2 := route.NewEndpoint("", "5.6.7.8", 5678, "", "", nil, -1, "", modTag)
+		e := route.NewEndpoint("", "1.2.3.4", 5678, "", "", nil, -1, "https://my-rs.com", modTag, "")
+		e2 := route.NewEndpoint("", "5.6.7.8", 5678, "", "", nil, -1, "", modTag, "")
 		pool.Put(e)
 		pool.Put(e2)
 
 		json, err := pool.MarshalJSON()
 		Expect(err).ToNot(HaveOccurred())
 
-		Expect(string(json)).To(Equal(`[{"address":"1.2.3.4:5678","ttl":-1,"route_service_url":"https://my-rs.com"},{"address":"5.6.7.8:5678","ttl":-1}]`))
+		Expect(string(json)).To(Equal(`[{"address":"1.2.3.4:5678","ttl":-1,"route_service_url":"https://my-rs.com","tags":null},{"address":"5.6.7.8:5678","ttl":-1,"tags":null}]`))
+	})
+
+	Context("when endpoints do not have empty tags", func() {
+		var e *route.Endpoint
+		BeforeEach(func() {
+			sample_tags := map[string]string{
+				"some-key": "some-value"}
+			e = route.NewEndpoint("", "1.2.3.4", 5678, "", "", sample_tags, -1, "https://my-rs.com", modTag, "")
+		})
+		It("marshals json ", func() {
+			pool.Put(e)
+			json, err := pool.MarshalJSON()
+			Expect(err).ToNot(HaveOccurred())
+			Expect(string(json)).To(Equal(`[{"address":"1.2.3.4:5678","ttl":-1,"route_service_url":"https://my-rs.com","tags":{"some-key":"some-value"}}]`))
+		})
+	})
+
+	Context("when endpoints have empty tags", func() {
+		var e *route.Endpoint
+		BeforeEach(func() {
+			sample_tags := map[string]string{}
+			e = route.NewEndpoint("", "1.2.3.4", 5678, "", "", sample_tags, -1, "https://my-rs.com", modTag, "")
+		})
+		It("marshals json ", func() {
+			pool.Put(e)
+			json, err := pool.MarshalJSON()
+			Expect(err).ToNot(HaveOccurred())
+			Expect(string(json)).To(Equal(`[{"address":"1.2.3.4:5678","ttl":-1,"route_service_url":"https://my-rs.com","tags":{}}]`))
+		})
 	})
 })

@@ -1,5 +1,4 @@
 <%=
-
   def discover_external_ip
     networks = spec.networks.marshal_dump
 
@@ -29,6 +28,7 @@
       name: name,
       index: spec.index,
       external_ip: discover_external_ip,
+      zone: spec.az,
     },
     path: {
       agent_path: "/var/vcap/packages/consul-windows/bin/consul",

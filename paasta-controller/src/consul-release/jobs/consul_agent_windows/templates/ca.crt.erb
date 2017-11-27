@@ -1,3 +1,11 @@
 <%=
-  p("consul.ca_cert")
+  ca_cert = nil
+
+  respond_to?(:if_link) && if_link("consul_common") do |link|
+    ca_cert = link.p("consul.ca_cert")
+  end.else do
+    ca_cert = p("consul.ca_cert")
+  end
+
+  ca_cert
 %>

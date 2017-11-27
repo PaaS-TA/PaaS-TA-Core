@@ -14,24 +14,37 @@ This is a port of psutil (http://pythonhosted.org/psutil/). The challenge is por
 psutil functions on some architectures.
 
 
-.. highlights:: Breaking Changes!
+Breaking Changes! golang 1.8 is required
+-------------------------------------------
 
-   Breaking changes is introduced at v2. See `issue 174 <https://github.com/shirou/gopsutil/issues/174>`_ .
+After v2.17.04, golang 1.8 is required to build.
 
 
-Migrating to v2
+Tag semantics
 -------------------------
 
-On gopsutil itself, `v2migration.sh <https://github.com/shirou/gopsutil/blob/v2/v2migration.sh>`_ is used for migration. It can not be commonly used, but it may help you with migration.
+gopsutil tag policy is almost same as Semantic Versioning, but automatically increase like Ubuntu versioning.
+
+for example, `v2.17.04` means
+
+- v2: major version
+- 17: release year, 2017
+- 04: release month
+
+gopsutil aims to keep backwards-compatiblity until major version change.
+
+Taged at every end of month, but there are only a few commits, it can be skipped.
 
 
 Available Architectures
 ------------------------------------
 
-- FreeBSD i386/amd64
+- FreeBSD i386/amd64/arm
 - Linux i386/amd64/arm(raspberry pi)
 - Windows/amd64
-- Darwin/amd64
+- Darwin i386/amd64
+- OpenBDS amd64 (Thank you @mpfz0r!)
+- Solaris amd64 (developed and tested on SmartOS/Illumos, Thank you @jen20!)
 
 All works are implemented without cgo by porting c struct to golang struct.
 
@@ -116,6 +129,7 @@ Several methods have been added which are not present in psutil, but will provid
   - Mhz
   - CacheSize
   - Flags        (ex: "fpu vme de pse tsc msr pae mce cx8 ...")
+  - Microcode
 
 - load/LoadAvg()  (linux, freebsd)
 
@@ -155,107 +169,109 @@ Current Status
 - x: work
 - b: almost works, but something is broken
 
-================= ====== ======= ====== =======
-name              Linux  FreeBSD MacOSX Windows
-cpu_times            x      x      x       x
-cpu_count            x      x      x       x
-cpu_percent          x      x      x       x
-cpu_times_percent    x      x      x       x
-virtual_memory       x      x      x       x
-swap_memory          x      x      x
-disk_partitions      x      x      x       x
-disk_io_counters     x      x
-disk_usage           x      x      x       x
-net_io_counters      x      x      b       x
-boot_time            x      x      x       x
-users                x      x      x       x
-pids                 x      x      x       x
-pid_exists           x      x      x       x
-net_connections      x             x
-net_protocols        x
+=================== ====== ======= ======= ====== ======= =======
+name                Linux  FreeBSD OpenBSD MacOSX Windows Solaris
+cpu_times             x      x       x       x       x
+cpu_count             x      x       x       x       x
+cpu_percent           x      x       x       x       x
+cpu_times_percent     x      x       x       x       x
+virtual_memory        x      x       x       x       x       b
+swap_memory           x      x       x       x
+disk_partitions       x      x       x       x       x
+disk_io_counters      x      x       x
+disk_usage            x      x       x       x       x
+net_io_counters       x      x       x       b       x
+boot_time             x      x       x       x       x
+users                 x      x       x       x       x
+pids                  x      x       x       x       x
+pid_exists            x      x       x       x       x
+net_connections       x                      x
+net_protocols         x
 net_if_addrs
 net_if_stats
-netfilter_conntrack  x
-================= ====== ======= ====== =======
+netfilter_conntrack   x
+=================== ====== ======= ======= ====== =======
 
 Process class
 ^^^^^^^^^^^^^^^
 
-================ ===== ======= ====== =======
-name             Linux FreeBSD MacOSX Windows
-pid                 x     x      x       x
-ppid                x     x      x       x
-name                x     x      x       x
-cmdline             x            x       x
+================ ===== ======= ======= ====== =======
+name             Linux FreeBSD OpenBSD MacOSX Windows
+pid                 x     x      x       x       x
+ppid                x     x      x       x       x
+name                x     x      x       x       x
+cmdline             x                    x       x
 create_time         x
-status              x     x      x
+status              x     x      x       x
 cwd                 x
-exe                 x     x              x
-uids                x     x      x
-gids                x     x      x
-terminal            x     x      x
-io_counters         x     x              x
-nice                x     x      x       x
+exe                 x     x      x               x
+uids                x     x      x       x
+gids                x     x      x       x
+terminal            x     x      x       x
+io_counters         x     x      x               x
+nice                x     x      x       x       x
 num_fds             x
 num_ctx_switches    x
-num_threads         x     x      x       x
+num_threads         x     x      x       x       x
 cpu_times           x
-memory_info         x     x      x       x
+memory_info         x     x      x       x       x
 memory_info_ex      x
 memory_maps         x
 open_files          x
-send_signal         x     x      x
-suspend             x     x      x
-resume              x     x      x
-terminate           x     x      x
-kill                x     x      x
+send_signal         x     x      x       x
+suspend             x     x      x       x
+resume              x     x      x       x
+terminate           x     x      x       x       x
+kill                x     x      x       x
 username            x
 ionice
 rlimit
 num_handlres
 threads
-cpu_percent         x            x
+cpu_percent         x            x       x
 cpu_affinity
 memory_percent
-parent              x            x
-children            x     x      x
-connections         x            x
+parent              x            x       x
+children            x     x      x       x
+connections         x            x       x
 is_running
-================ ===== ======= ====== =======
+================ ===== ======= ======= ====== =======
 
 Original Metrics
 ^^^^^^^^^^^^^^^^^^^
-================== ===== ======= ====== =======
-item               Linux FreeBSD MacOSX Windows
+
+================== ===== ======= ======= ====== ======= =======
+item               Linux FreeBSD OpenBSD MacOSX Windows Solaris
 **HostInfo**
-hostname              x     x      x       x
-  uptime              x     x      x
-  proces              x     x
-  os                  x     x      x       x
-  platform            x     x      x
-  platformfamily      x     x      x
+hostname              x     x      x       x       x       x
+  uptime              x     x      x       x               x
+  proces              x     x      x                       x
+  os                  x     x      x       x       x       x
+  platform            x     x      x       x               x
+  platformfamily      x     x      x       x               x
   virtualization      x
 **CPU**
-  VendorID            x     x      x       x
-  Family              x     x      x       x
-  Model               x     x      x       x
-  Stepping            x     x      x       x
-  PhysicalID          x
-  CoreID              x
-  Cores               x                    x
-  ModelName           x     x      x       x
+  VendorID            x     x      x       x       x      x
+  Family              x     x      x       x       x      x
+  Model               x     x      x       x       x      x
+  Stepping            x     x      x       x       x      x
+  PhysicalID          x                                   x
+  CoreID              x                                   x
+  Cores               x                            x      x
+  ModelName           x     x      x       x       x      x
+  Microcode           x                                   x
 **LoadAvg**
-  Load1               x     x      x
-  Load5               x     x      x
-  Load15              x     x      x
+  Load1               x     x      x       x
+  Load5               x     x      x       x
+  Load15              x     x      x       x
 **GetDockerID**
-  container id        x     no    no      no
+  container id        x     no     no      no      no
 **CgroupsCPU**
-  user                x     no    no      no
-  system              x     no    no      no
+  user                x     no     no      no      no
+  system              x     no     no      no      no
 **CgroupsMem**
-  various             x     no    no      no
-================== ===== ======= ====== =======
+  various             x     no     no      no      no
+================== ===== ======= ======= ====== ======= =======
 
 - future work
 

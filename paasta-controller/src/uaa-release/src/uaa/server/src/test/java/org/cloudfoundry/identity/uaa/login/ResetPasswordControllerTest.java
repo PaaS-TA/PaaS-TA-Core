@@ -20,7 +20,7 @@ import org.cloudfoundry.identity.uaa.account.ResetPasswordController;
 import org.cloudfoundry.identity.uaa.account.ResetPasswordService;
 import org.cloudfoundry.identity.uaa.codestore.ExpiringCode;
 import org.cloudfoundry.identity.uaa.codestore.ExpiringCodeStore;
-import org.cloudfoundry.identity.uaa.login.test.ThymeleafConfig;
+import org.cloudfoundry.identity.uaa.codestore.InMemoryExpiringCodeStore;
 import org.cloudfoundry.identity.uaa.message.MessageService;
 import org.cloudfoundry.identity.uaa.message.MessageType;
 import org.cloudfoundry.identity.uaa.user.UaaUser;
@@ -44,14 +44,12 @@ import org.springframework.test.context.junit4.SpringJUnit4ClassRunner;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
-import org.springframework.web.servlet.view.InternalResourceViewResolver;
 import org.thymeleaf.spring4.SpringTemplateEngine;
 
 import java.sql.Timestamp;
 
 import static org.hamcrest.Matchers.containsString;
 import static org.junit.Assert.assertThat;
-import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyString;
 import static org.mockito.Matchers.contains;
 import static org.mockito.Matchers.eq;
@@ -68,7 +66,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.view;
 
 @RunWith(SpringJUnit4ClassRunner.class)
-@ContextConfiguration(classes = ThymeleafConfig.class)
+@ContextConfiguration(classes = {ThymeleafAdditional.class,ThymeleafConfig.class})
 public class ResetPasswordControllerTest extends TestClassNullifier {
     private MockMvc mockMvc;
     private ResetPasswordService resetPasswordService;
@@ -88,17 +86,14 @@ public class ResetPasswordControllerTest extends TestClassNullifier {
         IdentityZoneHolder.set(IdentityZone.getUaa());
         resetPasswordService = mock(ResetPasswordService.class);
         messageService = mock(MessageService.class);
-        codeStore = mock(ExpiringCodeStore.class);
+        codeStore = new InMemoryExpiringCodeStore();
         userDatabase = mock(UaaUserDatabase.class);
         when(userDatabase.retrieveUserById(anyString())).thenReturn(new UaaUser("username","password","email","givenname","familyname"));
         ResetPasswordController controller = new ResetPasswordController(resetPasswordService, messageService, templateEngine, codeStore, userDatabase, successHandler);
 
-        InternalResourceViewResolver viewResolver = new InternalResourceViewResolver();
-        viewResolver.setPrefix("/WEB-INF/jsp");
-        viewResolver.setSuffix(".jsp");
         mockMvc = MockMvcBuilders
             .standaloneSetup(controller)
-            .setViewResolvers(viewResolver)
+            .setViewResolvers(getResolver())
             .build();
     }
 
@@ -117,6 +112,20 @@ public class ResetPasswordControllerTest extends TestClassNullifier {
             .andExpect(view().name("forgot_password"))
             .andExpect(model().attribute("client_id", "example"))
             .andExpect(model().attribute("redirect_uri", "http://example.com"));
+    }
+
+    @Test
+    public void testForgotPasswordWithSelfServiceDisabled() throws Exception {
+        IdentityZone zone = MultitenancyFixture.identityZone("test-zone-id", "testsubdomain");
+        zone.getConfig().getLinks().getSelfService().setSelfServiceLinksEnabled(false);
+        IdentityZoneHolder.set(zone);
+
+        mockMvc.perform(get("/forgot_password")
+                .param("client_id", "example")
+                .param("redirect_uri", "http://example.com"))
+                .andExpect(status().isNotFound())
+                .andExpect(view().name("error"))
+                .andExpect(model().attribute("error_message_code", "self_service_disabled"));
     }
 
     @Test
@@ -194,28 +203,41 @@ public class ResetPasswordControllerTest extends TestClassNullifier {
     @Test
     public void forgotPassword_SuccessfulDefaultCompanyName() throws Exception {
         ResetPasswordController controller = new ResetPasswordController(resetPasswordService, messageService, templateEngine, codeStore, userDatabase, successHandler);
-        InternalResourceViewResolver viewResolver = new InternalResourceViewResolver();
-        viewResolver.setPrefix("/WEB-INF/jsp");
-        viewResolver.setSuffix(".jsp");
         mockMvc = MockMvcBuilders
                 .standaloneSetup(controller)
-                .setViewResolvers(viewResolver)
+                .setViewResolvers(getResolver())
                 .build();
-        forgotPasswordSuccessful("http://localhost/reset_password?code=code1", "Cloud Foundry", null);
+        forgotPasswordSuccessful("http://localhost/reset_password?code=code1", "Cloud Foundry");
     }
 
     @Test
     public void forgotPassword_SuccessfulInOtherZone() throws Exception {
         IdentityZone zone = MultitenancyFixture.identityZone("test-zone-id", "testsubdomain");
         IdentityZoneHolder.set(zone);
-        forgotPasswordSuccessful("http://testsubdomain.localhost/reset_password?code=code1", "The Twiglet Zone", zone);
+        forgotPasswordSuccessful("http://testsubdomain.localhost/reset_password?code=code1", "The Twiglet Zone");
+    }
+
+    @Test
+    public void forgotPasswordPostWithSelfServiceDisabled() throws Exception {
+        IdentityZone zone = MultitenancyFixture.identityZone("test-zone-id", "testsubdomain");
+        zone.getConfig().getLinks().getSelfService().setSelfServiceLinksEnabled(false);
+        IdentityZoneHolder.set(zone);
+
+        mockMvc.perform(post("/forgot_password.do")
+                .contentType(APPLICATION_FORM_URLENCODED)
+                .param("email", "user@example.com")
+                .param("client_id", "example")
+                .param("redirect_uri", "redirect.example.com"))
+                .andExpect(status().isNotFound())
+                .andExpect(view().name("error"))
+                .andExpect(model().attribute("error_message_code", "self_service_disabled"));
     }
 
     private void forgotPasswordSuccessful(String url) throws Exception {
-        forgotPasswordSuccessful(url, "Best Company", null);
+        forgotPasswordSuccessful(url, "Best Company");
     }
 
-    private void forgotPasswordSuccessful(String url, String companyName, IdentityZone zone) throws Exception {
+    private void forgotPasswordSuccessful(String url, String companyName) throws Exception {
         IdentityZoneConfiguration defaultConfig = IdentityZoneHolder.get().getConfig();
         BrandingInformation branding = new BrandingInformation();
         branding.setCompanyName(companyName);
@@ -230,9 +252,9 @@ public class ResetPasswordControllerTest extends TestClassNullifier {
               .param("client_id", "example")
               .param("redirect_uri", "redirect.example.com");
 
-            if (zone != null) {
+            if (!IdentityZoneHolder.isUaa()) {
                 post.with(request -> {
-                    request.setServerName(zone.getSubdomain() + ".localhost");
+                    request.setServerName(IdentityZoneHolder.get().getSubdomain() + ".localhost");
                     return request;
                 });
             }
@@ -273,12 +295,29 @@ public class ResetPasswordControllerTest extends TestClassNullifier {
 
     @Test
     public void testResetPasswordPage() throws Exception {
-        ExpiringCode code = new ExpiringCode("code1", new Timestamp(System.currentTimeMillis()), "{\"user_id\" : \"some-user-id\"}", null);
-        when(codeStore.generateCode(anyString(), any(Timestamp.class), eq(null))).thenReturn(code);
-        when(codeStore.retrieveCode(anyString())).thenReturn(code);
-        mockMvc.perform(get("/reset_password").param("email", "user@example.com").param("code", "code1"))
+        ExpiringCode code = codeStore.generateCode("{\"user_id\" : \"some-user-id\"}", new Timestamp(System.currentTimeMillis() + 1000000), null, IdentityZoneHolder.get().getId());
+        mockMvc.perform(get("/reset_password").param("email", "user@example.com").param("code", code.getCode()))
             .andExpect(status().isOk())
             .andExpect(view().name("reset_password"));
+    }
+
+    @Test
+    public void testResetPasswordPageDuplicate() throws Exception {
+        ExpiringCode code = codeStore.generateCode("{\"user_id\" : \"some-user-id\"}", new Timestamp(System.currentTimeMillis() + 1000000), null, IdentityZoneHolder.get().getId());
+        mockMvc.perform(get("/reset_password").param("email", "user@example.com").param("code", code.getCode()))
+            .andExpect(status().isOk())
+            .andExpect(view().name("reset_password"));
+        mockMvc.perform(get("/reset_password").param("email", "user@example.com").param("code", code.getCode()))
+            .andExpect(status().isUnprocessableEntity())
+            .andExpect(view().name("forgot_password"));
+    }
+
+    @Test
+    public void testResetPasswordPageWhenExpiringCodeNull() throws Exception {
+        mockMvc.perform(get("/reset_password").param("email", "user@example.com").param("code", "code1"))
+            .andExpect(status().isUnprocessableEntity())
+            .andExpect(view().name("forgot_password"))
+            .andExpect(model().attribute("message_code", "bad_code"));
     }
 
 }

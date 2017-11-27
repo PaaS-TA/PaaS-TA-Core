@@ -11,7 +11,7 @@ RSpec.describe 'ServiceBindings' do
 
   describe 'GET /v2/service_bindings' do
     let(:service_instance) { VCAP::CloudController::ManagedServiceInstance.make(space: space) }
-    let(:process1) { VCAP::CloudController::AppFactory.make(space: space) }
+    let(:process1) { VCAP::CloudController::AppFactory.make(diego: false, space: space) }
     let(:process2) { VCAP::CloudController::AppFactory.make(space: space) }
     let!(:service_binding1) do
       VCAP::CloudController::ServiceBinding.make(service_instance: service_instance, app: process1.app, credentials: { secret: 'key' })
@@ -29,48 +29,48 @@ RSpec.describe 'ServiceBindings' do
       expect(parsed_response).to be_a_response_like(
         {
           'total_results' => 2,
-          'total_pages'   => 1,
-          'prev_url'      => nil,
-          'next_url'      => nil,
-          'resources'     => [
+          'total_pages' => 1,
+          'prev_url' => nil,
+          'next_url' => nil,
+          'resources' => [
             {
               'metadata' => {
-                'guid'       => service_binding1.guid,
-                'url'        => "/v2/service_bindings/#{service_binding1.guid}",
+                'guid' => service_binding1.guid,
+                'url' => "/v2/service_bindings/#{service_binding1.guid}",
                 'created_at' => iso8601,
                 'updated_at' => iso8601
               },
               'entity' => {
-                'app_guid'              => process1.guid,
+                'app_guid' => process1.guid,
                 'service_instance_guid' => service_instance.guid,
-                'credentials'           => { 'secret' => 'key' },
-                'binding_options'       => {},
-                'gateway_data'          => nil,
-                'gateway_name'          => '',
-                'syslog_drain_url'      => nil,
-                'volume_mounts'         => [],
-                'app_url'               => "/v2/apps/#{process1.guid}",
-                'service_instance_url'  => "/v2/service_instances/#{service_instance.guid}"
+                'credentials' => { 'secret' => 'key' },
+                'binding_options' => {},
+                'gateway_data' => nil,
+                'gateway_name' => '',
+                'syslog_drain_url' => nil,
+                'volume_mounts' => [],
+                'app_url' => "/v2/apps/#{process1.guid}",
+                'service_instance_url' => "/v2/service_instances/#{service_instance.guid}"
               }
             },
             {
               'metadata' => {
-                'guid'       => service_binding2.guid,
-                'url'        => "/v2/service_bindings/#{service_binding2.guid}",
+                'guid' => service_binding2.guid,
+                'url' => "/v2/service_bindings/#{service_binding2.guid}",
                 'created_at' => iso8601,
                 'updated_at' => iso8601
               },
               'entity' => {
-                'app_guid'              => process2.guid,
+                'app_guid' => process2.guid,
                 'service_instance_guid' => service_instance.guid,
-                'credentials'           => { 'top' => 'secret' },
-                'binding_options'       => {},
-                'gateway_data'          => nil,
-                'gateway_name'          => '',
-                'syslog_drain_url'      => nil,
-                'volume_mounts'         => [],
-                'app_url'               => "/v2/apps/#{process2.guid}",
-                'service_instance_url'  => "/v2/service_instances/#{service_instance.guid}"
+                'credentials' => { 'top' => 'secret' },
+                'binding_options' => {},
+                'gateway_data' => nil,
+                'gateway_name' => '',
+                'syslog_drain_url' => nil,
+                'volume_mounts' => [],
+                'app_url' => "/v2/apps/#{process2.guid}",
+                'service_instance_url' => "/v2/service_instances/#{service_instance.guid}"
               }
             }
           ]
@@ -100,97 +100,101 @@ RSpec.describe 'ServiceBindings' do
         expect(parsed_response).to be_a_response_like(
           {
             'total_results' => 1,
-            'total_pages'   => 1,
-            'prev_url'      => nil,
-            'next_url'      => nil,
-            'resources'     => [
+            'total_pages' => 1,
+            'prev_url' => nil,
+            'next_url' => nil,
+            'resources' => [
               {
                 'metadata' => {
-                  'guid'       => service_binding1.guid,
-                  'url'        => "/v2/service_bindings/#{service_binding1.guid}",
+                  'guid' => service_binding1.guid,
+                  'url' => "/v2/service_bindings/#{service_binding1.guid}",
                   'created_at' => iso8601,
                   'updated_at' => iso8601
                 },
                 'entity' => {
-                  'app_guid'              => process1.guid,
+                  'app_guid' => process1.guid,
                   'service_instance_guid' => service_instance.guid,
-                  'credentials'           => { 'secret' => 'key' },
-                  'binding_options'       => {},
-                  'gateway_data'          => nil,
-                  'gateway_name'          => '',
-                  'syslog_drain_url'      => nil,
-                  'volume_mounts'         => [],
-                  'app_url'               => "/v2/apps/#{process1.guid}",
-                  'app'                   => {
+                  'credentials' => { 'secret' => 'key' },
+                  'binding_options' => {},
+                  'gateway_data' => nil,
+                  'gateway_name' => '',
+                  'syslog_drain_url' => nil,
+                  'volume_mounts' => [],
+                  'app_url' => "/v2/apps/#{process1.guid}",
+                  'app' => {
                     'metadata' => {
-                      'guid'       => process1.guid,
-                      'url'        => "/v2/apps/#{process1.guid}",
+                      'guid' => process1.guid,
+                      'url' => "/v2/apps/#{process1.guid}",
                       'created_at' => iso8601,
                       'updated_at' => iso8601
                     },
                     'entity' => {
-                      'name'                       => process1.name,
-                      'production'                 => false,
-                      'space_guid'                 => space.guid,
-                      'stack_guid'                 => process1.stack.guid,
-                      'buildpack'                  => nil,
-                      'detected_buildpack'         => nil,
-                      'detected_buildpack_guid'    => nil,
-                      'environment_json'           => nil,
-                      'memory'                     => 1024,
-                      'instances'                  => 1,
-                      'disk_quota'                 => 1024,
-                      'state'                      => 'STOPPED',
-                      'version'                    => process1.version,
-                      'command'                    => nil,
-                      'console'                    => false,
-                      'debug'                      => nil,
-                      'staging_task_id'            => process1.latest_droplet.guid,
-                      'package_state'              => 'STAGED',
-                      'health_check_type'          => 'port',
-                      'health_check_timeout'       => nil,
-                      'staging_failed_reason'      => nil,
+                      'name' => process1.name,
+                      'production' => false,
+                      'space_guid' => space.guid,
+                      'stack_guid' => process1.stack.guid,
+                      'buildpack' => nil,
+                      'detected_buildpack' => nil,
+                      'detected_buildpack_guid' => nil,
+                      'environment_json' => nil,
+                      'memory' => 1024,
+                      'instances' => 1,
+                      'disk_quota' => 1024,
+                      'state' => 'STOPPED',
+                      'version' => process1.version,
+                      'command' => nil,
+                      'console' => false,
+                      'debug' => nil,
+                      'staging_task_id' => process1.latest_build.guid,
+                      'package_state' => 'STAGED',
+                      'health_check_type' => 'port',
+                      'health_check_timeout' => nil,
+                      'health_check_http_endpoint' => nil,
+                      'staging_failed_reason' => nil,
                       'staging_failed_description' => nil,
-                      'diego'                      => false,
-                      'docker_image'               => nil,
-                      'package_updated_at'         => iso8601,
-                      'detected_start_command'     => '',
-                      'enable_ssh'                 => true,
-                      'docker_credentials_json'    => {
-                        'redacted_message' => '[PRIVATE DATA HIDDEN]'
+                      'diego' => false,
+                      'docker_image' => nil,
+                      'docker_credentials' => {
+                        'username' => nil,
+                        'password' => nil,
                       },
-                      'ports'                      => nil,
-                      'space_url'                  => "/v2/spaces/#{space.guid}",
-                      'stack_url'                  => "/v2/stacks/#{process1.stack.guid}",
-                      'routes_url'                 => "/v2/apps/#{process1.guid}/routes",
-                      'events_url'                 => "/v2/apps/#{process1.guid}/events",
-                      'service_bindings_url'       => "/v2/apps/#{process1.guid}/service_bindings",
-                      'route_mappings_url'         => "/v2/apps/#{process1.guid}/route_mappings"
+                      'package_updated_at' => iso8601,
+                      'detected_start_command' => '',
+                      'enable_ssh' => true,
+                      'ports' => nil,
+                      'space_url' => "/v2/spaces/#{space.guid}",
+                      'stack_url' => "/v2/stacks/#{process1.stack.guid}",
+                      'routes_url' => "/v2/apps/#{process1.guid}/routes",
+                      'events_url' => "/v2/apps/#{process1.guid}/events",
+                      'service_bindings_url' => "/v2/apps/#{process1.guid}/service_bindings",
+                      'route_mappings_url' => "/v2/apps/#{process1.guid}/route_mappings"
                     }
                   },
-                  'service_instance_url'  => "/v2/service_instances/#{service_instance.guid}",
-                  'service_instance'      => {
+                  'service_instance_url' => "/v2/service_instances/#{service_instance.guid}",
+                  'service_instance' => {
                     'metadata' => {
-                      'guid'       => service_instance.guid,
-                      'url'        => "/v2/service_instances/#{service_instance.guid}",
+                      'guid' => service_instance.guid,
+                      'url' => "/v2/service_instances/#{service_instance.guid}",
                       'created_at' => iso8601,
                       'updated_at' => iso8601
                     },
                     'entity' => {
-                      'name'                 => service_instance.name,
-                      'credentials'          => service_instance.credentials,
-                      'service_plan_guid'    => service_instance.service_plan.guid,
-                      'space_guid'           => space.guid,
-                      'gateway_data'         => nil,
-                      'dashboard_url'        => nil,
-                      'type'                 => 'managed_service_instance',
-                      'last_operation'       => nil,
-                      'tags'                 => [],
-                      'space_url'            => "/v2/spaces/#{space.guid}",
-                      'service_plan_url'     => "/v2/service_plans/#{service_instance.service_plan.guid}",
+                      'name' => service_instance.name,
+                      'credentials' => service_instance.credentials,
+                      'service_plan_guid' => service_instance.service_plan.guid,
+                      'service_guid' => service_instance.service.guid,
+                      'space_guid' => space.guid,
+                      'gateway_data' => nil,
+                      'dashboard_url' => nil,
+                      'type' => 'managed_service_instance',
+                      'last_operation' => nil,
+                      'tags' => [],
+                      'space_url' => "/v2/spaces/#{space.guid}",
+                      'service_url' => "/v2/services/#{service_instance.service.guid}",
+                      'service_plan_url' => "/v2/service_plans/#{service_instance.service_plan.guid}",
                       'service_bindings_url' => "/v2/service_instances/#{service_instance.guid}/service_bindings",
-                      'service_keys_url'     => "/v2/service_instances/#{service_instance.guid}/service_keys",
-                      'routes_url'           => "/v2/service_instances/#{service_instance.guid}/routes"
+                      'service_keys_url' => "/v2/service_instances/#{service_instance.guid}/service_keys",
+                      'routes_url' => "/v2/service_instances/#{service_instance.guid}/routes"
                     }
                   }
                 }
@@ -212,7 +216,7 @@ RSpec.describe 'ServiceBindings' do
 
       it 'filters by service_instance_guid' do
         filtered_service_instance = VCAP::CloudController::ManagedServiceInstance.make(space: space)
-        filtered_service_binding  = VCAP::CloudController::ServiceBinding.make(service_instance: filtered_service_instance, app: process1.app)
+        filtered_service_binding = VCAP::CloudController::ServiceBinding.make(service_instance: filtered_service_instance, app: process1.app)
 
         get "/v2/service_bindings?q=service_instance_guid:#{filtered_service_instance.guid}", nil, headers_for(user)
         expect(last_response.status).to eq(200)
@@ -238,22 +242,22 @@ RSpec.describe 'ServiceBindings' do
       expect(parsed_response).to be_a_response_like(
         {
           'metadata' => {
-            'guid'       => service_binding1.guid,
-            'url'        => "/v2/service_bindings/#{service_binding1.guid}",
+            'guid' => service_binding1.guid,
+            'url' => "/v2/service_bindings/#{service_binding1.guid}",
             'created_at' => iso8601,
             'updated_at' => iso8601
           },
           'entity' => {
-            'app_guid'              => process1.guid,
+            'app_guid' => process1.guid,
             'service_instance_guid' => service_instance.guid,
-            'credentials'           => { 'secret' => 'key' },
-            'binding_options'       => {},
-            'gateway_data'          => nil,
-            'gateway_name'          => '',
-            'syslog_drain_url'      => nil,
-            'volume_mounts'         => [],
-            'app_url'               => "/v2/apps/#{process1.guid}",
-            'service_instance_url'  => "/v2/service_instances/#{service_instance.guid}"
+            'credentials' => { 'secret' => 'key' },
+            'binding_options' => {},
+            'gateway_data' => nil,
+            'gateway_name' => '',
+            'syslog_drain_url' => nil,
+            'volume_mounts' => [],
+            'app_url' => "/v2/apps/#{process1.guid}",
+            'service_instance_url' => "/v2/service_instances/#{service_instance.guid}"
           }
         }
       )
@@ -274,10 +278,10 @@ RSpec.describe 'ServiceBindings' do
 
     before do
       allow(VCAP::Services::ServiceBrokers::V2::Client).to receive(:new) do |*args, **kwargs, &block|
-        fb                  = FakeServiceBrokerV2Client.new(*args, **kwargs, &block)
-        fb.credentials      = { 'username' => 'managed_username' }
+        fb = FakeServiceBrokerV2Client.new(*args, **kwargs, &block)
+        fb.credentials = { 'username' => 'managed_username' }
         fb.syslog_drain_url = 'syslog://mydrain.example.com'
-        fb.volume_mounts    = [{ 'container_dir' => 'mount', 'private' => 'secret-thing' }]
+        fb.volume_mounts = [{ 'container_dir' => 'mount', 'private' => 'secret-thing' }]
         fb
       end
     end
@@ -285,8 +289,8 @@ RSpec.describe 'ServiceBindings' do
     it 'creates a service binding' do
       req_body = {
         service_instance_guid: service_instance.guid,
-        app_guid:              process.guid,
-        parameters:            { hello: 'mr_broker' }
+        app_guid: process.guid,
+        parameters: { hello: 'mr_broker' }
       }.to_json
 
       post '/v2/service_bindings', req_body, headers_for(user)
@@ -298,22 +302,22 @@ RSpec.describe 'ServiceBindings' do
       expect(parsed_response).to be_a_response_like(
         {
           'metadata' => {
-            'guid'       => service_binding.guid,
-            'url'        => "/v2/service_bindings/#{service_binding.guid}",
+            'guid' => service_binding.guid,
+            'url' => "/v2/service_bindings/#{service_binding.guid}",
             'created_at' => iso8601,
             'updated_at' => iso8601
           },
           'entity' => {
-            'app_guid'              => process.guid,
+            'app_guid' => process.guid,
             'service_instance_guid' => service_instance.guid,
-            'credentials'           => { 'username' => 'managed_username' },
-            'binding_options'       => {},
-            'gateway_data'          => nil,
-            'gateway_name'          => '',
-            'syslog_drain_url'      => 'syslog://mydrain.example.com',
-            'volume_mounts'         => [{ 'container_dir' => 'mount' }],
-            'app_url'               => "/v2/apps/#{process.guid}",
-            'service_instance_url'  => "/v2/service_instances/#{service_instance.guid}"
+            'credentials' => { 'username' => 'managed_username' },
+            'binding_options' => {},
+            'gateway_data' => nil,
+            'gateway_name' => '',
+            'syslog_drain_url' => 'syslog://mydrain.example.com',
+            'volume_mounts' => [{ 'container_dir' => 'mount' }],
+            'app_url' => "/v2/apps/#{process.guid}",
+            'service_instance_url' => "/v2/service_instances/#{service_instance.guid}"
           }
         }
       )
@@ -324,10 +328,14 @@ RSpec.describe 'ServiceBindings' do
       expect(event.actee_type).to eq('service_binding')
       expect(event.metadata).to match({
         'request' => {
-          'type'          => 'app',
+          'type' => 'app',
           'relationships' => {
-            'app'              => { 'guid' => process.guid },
-            'service_instance' => { 'guid' => service_instance.guid }
+            'app' => {
+              'data' => { 'guid' => process.guid }
+            },
+            'service_instance' => {
+              'data' => { 'guid' => service_instance.guid }
+            },
           },
           'data' => 'PRIVATE DATA HIDDEN'
         }
@@ -354,7 +362,14 @@ RSpec.describe 'ServiceBindings' do
       expect(event.type).to eq('audit.service_binding.delete')
       expect(event.actee).to eq(service_binding.guid)
       expect(event.actee_type).to eq('service_binding')
-      expect(event.metadata).to match({})
+      expect(event.metadata).to match(
+        {
+          'request' => {
+            'app_guid' => service_binding.app_guid,
+            'service_instance_guid' => service_binding.service_instance_guid,
+          }
+        }
+      )
     end
   end
 end

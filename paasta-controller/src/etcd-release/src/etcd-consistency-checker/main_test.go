@@ -42,11 +42,30 @@ var _ = Describe("etcd-consistency-checker", func() {
 		func(newServer func(http.Handler) *httptest.Server, ca, cert, key string) {
 			etcdServer1Handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				switch r.URL.Path {
-				case "/v2/stats/leader":
+				case "/v2/stats/self":
 					if r.Method == "GET" {
 						w.WriteHeader(http.StatusOK)
 						w.Write([]byte(`{
-							"leader": "XXXXXXXXXXXXXXXXXXXXXX"
+						  "leaderInfo": {
+							"leader": "XXXXXXXXXXXXXXX"
+						  }
+						}`))
+						return
+					}
+				case "/v2/members":
+					if r.Method == "GET" {
+						w.WriteHeader(http.StatusOK)
+						w.Write([]byte(`{
+						  "members": [
+							{
+							  "clientURLs": ["etcd-url"],
+							  "id": "XXXXXXXXXXXXXXX"
+							},
+							{
+							  "clientURLs": ["etcd-url"],
+							  "id": "YYYYYYYYYYYYYYY"
+							}
+						  ]
 						}`))
 						return
 					}
@@ -57,11 +76,30 @@ var _ = Describe("etcd-consistency-checker", func() {
 
 			etcdServer2Handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				switch r.URL.Path {
-				case "/v2/stats/leader":
+				case "/v2/stats/self":
 					if r.Method == "GET" {
 						w.WriteHeader(http.StatusOK)
 						w.Write([]byte(`{
-							"leader": "YYYYYYYYYYYYYYYYYYYYY"
+						  "leaderInfo": {
+							"leader": "YYYYYYYYYYYYYYY"
+						  }
+						}`))
+						return
+					}
+				case "/v2/members":
+					if r.Method == "GET" {
+						w.WriteHeader(http.StatusOK)
+						w.Write([]byte(`{
+						  "members": [
+							{
+							  "clientURLs": ["etcd-url"],
+							  "id": "XXXXXXXXXXXXXXX"
+							},
+							{
+							  "clientURLs": ["etcd-url"],
+							  "id": "YYYYYYYYYYYYYYY"
+							}
+						  ]
 						}`))
 						return
 					}
@@ -81,7 +119,7 @@ var _ = Describe("etcd-consistency-checker", func() {
 			}
 
 			session := executeEtcdCC(args, 1)
-			Expect(session.Err.Contents()).To(ContainSubstring(fmt.Sprintf("more than one leader exists: [%s %s]", etcdServer1.URL, etcdServer2.URL)))
+			Expect(session.Err.Contents()).To(ContainSubstring(fmt.Sprintf("more than one leader exists: [etcd-url etcd-url]")))
 		},
 		Entry("when tls is enabled", newTLSServer, "fixtures/ca.crt", "fixtures/client.crt", "fixtures/client.key"),
 		Entry("when tls is not enabled", httptest.NewServer, "", "", ""),

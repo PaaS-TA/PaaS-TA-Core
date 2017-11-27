@@ -1,4 +1,5 @@
 require 'cloud_controller/diego/staging_completion_handler'
+require 'utils/uri_utils'
 
 module VCAP::CloudController
   module Diego
@@ -15,7 +16,7 @@ module VCAP::CloudController
                 execution_metadata: String,
                 lifecycle_type:     Lifecycles::BUILDPACK,
                 lifecycle_metadata: {
-                  buildpack_key:      String,
+                  optional(:buildpack_key) =>      String,
                   detected_buildpack: String,
                 },
                 process_types:      dict(Symbol, String)
@@ -26,12 +27,16 @@ module VCAP::CloudController
 
         private
 
+        def handle_missing_droplet!(payload)
+          build.fail_to_stage!(nil, 'no droplet')
+        end
+
         def save_staging_result(payload)
           lifecycle_data = payload[:result][:lifecycle_metadata]
           buildpack_key  = nil
           buildpack_url  = nil
 
-          if lifecycle_data[:buildpack_key].is_uri?
+          if UriUtils.is_buildpack_uri?(lifecycle_data[:buildpack_key])
             buildpack_url = lifecycle_data[:buildpack_key]
           else
             buildpack_key = lifecycle_data[:buildpack_key]
@@ -39,15 +44,20 @@ module VCAP::CloudController
 
           droplet.class.db.transaction do
             droplet.lock!
+            build.lock!
             droplet.set_buildpack_receipt(
               buildpack_key:       buildpack_key,
               buildpack_url:       buildpack_url,
               detect_output:       lifecycle_data[:detected_buildpack],
-              requested_buildpack: droplet.buildpack_lifecycle_data.buildpack
+              requested_buildpack: droplet.buildpack_lifecycle_data.buildpacks.first
             )
+            droplet.save_changes(raise_on_save_failure: true)
+            build.droplet.reload
             droplet.mark_as_staged
+            build.mark_as_staged
             droplet.process_types      = payload[:result][:process_types]
             droplet.execution_metadata = payload[:result][:execution_metadata]
+            build.save_changes(raise_on_save_failure: true)
             droplet.save_changes(raise_on_save_failure: true)
           end
         end

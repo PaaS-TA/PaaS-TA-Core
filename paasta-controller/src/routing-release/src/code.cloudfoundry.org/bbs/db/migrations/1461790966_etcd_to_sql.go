@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"code.cloudfoundry.org/bbs/db/etcd"
-	"code.cloudfoundry.org/bbs/db/sqldb"
+	"code.cloudfoundry.org/bbs/db/sqldb/helpers"
 	"code.cloudfoundry.org/bbs/encryption"
 	"code.cloudfoundry.org/bbs/format"
 	"code.cloudfoundry.org/bbs/migration"
@@ -127,7 +127,7 @@ func (e *ETCDToSQL) Up(logger lager.Logger) error {
 	// Ignore the error as the tables may not exist
 	_ = dropTables(e.rawSQLDB)
 
-	err := createTables(logger, e.rawSQLDB)
+	err := createTables(logger, e.rawSQLDB, e.dbFlavor)
 	if err != nil {
 		return err
 	}
@@ -173,13 +173,7 @@ func dropTables(db *sql.DB) error {
 		"actual_lrps",
 	}
 	for _, tableName := range tableNames {
-		var value int
-		// check whether the table exists before truncating
-		err := db.QueryRow("SELECT 1 FROM ? LIMIT 1;", tableName).Scan(&value)
-		if err == sql.ErrNoRows {
-			continue
-		}
-		_, err = db.Exec("DROP TABLE " + tableName)
+		_, err := db.Exec("DROP TABLE IF EXISTS " + tableName)
 		if err != nil {
 			return err
 		}
@@ -187,12 +181,12 @@ func dropTables(db *sql.DB) error {
 	return nil
 }
 
-func createTables(logger lager.Logger, db *sql.DB) error {
+func createTables(logger lager.Logger, db *sql.DB, flavor string) error {
 	var createTablesSQL = []string{
-		createDomainSQL,
-		createDesiredLRPsSQL,
-		createActualLRPsSQL,
-		createTasksSQL,
+		helpers.RebindForFlavor(createDomainSQL, flavor),
+		helpers.RebindForFlavor(createDesiredLRPsSQL, flavor),
+		helpers.RebindForFlavor(createActualLRPsSQL, flavor),
+		helpers.RebindForFlavor(createTasksSQL, flavor),
 	}
 
 	logger.Info("creating-tables")
@@ -245,7 +239,7 @@ func (e *ETCDToSQL) migrateDomains(logger lager.Logger) error {
 			domain := path.Base(node.Key)
 			expireTime := e.clock.Now().UnixNano() + int64(time.Second)*node.TTL
 
-			_, err := e.rawSQLDB.Exec(sqldb.RebindForFlavor(`
+			_, err := e.rawSQLDB.Exec(helpers.RebindForFlavor(`
 				INSERT INTO domains
 				(domain, expire_time)
 				VALUES (?, ?)
@@ -307,7 +301,7 @@ func (e *ETCDToSQL) migrateDesiredLRPs(logger lager.Logger) error {
 				logger.Error("failed-marshalling-volume-placements", err)
 			}
 
-			_, err = e.rawSQLDB.Exec(sqldb.RebindForFlavor(`
+			_, err = e.rawSQLDB.Exec(helpers.RebindForFlavor(`
 				INSERT INTO desired_lrps
 					(process_guid, domain, log_guid, annotation, instances, memory_mb,
 					disk_mb, rootfs, volume_placement, routes, modification_tag_epoch,
@@ -353,7 +347,7 @@ func (e *ETCDToSQL) migrateActualLRPs(logger lager.Logger) error {
 							logger.Error("failed-to-marshal-net-info", err)
 						}
 
-						_, err = e.rawSQLDB.Exec(sqldb.RebindForFlavor(`
+						_, err = e.rawSQLDB.Exec(helpers.RebindForFlavor(`
 							INSERT INTO actual_lrps
 								(process_guid, instance_index, domain, instance_guid, cell_id,
 								net_info, crash_count, crash_reason, state, placement_error, since,
@@ -396,7 +390,7 @@ func (e *ETCDToSQL) migrateTasks(logger lager.Logger) error {
 
 			definitionData, err := e.serializer.Marshal(logger, format.ENCRYPTED_PROTO, task.TaskDefinition)
 
-			_, err = e.rawSQLDB.Exec(sqldb.RebindForFlavor(`
+			_, err = e.rawSQLDB.Exec(helpers.RebindForFlavor(`
 							INSERT INTO tasks
 								(guid, domain, updated_at, created_at, first_completed_at,
 								state, cell_id, result, failed, failure_reason,
@@ -425,16 +419,16 @@ const createDesiredLRPsSQL = `CREATE TABLE desired_lrps(
 	process_guid VARCHAR(255) PRIMARY KEY,
 	domain VARCHAR(255) NOT NULL,
 	log_guid VARCHAR(255) NOT NULL,
-	annotation TEXT,
+	annotation MEDIUMTEXT,
 	instances INT NOT NULL,
 	memory_mb INT NOT NULL,
 	disk_mb INT NOT NULL,
 	rootfs VARCHAR(255) NOT NULL,
-	routes TEXT NOT NULL,
-	volume_placement TEXT NOT NULL,
+	routes MEDIUMTEXT NOT NULL,
+	volume_placement MEDIUMTEXT NOT NULL,
 	modification_tag_epoch VARCHAR(255) NOT NULL,
 	modification_tag_index INT,
-	run_info TEXT NOT NULL
+	run_info MEDIUMTEXT NOT NULL
 );`
 
 const createActualLRPsSQL = `CREATE TABLE actual_lrps(
@@ -447,7 +441,7 @@ const createActualLRPsSQL = `CREATE TABLE actual_lrps(
 	cell_id VARCHAR(255) NOT NULL DEFAULT '',
 	placement_error VARCHAR(255) NOT NULL DEFAULT '',
 	since BIGINT DEFAULT 0,
-	net_info TEXT NOT NULL,
+	net_info MEDIUMTEXT NOT NULL,
 	modification_tag_epoch VARCHAR(255) NOT NULL,
 	modification_tag_index INT,
 	crash_count INT NOT NULL DEFAULT 0,
@@ -465,10 +459,10 @@ const createTasksSQL = `CREATE TABLE tasks(
 	first_completed_at BIGINT DEFAULT 0,
 	state INT,
 	cell_id VARCHAR(255) NOT NULL DEFAULT '',
-	result TEXT,
+	result MEDIUMTEXT,
 	failed BOOL DEFAULT false,
 	failure_reason VARCHAR(255) NOT NULL DEFAULT '',
-	task_definition TEXT NOT NULL
+	task_definition MEDIUMTEXT NOT NULL
 );`
 
 var createDomainsIndices = []string{

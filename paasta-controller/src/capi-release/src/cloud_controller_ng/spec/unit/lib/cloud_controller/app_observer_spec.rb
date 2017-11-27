@@ -9,14 +9,14 @@ module VCAP::CloudController
     let(:app_active) { true }
     let(:diego) { false }
     let(:app) do
-      instance_double(App,
+      instance_double(ProcessModel,
         package_hash: package_hash,
         guid: 'app-guid',
         previous_changes: previous_changes,
         started?: app_started,
         needs_staging?: app_needs_staging,
         active?: app_active,
-        buildpack_cache_key: key,
+        # TODO: why did we remove `buildpack_cache_key: key`?
         diego: diego,
         staging?: staging?,
         current_droplet: nil,

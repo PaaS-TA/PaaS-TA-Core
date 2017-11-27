@@ -7,6 +7,7 @@ import (
 
 	"github.com/cloudfoundry-incubator/cf-test-helpers/cf"
 	"github.com/cloudfoundry-incubator/cf-test-helpers/helpers"
+	. "github.com/cloudfoundry/cf-acceptance-tests/helpers/app_helpers"
 	"github.com/cloudfoundry/cf-acceptance-tests/helpers/assets"
 	"github.com/cloudfoundry/cf-acceptance-tests/helpers/random_name"
 	"github.com/cloudfoundry/cf-acceptance-tests/helpers/skip_messages"
@@ -25,6 +26,7 @@ var _ = V3Describe("v3 buildpack app lifecycle", func() {
 		appCreationEnvironmentVariables string
 		token                           string
 		uploadUrl                       string
+		expectedNullResponse            string
 	)
 
 	BeforeEach(func() {
@@ -35,6 +37,10 @@ var _ = V3Describe("v3 buildpack app lifecycle", func() {
 		packageGuid = CreatePackage(appGuid)
 		token = GetAuthToken()
 		uploadUrl = fmt.Sprintf("%s%s/v3/packages/%s/upload", Config.Protocol(), Config.GetApiEndpoint(), packageGuid)
+
+		appUrl := "https://" + appName + "." + Config.GetAppsDomain()
+		nullSession := helpers.CurlSkipSSL(Config.GetSkipSSLValidation(), appUrl).Wait(Config.DefaultTimeoutDuration())
+		expectedNullResponse = string(nullSession.Buffer().Contents())
 	})
 
 	AfterEach(func() {
@@ -49,8 +55,21 @@ var _ = V3Describe("v3 buildpack app lifecycle", func() {
 		})
 
 		It("can run apps with processes from the Procfile", func() {
-			dropletGuid := StageBuildpackPackage(packageGuid, Config.GetRubyBuildpackName())
-			WaitForDropletToStage(dropletGuid)
+			lastUsageEventGuid := LastAppUsageEventGuid(TestSetup)
+
+			buildGuid := StageBuildpackPackage(packageGuid, Config.GetRubyBuildpackName())
+
+			usageEvents := UsageEventsAfterGuid(TestSetup, lastUsageEventGuid)
+			event := AppUsageEvent{Entity: Entity{State: "STAGING_STARTED", ParentAppGuid: appGuid, ParentAppName: appName}}
+			Expect(UsageEventsInclude(usageEvents, event)).To(BeTrue())
+
+			WaitForBuildToStage(buildGuid)
+
+			usageEvents = UsageEventsAfterGuid(TestSetup, lastUsageEventGuid)
+			event = AppUsageEvent{Entity: Entity{State: "STAGING_STOPPED", ParentAppGuid: appGuid, ParentAppName: appName}}
+			Expect(UsageEventsInclude(usageEvents, event)).To(BeTrue())
+
+			dropletGuid := GetDropletFromBuild(buildGuid)
 
 			AssignDropletToApp(appGuid, dropletGuid)
 
@@ -62,6 +81,8 @@ var _ = V3Describe("v3 buildpack app lifecycle", func() {
 			Expect(workerProcess.Guid).ToNot(BeEmpty())
 
 			CreateAndMapRoute(appGuid, TestSetup.RegularUserContext().Space, Config.GetAppsDomain(), webProcess.Name)
+
+			lastUsageEventGuid = LastAppUsageEventGuid(TestSetup)
 
 			StartApp(appGuid)
 
@@ -76,10 +97,10 @@ var _ = V3Describe("v3 buildpack app lifecycle", func() {
 			Expect(string(cf.Cf("apps").Wait(Config.DefaultTimeoutDuration()).Out.Contents())).To(MatchRegexp(fmt.Sprintf("(v3-)?(%s)*(-web)?(\\s)+(started)", webProcess.Name)))
 			Expect(string(cf.Cf("apps").Wait(Config.DefaultTimeoutDuration()).Out.Contents())).To(MatchRegexp(fmt.Sprintf("(v3-)?(%s)*(-web)?(\\s)+(started)", workerProcess.Name)))
 
-			usageEvents := LastPageUsageEvents(TestSetup)
+			usageEvents = UsageEventsAfterGuid(TestSetup, lastUsageEventGuid)
 
-			event1 := AppUsageEvent{Entity{ProcessType: webProcess.Type, AppGuid: webProcess.Guid, State: "STARTED", ParentAppGuid: appGuid, ParentAppName: appName}}
-			event2 := AppUsageEvent{Entity{ProcessType: workerProcess.Type, AppGuid: workerProcess.Guid, State: "STARTED", ParentAppGuid: appGuid, ParentAppName: appName}}
+			event1 := AppUsageEvent{Entity: Entity{ProcessType: webProcess.Type, AppGuid: webProcess.Guid, State: "STARTED", ParentAppGuid: appGuid, ParentAppName: appName}}
+			event2 := AppUsageEvent{Entity: Entity{ProcessType: workerProcess.Type, AppGuid: workerProcess.Guid, State: "STARTED", ParentAppGuid: appGuid, ParentAppName: appName}}
 			Expect(UsageEventsInclude(usageEvents, event1)).To(BeTrue())
 			Expect(UsageEventsInclude(usageEvents, event2)).To(BeTrue())
 
@@ -88,15 +109,15 @@ var _ = V3Describe("v3 buildpack app lifecycle", func() {
 			Expect(string(cf.Cf("apps").Wait(Config.DefaultTimeoutDuration()).Out.Contents())).To(MatchRegexp(fmt.Sprintf("(v3-)?(%s)*(-web)?(\\s)+(stopped)", webProcess.Name)))
 			Expect(string(cf.Cf("apps").Wait(Config.DefaultTimeoutDuration()).Out.Contents())).To(MatchRegexp(fmt.Sprintf("(v3-)?(%s)*(-web)?(\\s)+(stopped)", workerProcess.Name)))
 
-			usageEvents = LastPageUsageEvents(TestSetup)
-			event1 = AppUsageEvent{Entity{ProcessType: webProcess.Type, AppGuid: webProcess.Guid, State: "STOPPED", ParentAppGuid: appGuid, ParentAppName: appName}}
-			event2 = AppUsageEvent{Entity{ProcessType: workerProcess.Type, AppGuid: workerProcess.Guid, State: "STOPPED", ParentAppGuid: appGuid, ParentAppName: appName}}
+			usageEvents = UsageEventsAfterGuid(TestSetup, lastUsageEventGuid)
+			event1 = AppUsageEvent{Entity: Entity{ProcessType: webProcess.Type, AppGuid: webProcess.Guid, State: "STOPPED", ParentAppGuid: appGuid, ParentAppName: appName}}
+			event2 = AppUsageEvent{Entity: Entity{ProcessType: workerProcess.Type, AppGuid: workerProcess.Guid, State: "STOPPED", ParentAppGuid: appGuid, ParentAppName: appName}}
 			Expect(UsageEventsInclude(usageEvents, event1)).To(BeTrue())
 			Expect(UsageEventsInclude(usageEvents, event2)).To(BeTrue())
 
 			Eventually(func() string {
 				return helpers.CurlAppRoot(Config, webProcess.Name)
-			}, Config.DefaultTimeoutDuration()).Should(ContainSubstring("404"))
+			}, Config.DefaultTimeoutDuration()).Should(ContainSubstring(expectedNullResponse))
 		})
 	})
 
@@ -107,8 +128,9 @@ var _ = V3Describe("v3 buildpack app lifecycle", func() {
 		})
 
 		It("can run spring apps", func() {
-			dropletGuid := StageBuildpackPackage(packageGuid, Config.GetJavaBuildpackName())
-			WaitForDropletToStage(dropletGuid)
+			buildGuid := StageBuildpackPackage(packageGuid, Config.GetJavaBuildpackName())
+			WaitForBuildToStage(buildGuid)
+			dropletGuid := GetDropletFromBuild(buildGuid)
 
 			AssignDropletToApp(appGuid, dropletGuid)
 
@@ -116,9 +138,11 @@ var _ = V3Describe("v3 buildpack app lifecycle", func() {
 			webProcess := GetProcessByType(processes, "web")
 
 			Expect(webProcess.Guid).ToNot(BeEmpty())
+			ScaleProcess(appGuid, webProcess.Type, V3_JAVA_MEMORY_LIMIT)
 
 			CreateAndMapRoute(appGuid, TestSetup.RegularUserContext().Space, Config.GetAppsDomain(), webProcess.Name)
 
+			lastUsageEventGuid := LastAppUsageEventGuid(TestSetup)
 			StartApp(appGuid)
 
 			Eventually(func() string {
@@ -127,22 +151,22 @@ var _ = V3Describe("v3 buildpack app lifecycle", func() {
 
 			Expect(string(cf.Cf("apps").Wait(Config.DefaultTimeoutDuration()).Out.Contents())).To(MatchRegexp(fmt.Sprintf("(v3-)?(%s)*(-web)?(\\s)+(started)", webProcess.Name)))
 
-			usageEvents := LastPageUsageEvents(TestSetup)
+			usageEvents := UsageEventsAfterGuid(TestSetup, lastUsageEventGuid)
 
-			event1 := AppUsageEvent{Entity{ProcessType: webProcess.Type, AppGuid: webProcess.Guid, State: "STARTED", ParentAppGuid: appGuid, ParentAppName: appName}}
+			event1 := AppUsageEvent{Entity: Entity{ProcessType: webProcess.Type, AppGuid: webProcess.Guid, State: "STARTED", ParentAppGuid: appGuid, ParentAppName: appName}}
 			Expect(UsageEventsInclude(usageEvents, event1)).To(BeTrue())
 
 			StopApp(appGuid)
 
 			Expect(string(cf.Cf("apps").Wait(Config.DefaultTimeoutDuration()).Out.Contents())).To(MatchRegexp(fmt.Sprintf("(v3-)?(%s)*(-web)?(\\s)+(stopped)", webProcess.Name)))
 
-			usageEvents = LastPageUsageEvents(TestSetup)
-			event1 = AppUsageEvent{Entity{ProcessType: webProcess.Type, AppGuid: webProcess.Guid, State: "STOPPED", ParentAppGuid: appGuid, ParentAppName: appName}}
+			usageEvents = UsageEventsAfterGuid(TestSetup, lastUsageEventGuid)
+			event1 = AppUsageEvent{Entity: Entity{ProcessType: webProcess.Type, AppGuid: webProcess.Guid, State: "STOPPED", ParentAppGuid: appGuid, ParentAppName: appName}}
 			Expect(UsageEventsInclude(usageEvents, event1)).To(BeTrue())
 
 			Eventually(func() string {
 				return helpers.CurlAppRoot(Config, webProcess.Name)
-			}, Config.DefaultTimeoutDuration()).Should(ContainSubstring("404"))
+			}, Config.DefaultTimeoutDuration()).Should(ContainSubstring(expectedNullResponse))
 		})
 	})
 })
@@ -155,6 +179,7 @@ var _ = V3Describe("v3 docker app lifecycle", func() {
 		spaceGuid                       string
 		appCreationEnvironmentVariables string
 		token                           string
+		expectedNullResponse            string
 	)
 
 	BeforeEach(func() {
@@ -167,6 +192,10 @@ var _ = V3Describe("v3 docker app lifecycle", func() {
 		appGuid = CreateDockerApp(appName, spaceGuid, `{"foo":"bar"}`)
 		packageGuid = CreateDockerPackage(appGuid, "cloudfoundry/diego-docker-app:latest")
 		token = GetAuthToken()
+
+		appUrl := "https://" + appName + "." + Config.GetAppsDomain()
+		nullSession := helpers.CurlSkipSSL(Config.GetSkipSSLValidation(), appUrl).Wait(Config.DefaultTimeoutDuration())
+		expectedNullResponse = string(nullSession.Buffer().Contents())
 	})
 
 	AfterEach(func() {
@@ -175,8 +204,9 @@ var _ = V3Describe("v3 docker app lifecycle", func() {
 	})
 
 	It("can run apps", func() {
-		dropletGuid := StageDockerPackage(packageGuid)
-		WaitForDropletToStage(dropletGuid)
+		buildGuid := StageDockerPackage(packageGuid)
+		WaitForBuildToStage(buildGuid)
+		dropletGuid := GetDropletFromBuild(buildGuid)
 
 		AssignDropletToApp(appGuid, dropletGuid)
 
@@ -187,6 +217,7 @@ var _ = V3Describe("v3 docker app lifecycle", func() {
 
 		CreateAndMapRoute(appGuid, TestSetup.RegularUserContext().Space, Config.GetAppsDomain(), webProcess.Name)
 
+		lastUsageEventGuid := LastAppUsageEventGuid(TestSetup)
 		StartApp(appGuid)
 
 		Eventually(func() string {
@@ -198,21 +229,21 @@ var _ = V3Describe("v3 docker app lifecycle", func() {
 		Expect(output).To(ContainSubstring(appCreationEnvironmentVariables))
 
 		Expect(string(cf.Cf("apps").Wait(Config.DefaultTimeoutDuration()).Out.Contents())).To(MatchRegexp(fmt.Sprintf("(v3-)?(%s)*(-web)?(\\s)+(started)", webProcess.Name)))
-		usageEvents := LastPageUsageEvents(TestSetup)
+		usageEvents := UsageEventsAfterGuid(TestSetup, lastUsageEventGuid)
 
-		event := AppUsageEvent{Entity{ProcessType: webProcess.Type, AppGuid: webProcess.Guid, State: "STARTED", ParentAppGuid: appGuid, ParentAppName: appName}}
+		event := AppUsageEvent{Entity: Entity{ProcessType: webProcess.Type, AppGuid: webProcess.Guid, State: "STARTED", ParentAppGuid: appGuid, ParentAppName: appName}}
 		Expect(UsageEventsInclude(usageEvents, event)).To(BeTrue())
 
 		StopApp(appGuid)
 
 		Expect(string(cf.Cf("apps").Wait(Config.DefaultTimeoutDuration()).Out.Contents())).To(MatchRegexp(fmt.Sprintf("(v3-)?(%s)*(-web)?(\\s)+(stopped)", webProcess.Name)))
 
-		usageEvents = LastPageUsageEvents(TestSetup)
-		event = AppUsageEvent{Entity{ProcessType: webProcess.Type, AppGuid: webProcess.Guid, State: "STOPPED", ParentAppGuid: appGuid, ParentAppName: appName}}
+		usageEvents = UsageEventsAfterGuid(TestSetup, lastUsageEventGuid)
+		event = AppUsageEvent{Entity: Entity{ProcessType: webProcess.Type, AppGuid: webProcess.Guid, State: "STOPPED", ParentAppGuid: appGuid, ParentAppName: appName}}
 		Expect(UsageEventsInclude(usageEvents, event)).To(BeTrue())
 
 		Eventually(func() string {
 			return helpers.CurlAppRoot(Config, webProcess.Name)
-		}, Config.DefaultTimeoutDuration()).Should(ContainSubstring("404"))
+		}, Config.DefaultTimeoutDuration()).Should(ContainSubstring(expectedNullResponse))
 	})
 })

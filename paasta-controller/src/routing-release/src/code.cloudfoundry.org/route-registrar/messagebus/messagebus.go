@@ -2,7 +2,10 @@ package messagebus
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"net/url"
+	"sync/atomic"
 	"time"
 
 	"code.cloudfoundry.org/lager"
@@ -19,6 +22,7 @@ type MessageBus interface {
 }
 
 type msgBus struct {
+	natsHost *atomic.Value
 	natsConn *nats.Conn
 	logger   lager.Logger
 }
@@ -34,41 +38,64 @@ type Message struct {
 
 func NewMessageBus(logger lager.Logger) MessageBus {
 	return &msgBus{
-		logger: logger,
+		logger:   logger,
+		natsHost: &atomic.Value{},
 	}
 }
 
 func (m *msgBus) Connect(servers []config.MessageBusServer) error {
-	m.logger.Debug("Connecting to nats", lager.Data{"servers": servers})
 
 	var natsServers []string
+	var natsHosts []string
 	for _, server := range servers {
-		m.logger.Info(
-			"Adding NATS server",
-			lager.Data{"server": server},
-		)
 		natsServers = append(
 			natsServers,
 			fmt.Sprintf("nats://%s:%s@%s", server.User, server.Password, server.Host),
 		)
+		natsHosts = append(natsHosts, server.Host)
 	}
 
 	opts := nats.DefaultOptions
 	opts.Servers = natsServers
 	opts.PingInterval = 20 * time.Second
-	natsConn, err := opts.Connect()
 
+	opts.ClosedCB = func(conn *nats.Conn) {
+		m.logger.Error("nats-connection-closed", errors.New("unexpected nats conn closed"), lager.Data{"nats-host": m.natsHost.Load()})
+	}
+
+	opts.DisconnectedCB = func(conn *nats.Conn) {
+		m.logger.Info("nats-connection-disconnected", lager.Data{"nats-host": m.natsHost.Load()})
+	}
+
+	opts.ReconnectedCB = func(conn *nats.Conn) {
+		natsHost, err := parseNatsUrl(conn.ConnectedUrl())
+		if err != nil {
+			m.logger.Error("nats-url-parse-failed", err, lager.Data{"nats-host": natsHost})
+		}
+		m.natsHost.Store(natsHost)
+		m.logger.Info("nats-connection-reconnected", lager.Data{"nats-host": m.natsHost.Load()})
+	}
+
+	natsConn, err := opts.Connect()
 	if err != nil {
+		m.logger.Error("nats-connection-failed", err, lager.Data{"nats-hosts": natsHosts})
 		return err
 	}
 
+	natsHost, err := parseNatsUrl(natsConn.ConnectedUrl())
+	if err != nil {
+		m.logger.Error("nats-url-parse-failed", err, lager.Data{"nats-host": natsHost})
+	}
+
+	m.natsHost.Store(natsHost)
+	m.logger.Info("nats-connection-successful", lager.Data{"nats-host": m.natsHost.Load()})
 	m.natsConn = natsConn
 
 	return nil
 }
 
 func (m msgBus) SendMessage(subject string, host string, route config.Route, privateInstanceId string) error {
-	m.logger.Debug("Creating message", lager.Data{"subject": subject, "host": host, "route": route, "privateInstanceId": privateInstanceId})
+	m.logger.Debug("creating-message", lager.Data{"subject": subject, "host": host, "route": route, "privateInstanceId": privateInstanceId})
 
 	msg := &Message{
 		URIs:              route.URIs,
@@ -85,11 +112,23 @@ func (m msgBus) SendMessage(subject string, host string, route config.Route, pri
 		return err
 	}
 
-	m.logger.Debug("Publishing message", lager.Data{"msg": string(json)})
+	m.logger.Debug("publishing-message", lager.Data{"msg": string(json)})
 
 	return m.natsConn.Publish(subject, json)
 }
 
 func (m msgBus) Close() {
 	m.natsConn.Close()
+}
+
+func parseNatsUrl(natsUrl string) (string, error) {
+	natsURL, err := url.Parse(natsUrl)
+	natsHostStr := ""
+	if err != nil {
+		return "", err
+	} else {
+		natsHostStr = natsURL.Host
+	}
+
+	return natsHostStr, nil
 }

@@ -12,9 +12,11 @@ import (
 	"github.com/vito/go-sse/sse"
 )
 
-var ErrUnrecognizedEventType = errors.New("unrecognized event type")
-
-var ErrSourceClosed = errors.New("source closed")
+var (
+	ErrUnrecognizedEventType = errors.New("unrecognized event type")
+	ErrSourceClosed          = errors.New("source closed")
+	ErrNoData                = errors.New("event with no data")
+)
 
 type invalidPayloadError struct {
 	payloadType string
@@ -130,9 +132,12 @@ func (e *eventSource) Close() error {
 
 func parseRawEvent(rawEvent sse.Event) (models.Event, error) {
 	data, err := base64.StdEncoding.DecodeString(string(rawEvent.Data))
-	if len(data) == 0 || err != nil {
+	if len(data) == 0 {
+		return nil, NewInvalidPayloadError(rawEvent.Name, ErrNoData)
+	} else if err != nil {
 		return nil, NewInvalidPayloadError(rawEvent.Name, err)
 	}
+
 	switch rawEvent.Name {
 	case models.EventTypeDesiredLRPCreated:
 		event := new(models.DesiredLRPCreatedEvent)

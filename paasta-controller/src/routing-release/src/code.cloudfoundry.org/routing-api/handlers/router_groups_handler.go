@@ -11,6 +11,7 @@ import (
 	"code.cloudfoundry.org/routing-api/db"
 	"code.cloudfoundry.org/routing-api/models"
 	uaaclient "code.cloudfoundry.org/uaa-go-client"
+	uuid "github.com/nu7hatch/gouuid"
 	"github.com/tedsuo/rata"
 )
 
@@ -43,7 +44,21 @@ func (h *RouterGroupsHandler) ListRouterGroups(w http.ResponseWriter, req *http.
 		return
 	}
 
-	routerGroups, err := h.db.ReadRouterGroups()
+	var routerGroups []models.RouterGroup
+
+	routerGroupName := req.URL.Query().Get("name")
+	if routerGroupName != "" {
+		var rg models.RouterGroup
+		rg, err = h.db.ReadRouterGroupByName(routerGroupName)
+		if rg == (models.RouterGroup{}) {
+			handleNotFoundError(w, fmt.Errorf("Router Group '%s' not found", routerGroupName), log)
+			return
+		}
+		routerGroups = []models.RouterGroup{rg}
+	} else {
+		routerGroups, err = h.db.ReadRouterGroups()
+	}
+
 	if err != nil {
 		handleDBCommunicationError(w, err, log)
 		return
@@ -68,7 +83,9 @@ func (h *RouterGroupsHandler) UpdateRouterGroup(w http.ResponseWriter, req *http
 	defer log.Debug("completed")
 	defer func() {
 		err := req.Body.Close()
-		log.Error("failed-to-close-request-body", err)
+		if err != nil {
+			log.Error("failed-to-close-request-body", err)
+		}
 	}()
 
 	err := h.uaaClient.DecodeToken(req.Header.Get("Authorization"), RouterGroupsWriteScope)
@@ -80,7 +97,9 @@ func (h *RouterGroupsHandler) UpdateRouterGroup(w http.ResponseWriter, req *http
 	bodyDecoder := json.NewDecoder(req.Body)
 	var updatedGroup models.RouterGroup
 	err = bodyDecoder.Decode(&updatedGroup)
+
 	if err != nil {
+
 		handleProcessRequestError(w, err, log)
 		return
 	}
@@ -97,15 +116,18 @@ func (h *RouterGroupsHandler) UpdateRouterGroup(w http.ResponseWriter, req *http
 		return
 	}
 
-	if updatedGroup.ReservablePorts != "" && rg.ReservablePorts != updatedGroup.ReservablePorts {
+	if rg.ReservablePorts != updatedGroup.ReservablePorts {
 		rg.ReservablePorts = updatedGroup.ReservablePorts
+
 		err = rg.Validate()
+
 		if err != nil {
 			handleProcessRequestError(w, err, log)
 			return
 		}
 
 		err = h.db.SaveRouterGroup(rg)
+
 		if err != nil {
 			handleDBCommunicationError(w, err, log)
 			return
@@ -125,6 +147,87 @@ func (h *RouterGroupsHandler) UpdateRouterGroup(w http.ResponseWriter, req *http
 		log.Error("failed-to-write-to-response", err)
 	}
 	w.Header().Set("Content-Length", strconv.Itoa(len(jsonBytes)))
+}
+
+func (h *RouterGroupsHandler) CreateRouterGroup(w http.ResponseWriter, req *http.Request) {
+	log := h.logger.Session("create-router-group")
+	log.Debug("started")
+	defer log.Debug("completed")
+
+	defer func() {
+		err := req.Body.Close()
+		if err != nil {
+			log.Error("failed-to-close-request-body", err)
+		}
+	}()
+
+	err := h.uaaClient.DecodeToken(req.Header.Get("Authorization"), RouterGroupsWriteScope)
+	if err != nil {
+		handleUnauthorizedError(w, err, log)
+		return
+	}
+
+	var rg models.RouterGroup
+	bodyDecoder := json.NewDecoder(req.Body)
+	err = bodyDecoder.Decode(&rg)
+	if err != nil {
+		handleProcessRequestError(w, err, log)
+		return
+	}
+
+	routerGroups, err := h.db.ReadRouterGroups()
+	if err != nil {
+		handleDBCommunicationError(w, err, log)
+		return
+	}
+	if existingRg := routerGroupExist(routerGroups, rg); existingRg != nil {
+		w.WriteHeader(http.StatusOK)
+		writeRouterGroupResponse(w, *existingRg, log)
+		return
+	}
+	guid, err := uuid.NewV4()
+	if err != nil {
+		handleGuidGenerationError(w, err, log)
+		return
+	}
+	rg.Guid = guid.String()
+	routerGroups = append(routerGroups, rg)
+	err = routerGroups.Validate()
+	if err != nil {
+		handleProcessRequestError(w, err, log)
+		return
+	}
+
+	err = h.db.SaveRouterGroup(rg)
+	if err != nil {
+		handleDBCommunicationError(w, err, log)
+		return
+	}
+	w.WriteHeader(http.StatusCreated)
+	writeRouterGroupResponse(w, rg, log)
+}
+
+func writeRouterGroupResponse(w http.ResponseWriter, rg models.RouterGroup, log lager.Logger) {
+	jsonBytes, err := json.Marshal(rg)
+	if err != nil {
+		log.Error("failed-to-marshal", err)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_, err = w.Write(jsonBytes)
+	if err != nil {
+		log.Error("failed-to-write-to-response", err)
+	}
+	w.Header().Set("Content-Length", strconv.Itoa(len(jsonBytes)))
+}
+
+func routerGroupExist(rgs models.RouterGroups, rg models.RouterGroup) *models.RouterGroup {
+	for _, r := range rgs {
+		if r.Name == rg.Name && r.Type == rg.Type {
+			return &r
+		}
+	}
+	return nil
 }
 
 func addWarningsHeader(w http.ResponseWriter) {

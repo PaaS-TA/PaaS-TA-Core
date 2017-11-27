@@ -17,10 +17,16 @@ type FakeMigration struct {
 	runReturns struct {
 		result1 error
 	}
+	runReturnsOnCall map[int]struct {
+		result1 error
+	}
 	VersionStub        func() int
 	versionMutex       sync.RWMutex
 	versionArgsForCall []struct{}
 	versionReturns     struct {
+		result1 int
+	}
+	versionReturnsOnCall map[int]struct {
 		result1 int
 	}
 	invocations      map[string][][]interface{}
@@ -29,6 +35,7 @@ type FakeMigration struct {
 
 func (fake *FakeMigration) Run(arg1 *db.SqlDB) error {
 	fake.runMutex.Lock()
+	ret, specificReturn := fake.runReturnsOnCall[len(fake.runArgsForCall)]
 	fake.runArgsForCall = append(fake.runArgsForCall, struct {
 		arg1 *db.SqlDB
 	}{arg1})
@@ -36,9 +43,11 @@ func (fake *FakeMigration) Run(arg1 *db.SqlDB) error {
 	fake.runMutex.Unlock()
 	if fake.RunStub != nil {
 		return fake.RunStub(arg1)
-	} else {
-		return fake.runReturns.result1
 	}
+	if specificReturn {
+		return ret.result1
+	}
+	return fake.runReturns.result1
 }
 
 func (fake *FakeMigration) RunCallCount() int {
@@ -60,16 +69,31 @@ func (fake *FakeMigration) RunReturns(result1 error) {
 	}{result1}
 }
 
+func (fake *FakeMigration) RunReturnsOnCall(i int, result1 error) {
+	fake.RunStub = nil
+	if fake.runReturnsOnCall == nil {
+		fake.runReturnsOnCall = make(map[int]struct {
+			result1 error
+		})
+	}
+	fake.runReturnsOnCall[i] = struct {
+		result1 error
+	}{result1}
+}
+
 func (fake *FakeMigration) Version() int {
 	fake.versionMutex.Lock()
+	ret, specificReturn := fake.versionReturnsOnCall[len(fake.versionArgsForCall)]
 	fake.versionArgsForCall = append(fake.versionArgsForCall, struct{}{})
 	fake.recordInvocation("Version", []interface{}{})
 	fake.versionMutex.Unlock()
 	if fake.VersionStub != nil {
 		return fake.VersionStub()
-	} else {
-		return fake.versionReturns.result1
 	}
+	if specificReturn {
+		return ret.result1
+	}
+	return fake.versionReturns.result1
 }
 
 func (fake *FakeMigration) VersionCallCount() int {
@@ -81,6 +105,18 @@ func (fake *FakeMigration) VersionCallCount() int {
 func (fake *FakeMigration) VersionReturns(result1 int) {
 	fake.VersionStub = nil
 	fake.versionReturns = struct {
+		result1 int
+	}{result1}
+}
+
+func (fake *FakeMigration) VersionReturnsOnCall(i int, result1 int) {
+	fake.VersionStub = nil
+	if fake.versionReturnsOnCall == nil {
+		fake.versionReturnsOnCall = make(map[int]struct {
+			result1 int
+		})
+	}
+	fake.versionReturnsOnCall[i] = struct {
 		result1 int
 	}{result1}
 }

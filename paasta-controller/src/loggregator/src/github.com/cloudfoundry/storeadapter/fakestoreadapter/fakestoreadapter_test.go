@@ -88,7 +88,7 @@ var _ = Describe("Fakestoreadapter", func() {
 		Context("when creating an existing key", func() {
 			It("should error", func() {
 				err := adapter.Create(firstCourseDinnerNode)
-				Expect(err).To(Equal(storeadapter.ErrorKeyExists))
+				Expect(err.(storeadapter.Error).Type()).To(Equal(storeadapter.ErrorKeyExists))
 			})
 		})
 
@@ -129,7 +129,7 @@ var _ = Describe("Fakestoreadapter", func() {
 					Value: []byte("oops"),
 				}
 				err := adapter.SetMulti([]storeadapter.StoreNode{badMenu})
-				Expect(err).To(Equal(storeadapter.ErrorNodeIsDirectory))
+				Expect(err.(storeadapter.Error).Type()).To(Equal(storeadapter.ErrorNodeIsDirectory))
 
 				value, err := adapter.Get("/menu/breakfast")
 				Expect(err).NotTo(HaveOccurred())
@@ -144,7 +144,7 @@ var _ = Describe("Fakestoreadapter", func() {
 					Value: []byte("oops"),
 				}
 				err := adapter.SetMulti([]storeadapter.StoreNode{badBreakfast})
-				Expect(err).To(Equal(storeadapter.ErrorNodeIsNotDirectory))
+				Expect(err.(storeadapter.Error).Type()).To(Equal(storeadapter.ErrorNodeIsNotDirectory))
 
 				value, err := adapter.Get("/menu/breakfast")
 				Expect(err).NotTo(HaveOccurred())
@@ -197,7 +197,7 @@ var _ = Describe("Fakestoreadapter", func() {
 		Context("when the key is missing", func() {
 			It("should return the key not found error", func() {
 				value, err := adapter.Get("/not/a/key")
-				Expect(err).To(Equal(storeadapter.ErrorKeyNotFound))
+				Expect(err.(storeadapter.Error).Type()).To(Equal(storeadapter.ErrorKeyNotFound))
 				Expect(value).To(BeZero())
 			})
 		})
@@ -205,7 +205,7 @@ var _ = Describe("Fakestoreadapter", func() {
 		Context("when the key is a directory", func() {
 			It("should return the key not found error", func() {
 				value, err := adapter.Get("/menu")
-				Expect(err).To(Equal(storeadapter.ErrorNodeIsDirectory))
+				Expect(err.(storeadapter.Error).Type()).To(Equal(storeadapter.ErrorNodeIsDirectory))
 				Expect(value).To(BeZero())
 			})
 		})
@@ -282,7 +282,7 @@ var _ = Describe("Fakestoreadapter", func() {
 		Context("when listing a nonexistent key", func() {
 			It("should return the key not found error", func() {
 				value, err := adapter.ListRecursively("/not-a-key")
-				Expect(err).To(Equal(storeadapter.ErrorKeyNotFound))
+				Expect(err.(storeadapter.Error).Type()).To(Equal(storeadapter.ErrorKeyNotFound))
 				Expect(value).To(BeZero())
 			})
 		})
@@ -290,7 +290,7 @@ var _ = Describe("Fakestoreadapter", func() {
 		Context("when listing an entry", func() {
 			It("should return the key is not a directory error", func() {
 				value, err := adapter.ListRecursively("/menu/breakfast")
-				Expect(err).To(Equal(storeadapter.ErrorNodeIsNotDirectory))
+				Expect(err.(storeadapter.Error).Type()).To(Equal(storeadapter.ErrorNodeIsNotDirectory))
 				Expect(value).To(BeZero())
 			})
 		})
@@ -299,7 +299,7 @@ var _ = Describe("Fakestoreadapter", func() {
 			It("should return the injected error", func() {
 				adapter.ListErrInjector = NewFakeStoreAdapterErrorInjector("menu", errors.New("injected list error"))
 				value, err := adapter.ListRecursively("/menu")
-				Expect(err).To(Equal(errors.New("injected list error")))
+				Expect(err.(storeadapter.Error).Error()).To(Equal("injected list error"))
 				Expect(value).To(BeZero())
 			})
 		})
@@ -312,17 +312,17 @@ var _ = Describe("Fakestoreadapter", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				_, err = adapter.Get("/menu/breakfast")
-				Expect(err).To(Equal(storeadapter.ErrorKeyNotFound))
+				Expect(err.(storeadapter.Error).Type()).To(Equal(storeadapter.ErrorKeyNotFound))
 
 				_, err = adapter.Get("/menu/lunch")
-				Expect(err).To(Equal(storeadapter.ErrorKeyNotFound))
+				Expect(err.(storeadapter.Error).Type()).To(Equal(storeadapter.ErrorKeyNotFound))
 			})
 		})
 
 		Context("when the key is missing", func() {
 			It("should return the key not found error", func() {
 				err := adapter.Delete("/not/a/key")
-				Expect(err).To(Equal(storeadapter.ErrorKeyNotFound))
+				Expect(err.(storeadapter.Error).Type()).To(Equal(storeadapter.ErrorKeyNotFound))
 			})
 		})
 
@@ -333,7 +333,7 @@ var _ = Describe("Fakestoreadapter", func() {
 
 				_, err = adapter.Get("/menu")
 				_, err = adapter.Get("/menu")
-				Expect(err).To(Equal(storeadapter.ErrorKeyNotFound))
+				Expect(err.(storeadapter.Error).Type()).To(Equal(storeadapter.ErrorKeyNotFound))
 			})
 
 			It("should send a delete event", func() {
@@ -351,7 +351,7 @@ var _ = Describe("Fakestoreadapter", func() {
 				adapter.Delete("/menu")
 
 				_, err := adapter.Get("/menu/breakfast")
-				Expect(err).To(Equal(storeadapter.ErrorKeyNotFound))
+				Expect(err.(storeadapter.Error).Type()).To(Equal(storeadapter.ErrorKeyNotFound))
 
 				// /menu, /menu/breakfast, /menu/lunch, /menu/dinner, /menu/dinner/first, /menu/dinner/second
 				for i := 0; i < 6; i++ {
@@ -403,7 +403,7 @@ var _ = Describe("Fakestoreadapter", func() {
 			It("returns a KeyNotFound error", func() {
 
 				err := adapter.CompareAndDelete(nodeFoo)
-				Expect(err).To(Equal(storeadapter.ErrorKeyNotFound))
+				Expect(err.(storeadapter.Error).Type()).To(Equal(storeadapter.ErrorKeyNotFound))
 			})
 		})
 
@@ -414,7 +414,7 @@ var _ = Describe("Fakestoreadapter", func() {
 
 			It("does NOT delete the existing node and returns a KeyComparisonFailed error", func() {
 				err := adapter.CompareAndDelete(nodeBar)
-				Expect(err).To(Equal(storeadapter.ErrorKeyComparisonFailed))
+				Expect(err.(storeadapter.Error).Type()).To(Equal(storeadapter.ErrorKeyComparisonFailed))
 				node, _ := adapter.Get("/foo")
 				Expect(node).To(Equal(nodeFoo))
 			})
@@ -429,7 +429,7 @@ var _ = Describe("Fakestoreadapter", func() {
 				err := adapter.CompareAndDelete(nodeFoo)
 				Expect(err).NotTo(HaveOccurred())
 				_, err = adapter.Get("/foo")
-				Expect(err).To(Equal(storeadapter.ErrorKeyNotFound))
+				Expect(err.(storeadapter.Error).Type()).To(Equal(storeadapter.ErrorKeyNotFound))
 			})
 		})
 	})
@@ -437,7 +437,7 @@ var _ = Describe("Fakestoreadapter", func() {
 	Describe("Updating Dir TTL", func() {
 		It("should return a NotADirectory error if the key is not a directory", func() {
 			err := adapter.UpdateDirTTL("/menu/breakfast", 1)
-			Expect(err).To(Equal(storeadapter.ErrorNodeIsNotDirectory))
+			Expect(err.(storeadapter.Error).Type()).To(Equal(storeadapter.ErrorNodeIsNotDirectory))
 		})
 
 		It("should not return an error if the directory exists", func() {
@@ -447,9 +447,18 @@ var _ = Describe("Fakestoreadapter", func() {
 
 		It("should delete the key after the timeout", func() {
 			adapter.UpdateDirTTL("/menu", 1)
-			getErr := func() error { _, err := adapter.ListRecursively("/menu"); return err }
+			getErr := func() error {
+				_, err := adapter.ListRecursively("/menu")
+				return err
+			}
 			Consistently(getErr, 0.9).Should(Succeed())
-			Eventually(getErr, 0.2).Should(Equal(storeadapter.ErrorKeyNotFound))
+			Eventually(func() int {
+				e := getErr()
+				if e != nil {
+					return e.(storeadapter.Error).Type()
+				}
+				return -1
+			}, 0.2).Should(Equal(storeadapter.ErrorKeyNotFound))
 		})
 	})
 
@@ -462,7 +471,7 @@ var _ = Describe("Fakestoreadapter", func() {
 				}
 
 				err := adapter.CompareAndSwap(node, node)
-				Expect(err).To(Equal(storeadapter.ErrorKeyNotFound))
+				Expect(err.(storeadapter.Error).Type()).To(Equal(storeadapter.ErrorKeyNotFound))
 			})
 		})
 
@@ -491,7 +500,7 @@ var _ = Describe("Fakestoreadapter", func() {
 			Context("and the Value of oldNode is different", func() {
 				It("returns a KeyComparisonFailed error", func() {
 					err := adapter.CompareAndSwap(nodeBar, nodeBar)
-					Expect(err).To(Equal(storeadapter.ErrorKeyComparisonFailed))
+					Expect(err.(storeadapter.Error).Type()).To(Equal(storeadapter.ErrorKeyComparisonFailed))
 				})
 
 				It("does not update the existing node", func() {

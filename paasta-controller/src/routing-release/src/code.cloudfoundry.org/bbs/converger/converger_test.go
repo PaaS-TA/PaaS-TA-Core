@@ -8,8 +8,8 @@ import (
 	"github.com/tedsuo/ifrit"
 	"github.com/tedsuo/ifrit/ginkgomon"
 
-	"code.cloudfoundry.org/bbs/fake_bbs"
 	"code.cloudfoundry.org/bbs/models"
+	"code.cloudfoundry.org/bbs/serviceclient/serviceclientfakes"
 	"code.cloudfoundry.org/clock/fakeclock"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -24,7 +24,7 @@ var _ = Describe("ConvergerProcess", func() {
 	var (
 		fakeLrpConvergenceController *fake_controllers.FakeLrpConvergenceController
 		fakeTaskController           *fake_controllers.FakeTaskController
-		fakeBBSServiceClient         *fake_bbs.FakeServiceClient
+		fakeBBSServiceClient         *serviceclientfakes.FakeServiceClient
 		logger                       *lagertest.TestLogger
 		fakeClock                    *fakeclock.FakeClock
 		convergeRepeatInterval       time.Duration
@@ -41,7 +41,7 @@ var _ = Describe("ConvergerProcess", func() {
 	BeforeEach(func() {
 		fakeLrpConvergenceController = new(fake_controllers.FakeLrpConvergenceController)
 		fakeTaskController = new(fake_controllers.FakeTaskController)
-		fakeBBSServiceClient = new(fake_bbs.FakeServiceClient)
+		fakeBBSServiceClient = new(serviceclientfakes.FakeServiceClient)
 		logger = lagertest.NewTestLogger("test")
 		fakeClock = fakeclock.NewFakeClock(time.Now())
 
@@ -83,20 +83,20 @@ var _ = Describe("ConvergerProcess", func() {
 
 	Describe("converging over time", func() {
 		It("converges tasks, LRPs, and auctions when the lock is periodically reestablished", func() {
-			fakeClock.Increment(convergeRepeatInterval + aBit)
+			fakeClock.WaitForWatcherAndIncrement(convergeRepeatInterval + aBit)
 
-			Eventually(fakeTaskController.ConvergeTasksCallCount, aBit).Should(Equal(1))
-			Eventually(fakeLrpConvergenceController.ConvergeLRPsCallCount, aBit).Should(Equal(1))
+			Eventually(fakeTaskController.ConvergeTasksCallCount).Should(Equal(1))
+			Eventually(fakeLrpConvergenceController.ConvergeLRPsCallCount).Should(Equal(1))
 
 			_, actualKickTaskDuration, actualExpirePendingTaskDuration, actualExpireCompletedTaskDuration := fakeTaskController.ConvergeTasksArgsForCall(0)
 			Expect(actualKickTaskDuration).To(Equal(kickTaskDuration))
 			Expect(actualExpirePendingTaskDuration).To(Equal(expirePendingTaskDuration))
 			Expect(actualExpireCompletedTaskDuration).To(Equal(expireCompletedTaskDuration))
 
-			fakeClock.Increment(convergeRepeatInterval + aBit)
+			fakeClock.WaitForWatcherAndIncrement(convergeRepeatInterval + aBit)
 
-			Eventually(fakeTaskController.ConvergeTasksCallCount, aBit).Should(Equal(2))
-			Eventually(fakeLrpConvergenceController.ConvergeLRPsCallCount, aBit).Should(Equal(2))
+			Eventually(fakeTaskController.ConvergeTasksCallCount).Should(Equal(2))
+			Eventually(fakeLrpConvergenceController.ConvergeLRPsCallCount).Should(Equal(2))
 
 			_, actualKickTaskDuration, actualExpirePendingTaskDuration, actualExpireCompletedTaskDuration = fakeTaskController.ConvergeTasksArgsForCall(1)
 			Expect(actualKickTaskDuration).To(Equal(kickTaskDuration))
@@ -114,8 +114,8 @@ var _ = Describe("ConvergerProcess", func() {
 				IDs: []string{"some-cell-id"},
 			}
 
-			Eventually(fakeTaskController.ConvergeTasksCallCount, aBit).Should(Equal(1))
-			Eventually(fakeLrpConvergenceController.ConvergeLRPsCallCount, aBit).Should(Equal(1))
+			Eventually(fakeTaskController.ConvergeTasksCallCount).Should(Equal(1))
+			Eventually(fakeLrpConvergenceController.ConvergeLRPsCallCount).Should(Equal(1))
 
 			_, actualKickTaskDuration, actualExpirePendingTaskDuration, actualExpireCompletedTaskDuration := fakeTaskController.ConvergeTasksArgsForCall(0)
 			Expect(actualKickTaskDuration).To(Equal(kickTaskDuration))
@@ -128,28 +128,28 @@ var _ = Describe("ConvergerProcess", func() {
 				IDs: []string{"some-cell-id"},
 			}
 
-			Eventually(fakeTaskController.ConvergeTasksCallCount, aBit).Should(Equal(2))
-			Eventually(fakeLrpConvergenceController.ConvergeLRPsCallCount, aBit).Should(Equal(2))
+			Eventually(fakeTaskController.ConvergeTasksCallCount).Should(Equal(2))
+			Eventually(fakeLrpConvergenceController.ConvergeLRPsCallCount).Should(Equal(2))
 		})
 
 		It("defers convergence to one full interval later", func() {
-			fakeClock.Increment(convergeRepeatInterval - aBit)
+			fakeClock.WaitForWatcherAndIncrement(convergeRepeatInterval - aBit)
 
 			waitEvents <- models.CellDisappearedEvent{
 				IDs: []string{"some-cell-id"},
 			}
 
-			Eventually(fakeTaskController.ConvergeTasksCallCount, aBit).Should(Equal(1))
-			Eventually(fakeLrpConvergenceController.ConvergeLRPsCallCount, aBit).Should(Equal(1))
+			Eventually(fakeTaskController.ConvergeTasksCallCount).Should(Equal(1))
+			Eventually(fakeLrpConvergenceController.ConvergeLRPsCallCount).Should(Equal(1))
 
-			fakeClock.Increment(2 * aBit)
+			fakeClock.WaitForWatcherAndIncrement(2 * aBit)
 
-			Consistently(fakeTaskController.ConvergeTasksCallCount, aBit).Should(Equal(1))
-			Consistently(fakeLrpConvergenceController.ConvergeLRPsCallCount, aBit).Should(Equal(1))
+			Consistently(fakeTaskController.ConvergeTasksCallCount).Should(Equal(1))
+			Consistently(fakeLrpConvergenceController.ConvergeLRPsCallCount).Should(Equal(1))
 
-			fakeClock.Increment(convergeRepeatInterval + aBit)
-			Eventually(fakeTaskController.ConvergeTasksCallCount, aBit).Should(Equal(2))
-			Eventually(fakeLrpConvergenceController.ConvergeLRPsCallCount, aBit).Should(Equal(2))
+			fakeClock.WaitForWatcherAndIncrement(convergeRepeatInterval + aBit)
+			Eventually(fakeTaskController.ConvergeTasksCallCount).Should(Equal(2))
+			Eventually(fakeLrpConvergenceController.ConvergeLRPsCallCount).Should(Equal(2))
 		})
 	})
 })

@@ -1,11 +1,9 @@
 package deploy_test
 
 import (
-	"fmt"
 	"testing"
 
-	"acceptance-tests/testing/helpers"
-
+	"github.com/cloudfoundry-incubator/etcd-release/src/acceptance-tests/testing/helpers"
 	"github.com/pivotal-cf-experimental/bosh-test/bosh"
 
 	. "github.com/onsi/ginkgo"
@@ -13,8 +11,8 @@ import (
 )
 
 var (
-	config helpers.Config
-	client bosh.Client
+	config     helpers.Config
+	boshClient bosh.Client
 )
 
 func TestDeploy(t *testing.T) {
@@ -29,8 +27,8 @@ var _ = BeforeSuite(func() {
 	config, err = helpers.LoadConfig(configPath)
 	Expect(err).NotTo(HaveOccurred())
 
-	client = bosh.NewClient(bosh.Config{
-		URL:              fmt.Sprintf("https://%s:25555", config.BOSH.Target),
+	boshClient = bosh.NewClient(bosh.Config{
+		URL:              config.BOSH.Target,
 		Username:         config.BOSH.Username,
 		Password:         config.BOSH.Password,
 		AllowInsecureSSL: true,

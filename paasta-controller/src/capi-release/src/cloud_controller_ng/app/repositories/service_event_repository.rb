@@ -1,11 +1,10 @@
 module VCAP::CloudController
   module Repositories
     class ServiceEventRepository
-      attr_reader :user, :current_user_email
+      attr_reader :user_audit_info
 
-      def initialize(user:, user_email:)
-        @user               = user
-        @current_user_email = user_email
+      def initialize(user_audit_info)
+        @user_audit_info = user_audit_info
       end
 
       def logger
@@ -103,23 +102,6 @@ module VCAP::CloudController
 
         space_data = { space: service_instance.space }
         create_event("audit.user_provided_service_instance.#{type}", user_actor, actee, metadata, space_data)
-      end
-
-      def record_service_binding_event(type, service_binding, params=nil)
-        metadata = { request: {} }
-
-        unless type == :delete
-          metadata[:request][:service_instance_guid] = service_binding.service_instance.guid
-          metadata[:request][:app_guid]              = service_binding.app.guid
-        end
-
-        actee = {
-          actee:      service_binding.guid,
-          actee_type: 'service_binding',
-          actee_name: '',
-        }
-        space_data = { space: service_binding.space }
-        create_event("audit.service_binding.#{type}", user_actor, actee, metadata, space_data)
       end
 
       def record_service_key_event(type, service_key, params=nil)
@@ -222,17 +204,19 @@ module VCAP::CloudController
 
       def broker_actor(broker)
         {
-          actor_type: 'service_broker',
-          actor:      broker.guid,
-          actor_name: broker.name
+          actor_type:     'service_broker',
+          actor:          broker.guid,
+          actor_name:     broker.name,
+          actor_username: '',
         }
       end
 
       def user_actor
         {
-          actor_type: 'user',
-          actor:      user.guid,
-          actor_name: current_user_email
+          actor_type:     'user',
+          actor:          @user_audit_info.user_guid,
+          actor_name:     @user_audit_info.user_email,
+          actor_username: @user_audit_info.user_name
         }
       end
 

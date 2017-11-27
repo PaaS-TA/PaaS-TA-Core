@@ -1,0 +1,13 @@
+<%=
+  cert = nil
+  respond_to?(:if_link) && if_link("etcd") do |link|
+    if link.p("etcd.require_ssl")
+        cert = link.p("etcd.client_cert")
+    end
+  end.else do
+    if p("etcd_testconsumer.etcd.require_ssl")
+        cert = p("etcd.client_cert")
+    end
+  end
+  cert
+%>

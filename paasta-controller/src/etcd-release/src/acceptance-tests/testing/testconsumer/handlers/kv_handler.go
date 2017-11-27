@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"strings"
 
-	"acceptance-tests/testing/testconsumer/etcd"
+	"github.com/cloudfoundry-incubator/etcd-release/src/acceptance-tests/testing/testconsumer/etcd"
 
 	goetcd "github.com/coreos/go-etcd/etcd"
 )

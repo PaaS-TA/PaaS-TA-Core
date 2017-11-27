@@ -1010,6 +1010,44 @@ properties:
       url:
     protocol:
     saml:
+      serviceProviderKey: |
+        -----BEGIN RSA PRIVATE KEY-----
+        MIICXQIBAAKBgQDHtC5gUXxBKpEqZTLkNvFwNGnNIkggNOwOQVNbpO0WVHIivig5
+        L39WqS9u0hnA+O7MCA/KlrAR4bXaeVVhwfUPYBKIpaaTWFQR5cTR1UFZJL/OF9vA
+        fpOwznoD66DDCnQVpbCjtDYWX+x6imxn8HCYxhMol6ZnTbSsFW6VZjFMjQIDAQAB
+        AoGAVOj2Yvuigi6wJD99AO2fgF64sYCm/BKkX3dFEw0vxTPIh58kiRP554Xt5ges
+        7ZCqL9QpqrChUikO4kJ+nB8Uq2AvaZHbpCEUmbip06IlgdA440o0r0CPo1mgNxGu
+        lhiWRN43Lruzfh9qKPhleg2dvyFGQxy5Gk6KW/t8IS4x4r0CQQD/dceBA+Ndj3Xp
+        ubHfxqNz4GTOxndc/AXAowPGpge2zpgIc7f50t8OHhG6XhsfJ0wyQEEvodDhZPYX
+        kKBnXNHzAkEAyCA76vAwuxqAd3MObhiebniAU3SnPf2u4fdL1EOm92dyFs1JxyyL
+        gu/DsjPjx6tRtn4YAalxCzmAMXFSb1qHfwJBAM3qx3z0gGKbUEWtPHcP7BNsrnWK
+        vw6By7VC8bk/ffpaP2yYspS66Le9fzbFwoDzMVVUO/dELVZyBnhqSRHoXQcCQQCe
+        A2WL8S5o7Vn19rC0GVgu3ZJlUrwiZEVLQdlrticFPXaFrn3Md82ICww3jmURaKHS
+        N+l4lnMda79eSp3OMmq9AkA0p79BvYsLshUJJnvbk76pCjR28PK4dV1gSDUEqQMB
+        qy45ptdwJLqLJCeNoR0JUcDNIRhOCuOPND7pcMtX6hI/
+        -----END RSA PRIVATE KEY-----
+      serviceProviderKeyPassword: password
+      serviceProviderCertificate: |
+        -----BEGIN CERTIFICATE-----
+        MIIDSTCCArKgAwIBAgIBADANBgkqhkiG9w0BAQQFADB8MQswCQYDVQQGEwJhdzEO
+        MAwGA1UECBMFYXJ1YmExDjAMBgNVBAoTBWFydWJhMQ4wDAYDVQQHEwVhcnViYTEO
+        MAwGA1UECxMFYXJ1YmExDjAMBgNVBAMTBWFydWJhMR0wGwYJKoZIhvcNAQkBFg5h
+        cnViYUBhcnViYS5hcjAeFw0xNTExMjAyMjI2MjdaFw0xNjExMTkyMjI2MjdaMHwx
+        CzAJBgNVBAYTAmF3MQ4wDAYDVQQIEwVhcnViYTEOMAwGA1UEChMFYXJ1YmExDjAM
+        BgNVBAcTBWFydWJhMQ4wDAYDVQQLEwVhcnViYTEOMAwGA1UEAxMFYXJ1YmExHTAb
+        BgkqhkiG9w0BCQEWDmFydWJhQGFydWJhLmFyMIGfMA0GCSqGSIb3DQEBAQUAA4GN
+        ADCBiQKBgQDHtC5gUXxBKpEqZTLkNvFwNGnNIkggNOwOQVNbpO0WVHIivig5L39W
+        qS9u0hnA+O7MCA/KlrAR4bXaeVVhwfUPYBKIpaaTWFQR5cTR1UFZJL/OF9vAfpOw
+        znoD66DDCnQVpbCjtDYWX+x6imxn8HCYxhMol6ZnTbSsFW6VZjFMjQIDAQABo4Ha
+        MIHXMB0GA1UdDgQWBBTx0lDzjH/iOBnOSQaSEWQLx1syGDCBpwYDVR0jBIGfMIGc
+        gBTx0lDzjH/iOBnOSQaSEWQLx1syGKGBgKR+MHwxCzAJBgNVBAYTAmF3MQ4wDAYD
+        VQQIEwVhcnViYTEOMAwGA1UEChMFYXJ1YmExDjAMBgNVBAcTBWFydWJhMQ4wDAYD
+        VQQLEwVhcnViYTEOMAwGA1UEAxMFYXJ1YmExHTAbBgkqhkiG9w0BCQEWDmFydWJh
+        QGFydWJhLmFyggEAMAwGA1UdEwQFMAMBAf8wDQYJKoZIhvcNAQEEBQADgYEAYvBJ
+        0HOZbbHClXmGUjGs+GS+xC1FO/am2suCSYqNB9dyMXfOWiJ1+TLJk+o/YZt8vuxC
+        KdcZYgl4l/L6PxJ982SRhc83ZW2dkAZI4M0/Ud3oePe84k8jm3A7EvH5wi5hvCkK
+        RpuRBwn3Ei+jCRouxTbzKPsuCVB+1sNyxMTXzf0=
+        -----END CERTIFICATE-----
       signatureAlgorithm: SHA256
       providers:
         okta-signed-or-encrypted:
@@ -1049,7 +1087,6 @@ properties:
             given_name: firstName
             family_name: surname
           providerDescription: 'Human readable description of this provider'
-    self_service_links_enabled:
     smtp:
       host:
       password:
@@ -1158,6 +1195,7 @@ properties:
         override: true
         refresh-token-validity: 2592000
         scope: cloud_controller.read,cloud_controller.write,openid,password.write,cloud_controller.admin,scim.read,scim.write,doppler.firehose,uaa.user,routing.router_groups.read
+        secret: ''
       cloud_controller_username_lookup:
         authorities: scim.userids
         authorized-grant-types: client_credentials
@@ -1166,9 +1204,10 @@ properties:
         authorities: uaa.resource
         override: true
         secret: doppler-secret
+        authorized-grant-types: client_credentials
       gorouter:
         authorities: routing.routes.read
-        authorized-grant-types: client_credentials,refresh_token
+        authorized-grant-types: client_credentials
         secret: gorouter-secret
       notifications:
         authorities: cloud_controller.admin,scim.read
@@ -1178,17 +1217,27 @@ properties:
         authorized-grant-types: authorization_code
         autoapprove: true
         override: true
-        redirect-uri: "/login"
+        redirect-uri: "http://ssh-proxy-redirect-domain.com/login"
         scope: openid,cloud_controller.read,cloud_controller.write,cloud_controller.admin
         secret: ssh-proxy-secret
       tcp_emitter:
         authorities: routing.routes.write,routing.routes.read,routing.router_groups.read
-        authorized-grant-types: client_credentials,refresh_token
+        authorized-grant-types: client_credentials
         secret: tcp-emitter-secret
       tcp_router:
         authorities: routing.routes.read,routing.router_groups.read
-        authorized-grant-types: client_credentials,refresh_token
+        authorized-grant-types: client_credentials
         secret: tcp-router-secret
+      implicit_ok:
+        scope: openid
+        authorized-grant-types: implicit
+        secret: null
+        redirect-uri: "http://some.redirect.com/callback"
+      many_redirects:
+        scope: uaa.user
+        authorized-grant-types: authorization_code
+        secret: secret
+        redirect-uri: http://localhost,http://localhost:8080,http://localhost:8080/uaa,http://valid.com,http://sub.valid.com,http://valid.com/with/path,https://subsub.sub.valid.com/**,https://valid.com/path/*/path,http://sub.valid.com/*/with/path**,http*://sub.valid.com/*/with/path**,http*://*.valid.com/*/with/path**,http://*.valid.com/*/with/path**,https://*.valid.com/*/with/path**,https://*.*.valid.com/*/with/path**,http://sub*.valid.com/*/with/path**,http://*.domain.com,http://username:password@some.server.com,http://username:password@some.server.com/path
     database:
     issuer: https://uaa.bosh-lite.com
     jwt:
@@ -1307,6 +1356,7 @@ properties:
       tag: uaa
     db_scheme: postgresql
     port: 5524
+    tls_enabled: true
     roles:
     - name: uaaadmin
       password: admin

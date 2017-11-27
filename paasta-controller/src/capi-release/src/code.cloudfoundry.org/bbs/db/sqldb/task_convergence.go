@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"code.cloudfoundry.org/auctioneer"
+	"code.cloudfoundry.org/bbs/db/sqldb/helpers"
 	"code.cloudfoundry.org/bbs/models"
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/runtimeschema/metric"
@@ -77,7 +78,7 @@ func (db *SQLDB) failExpiredPendingTasks(logger lager.Logger, expirePendingTaskD
 	now := db.clock.Now()
 
 	result, err := db.update(logger, db.db, tasksTable,
-		SQLAttributes{
+		helpers.SQLAttributes{
 			"failed":             true,
 			"failure_reason":     "not started within time limit",
 			"result":             "",
@@ -103,7 +104,7 @@ func (db *SQLDB) getTaskStartRequestsForKickablePendingTasks(logger lager.Logger
 	logger = logger.Session("get-task-start-requests-for-kickable-pending-tasks")
 
 	rows, err := db.all(logger, db.db, tasksTable,
-		taskColumns, NoLockRow,
+		taskColumns, helpers.NoLockRow,
 		"state = ? AND updated_at < ? AND created_at > ?",
 		models.Task_Pending, db.clock.Now().Add(-kickTasksDuration).UnixNano(), db.clock.Now().Add(-expirePendingTaskDuration).UnixNano(),
 	)
@@ -115,26 +116,18 @@ func (db *SQLDB) getTaskStartRequestsForKickablePendingTasks(logger lager.Logger
 
 	defer rows.Close()
 
-	var failedFetches uint64
 	tasksToAuction := []*auctioneer.TaskStartRequest{}
-	for rows.Next() {
-		task, err := db.fetchTask(logger, rows, db.db)
-		if err != nil {
-			logger.Error("failed-fetch", err)
-			if err == models.ErrDeserialize {
-				failedFetches++
-			}
-		} else {
-			taskStartRequest := auctioneer.NewTaskStartRequestFromModel(task.TaskGuid, task.Domain, task.TaskDefinition)
-			tasksToAuction = append(tasksToAuction, &taskStartRequest)
-		}
+	tasks, invalidTasksCount, err := db.fetchTasks(logger, rows, db.db, false)
+	for _, task := range tasks {
+		taskStartRequest := auctioneer.NewTaskStartRequestFromModel(task.TaskGuid, task.Domain, task.TaskDefinition)
+		tasksToAuction = append(tasksToAuction, &taskStartRequest)
 	}
 
-	if rows.Err() != nil {
-		logger.Error("failed-getting-next-row", rows.Err())
+	if err != nil {
+		logger.Error("failed-fetching-some-tasks", err)
 	}
 
-	return tasksToAuction, failedFetches
+	return tasksToAuction, uint64(invalidTasksCount)
 }
 
 func (db *SQLDB) failTasksWithDisappearedCells(logger lager.Logger, cellSet models.CellSet) int64 {
@@ -149,12 +142,12 @@ func (db *SQLDB) failTasksWithDisappearedCells(logger lager.Logger, cellSet mode
 
 	wheres := "state = ?"
 	if len(cellSet) != 0 {
-		wheres += fmt.Sprintf(" AND cell_id NOT IN (%s)", questionMarks(len(cellSet)))
+		wheres += fmt.Sprintf(" AND cell_id NOT IN (%s)", helpers.QuestionMarks(len(cellSet)))
 	}
 	now := db.clock.Now().UnixNano()
 
 	result, err := db.update(logger, db.db, tasksTable,
-		SQLAttributes{
+		helpers.SQLAttributes{
 			"failed":             true,
 			"failure_reason":     "cell disappeared before completion",
 			"result":             "",
@@ -181,7 +174,7 @@ func (db *SQLDB) failTasksWithDisappearedCells(logger lager.Logger, cellSet mode
 func (db *SQLDB) demoteKickableResolvingTasks(logger lager.Logger, kickTasksDuration time.Duration) {
 	logger = logger.Session("demote-kickable-resolving-tasks")
 	_, err := db.update(logger, db.db, tasksTable,
-		SQLAttributes{"state": models.Task_Completed},
+		helpers.SQLAttributes{"state": models.Task_Completed},
 		"state = ? AND updated_at < ?",
 		models.Task_Resolving, db.clock.Now().Add(-kickTasksDuration).UnixNano(),
 	)
@@ -212,7 +205,7 @@ func (db *SQLDB) getKickableCompleteTasksForCompletion(logger lager.Logger, kick
 	logger = logger.Session("get-kickable-complete-tasks-for-completion")
 
 	rows, err := db.all(logger, db.db, tasksTable,
-		taskColumns, NoLockRow,
+		taskColumns, helpers.NoLockRow,
 		"state = ? AND updated_at < ?",
 		models.Task_Completed, db.clock.Now().Add(-kickTasksDuration).UnixNano(),
 	)
@@ -224,25 +217,13 @@ func (db *SQLDB) getKickableCompleteTasksForCompletion(logger lager.Logger, kick
 
 	defer rows.Close()
 
-	var failedFetches uint64
-	tasksToComplete := []*models.Task{}
-	for rows.Next() {
-		task, err := db.fetchTask(logger, rows, db.db)
-		if err != nil {
-			logger.Error("failed-fetch", err)
-			if err == models.ErrDeserialize {
-				failedFetches++
-			}
-		} else {
-			tasksToComplete = append(tasksToComplete, task)
-		}
+	tasksToComplete, failedFetches, err := db.fetchTasks(logger, rows, db.db, false)
+
+	if err != nil {
+		logger.Error("failed-fetching-some-tasks", err)
 	}
 
-	if rows.Err() != nil {
-		logger.Error("failed-getting-next-row", rows.Err())
-	}
-
-	return tasksToComplete, failedFetches
+	return tasksToComplete, uint64(failedFetches)
 }
 
 func sendTaskMetrics(logger lager.Logger, pendingCount, runningCount, completedCount, resolvingCount int) {

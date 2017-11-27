@@ -1,0 +1,83 @@
+#!/bin/bash
+
+set -e
+
+manifest_dir=$(dirname $0)/../templates/v1
+
+usage() {
+  >&2 cat <<EOF
+SYNOPSIS:
+    Generate a manifest for a postgres-release deployment.
+
+USAGE:
+    $0 <MANDATORY ARGUMENTS> [OPTIONAL ARGUMENTS]
+
+MANDATORY ARGUMENTS:
+    -i <iaas-path>      Path to IaaS-settings stub file.
+    -p <property-path>  Path to property-overrides stub file.
+
+OPTIONAL ARGUMENTS:
+    -v <versions-path>  Path to release-versions stub file.
+
+EOF
+  exit 1
+}
+
+base_releases="${manifest_generation}/base-releases.yml"
+
+while getopts "i:p:v:" opt; do
+  case $opt in
+    i)
+      iaas_settings=$OPTARG
+      ;;
+    p)
+      property_overrides=$OPTARG
+      ;;
+    v)
+      release_versions=$OPTARG
+      ;;
+    *)
+      echo "Unknown arguments"
+      usage
+      ;;
+  esac
+done
+
+if [ -z ${iaas_settings} ]; then
+  >&2 echo "ERROR: IaaS-settings stub file is missing"
+  argument_error=true
+else
+  if [ ! -f "${iaas_settings}" ]; then
+    >&2 echo "ERROR: IaaS Setting stub '${iaas_settings}' is not a regular file"
+    argument_error=true
+  fi
+fi
+
+if [ -z ${property_overrides} ]; then
+  >&2 echo "ERROR: Property-overrides stub file is missing"
+  argument_error=true
+
+else
+  if [ ! -f "${property_overrides}" ]; then
+    >&2 echo "ERROR: Property-overrides stub '${property_overrides}' is not a regular file"
+    argument_error=true
+  fi
+fi
+
+if [[ ! -z "${release_versions}" && ! -f "${release_versions}" ]]; then
+  >&2 echo "ERROR: Release-versions stub '${release_versions}' is not a regular file"
+  argument_error=true
+fi
+
+if [ ! -z $argument_error ]; then
+  echo
+  usage
+fi
+
+spiff merge \
+  ${manifest_dir}/generic-manifest-mask.yml \
+  ${manifest_dir}/postgres.yml \
+  ${release_versions} \
+  ${property_overrides} \
+  ${iaas_settings}
+

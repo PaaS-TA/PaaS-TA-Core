@@ -25,6 +25,13 @@ module VCAP::CloudController
           end
         end
 
+        context 'and user is a global auditor' do
+          it 'returns true' do
+            set_current_user_as_global_auditor
+            expect(permissions.can_read_from_org?(org_guid)).to be true
+          end
+        end
+
         context 'and user is not an admin' do
           it 'returns false' do
             set_current_user(user)
@@ -55,6 +62,61 @@ module VCAP::CloudController
         end
       end
     end
+
+    describe '#can_write_to_org?' do
+      context 'user has no membership' do
+        context 'and user is an admin' do
+          it 'returns true' do
+            set_current_user(user, { admin: true })
+            expect(permissions.can_read_from_org?(org_guid)).to be true
+          end
+        end
+
+        context 'and user is a read only admin' do
+          it 'returns false' do
+            set_current_user(user, { admin_read_only: true })
+            expect(permissions.can_write_to_org?(org_guid)).to be false
+          end
+        end
+
+        context 'and user is a global auditor' do
+          it 'returns false' do
+            set_current_user_as_global_auditor
+            expect(permissions.can_write_to_org?(org_guid)).to be false
+          end
+        end
+
+        context 'and user is not an admin' do
+          it 'returns false' do
+            set_current_user(user)
+            expect(permissions.can_write_to_org?(org_guid)).to be false
+          end
+        end
+      end
+
+      context 'user has valid membership' do
+        it 'returns false for org user' do
+          org.add_user(user)
+          expect(permissions.can_write_to_org?(org_guid)).to be false
+        end
+
+        it 'returns false for org auditor' do
+          org.add_auditor(user)
+          expect(permissions.can_write_to_org?(org_guid)).to be false
+        end
+
+        it 'returns true for org manager' do
+          org.add_manager(user)
+          expect(permissions.can_write_to_org?(org_guid)).to be true
+        end
+
+        it 'returns false for org billing manager' do
+          org.add_billing_manager(user)
+          expect(permissions.can_write_to_org?(org_guid)).to be false
+        end
+      end
+    end
+
     describe '#can_read_from_space?' do
       context 'user has no membership' do
         context 'and user is an admin' do
@@ -67,6 +129,13 @@ module VCAP::CloudController
         context 'and the user is a read only admin' do
           it 'returns true' do
             set_current_user(user, { admin_read_only: true })
+            expect(permissions.can_read_from_space?(space_guid, org_guid)).to be true
+          end
+        end
+
+        context 'and user is a global auditor' do
+          it 'returns true' do
+            set_current_user_as_global_auditor
             expect(permissions.can_read_from_space?(space_guid, org_guid)).to be true
           end
         end
@@ -105,12 +174,86 @@ module VCAP::CloudController
       end
     end
 
+    describe '#can_read_globally?' do
+      context 'and user is an admin' do
+        it 'returns true' do
+          set_current_user(user, { admin: true })
+          expect(permissions.can_read_globally?).to be true
+        end
+      end
+
+      context 'and the user is a read only admin' do
+        it 'returns true' do
+          set_current_user(user, { admin_read_only: true })
+          expect(permissions.can_read_globally?).to be true
+        end
+      end
+
+      context 'and user is a global auditor' do
+        it 'returns true' do
+          set_current_user_as_global_auditor
+          expect(permissions.can_read_globally?).to be true
+        end
+      end
+
+      context 'and user is none of the above' do
+        it 'returns false' do
+          set_current_user(user)
+          expect(permissions.can_read_globally?).to be false
+        end
+      end
+    end
+
+    describe '#can_write_globally?' do
+      context 'and user is an admin' do
+        it 'returns true' do
+          set_current_user(user, { admin: true })
+          expect(permissions.can_write_globally?).to be true
+        end
+      end
+
+      context 'and the user is a read only admin' do
+        it 'returns false' do
+          set_current_user(user, { admin_read_only: true })
+          expect(permissions.can_write_globally?).to be false
+        end
+      end
+
+      context 'and user is a global auditor' do
+        it 'returns false' do
+          set_current_user_as_global_auditor
+          expect(permissions.can_write_globally?).to be false
+        end
+      end
+
+      context 'and user is none of the above' do
+        it 'returns false' do
+          set_current_user(user)
+          expect(permissions.can_write_globally?).to be false
+        end
+      end
+    end
+
     describe '#can_see_secrets_in_space?' do
       context 'user has no membership' do
         context 'and user is an admin' do
           it 'returns true' do
-            set_current_user(user, { admin: true })
+            set_current_user_as_admin
             expect(permissions.can_see_secrets_in_space?(space_guid, org_guid)).to be true
+          end
+        end
+
+        context 'and user is admin_read_only' do
+          it 'returns true' do
+            set_current_user_as_admin_read_only
+            expect(permissions.can_see_secrets_in_space?(space_guid, org_guid)).to be true
+          end
+        end
+
+        context 'and user is global auditor' do
+          it 'return false' do
+            set_current_user_as_global_auditor
+            expect(permissions.can_see_secrets_in_space?(space_guid, org_guid)).to be false
           end
         end
 
@@ -129,10 +272,10 @@ module VCAP::CloudController
           expect(permissions.can_see_secrets_in_space?(space_guid, org_guid)).to be true
         end
 
-        it 'returns true for space manager' do
+        it 'returns false for space manager' do
           org.add_user(user)
           space.add_manager(user)
-          expect(permissions.can_see_secrets_in_space?(space_guid, org_guid)).to be true
+          expect(permissions.can_see_secrets_in_space?(space_guid, org_guid)).to be false
         end
 
         it 'returns false for space auditor' do
@@ -141,9 +284,88 @@ module VCAP::CloudController
           expect(permissions.can_see_secrets_in_space?(space_guid, org_guid)).to be false
         end
 
+        it 'returns false for org manager' do
+          org.add_manager(user)
+          expect(permissions.can_see_secrets_in_space?(space_guid, org_guid)).to be false
+        end
+      end
+    end
+
+    describe '#can_read_from_isolation_segment?' do
+      let(:isolation_segment) { IsolationSegmentModel.make }
+      let(:assigner) { IsolationSegmentAssign.new }
+
+      before do
+        assigner.assign(isolation_segment, [org])
+      end
+
+      context 'user has no membership' do
+        context 'and user is an admin' do
+          it 'returns true' do
+            set_current_user_as_admin
+            expect(permissions.can_read_from_isolation_segment?(isolation_segment)).to be true
+          end
+        end
+
+        context 'and user is admin_read_only' do
+          it 'returns true' do
+            set_current_user_as_admin_read_only
+            expect(permissions.can_read_from_isolation_segment?(isolation_segment)).to be true
+          end
+        end
+
+        context 'and user is global auditor' do
+          it 'return true' do
+            set_current_user_as_global_auditor
+            expect(permissions.can_read_from_isolation_segment?(isolation_segment)).to be true
+          end
+        end
+
+        context 'and user is not an admin' do
+          it 'return false' do
+            set_current_user(user)
+            expect(permissions.can_read_from_isolation_segment?(isolation_segment)).to be false
+          end
+        end
+      end
+
+      context 'user has valid membership' do
+        it 'returns true for space developer' do
+          org.add_user(user)
+          space.add_developer(user)
+          expect(permissions.can_read_from_isolation_segment?(isolation_segment)).to be true
+        end
+
+        it 'returns true for space manager' do
+          org.add_user(user)
+          space.add_manager(user)
+          expect(permissions.can_read_from_isolation_segment?(isolation_segment)).to be true
+        end
+
+        it 'returns true for space auditor' do
+          org.add_user(user)
+          space.add_auditor(user)
+          expect(permissions.can_read_from_isolation_segment?(isolation_segment)).to be true
+        end
+
         it 'returns true for org manager' do
           org.add_manager(user)
-          expect(permissions.can_see_secrets_in_space?(space_guid, org_guid)).to be true
+          expect(permissions.can_read_from_isolation_segment?(isolation_segment)).to be true
+        end
+
+        it 'returns true for org auditor' do
+          org.add_auditor(user)
+          expect(permissions.can_read_from_isolation_segment?(isolation_segment)).to be true
+        end
+
+        it 'returns true for org member' do
+          org.add_user(user)
+          expect(permissions.can_read_from_isolation_segment?(isolation_segment)).to be true
+        end
+
+        it 'returns true for org billing manager' do
+          org.add_billing_manager(user)
+          expect(permissions.can_read_from_isolation_segment?(isolation_segment)).to be true
         end
       end
     end
@@ -174,6 +396,20 @@ module VCAP::CloudController
           it 'returns true' do
             set_current_user(user, { admin: true })
             expect(permissions.can_write_to_space?(space_guid)).to be true
+          end
+        end
+
+        context 'and user is admin_read_only' do
+          it 'return false' do
+            set_current_user_as_admin_read_only
+            expect(permissions.can_write_to_space?(space_guid)).to be false
+          end
+        end
+
+        context 'and user is global auditor' do
+          it 'return false' do
+            set_current_user_as_global_auditor
+            expect(permissions.can_write_to_space?(space_guid)).to be false
           end
         end
 

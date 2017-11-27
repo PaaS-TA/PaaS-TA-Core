@@ -27,10 +27,11 @@ module VCAP::CloudController
           end
         end
         let(:env) { double(:env) }
+        let(:generated_environment) { [::Diego::Bbs::Models::EnvironmentVariable.new(name: 'generated-environment', value: 'generated-value')] }
 
         before do
           allow(LifecycleBundleUriGenerator).to receive(:uri).with('the-docker-bundle').and_return('generated-uri')
-          allow(BbsEnvironmentBuilder).to receive(:build).with(env).and_return('generated-environment')
+          allow(BbsEnvironmentBuilder).to receive(:build).with(env).and_return(generated_environment)
         end
 
         describe '#action' do
@@ -45,7 +46,7 @@ module VCAP::CloudController
             run_action = emit_progress.action.run_action
             expect(run_action.path).to eq('/tmp/docker_app_lifecycle/builder')
             expect(run_action.user).to eq('vcap')
-            expect(run_action.env).to eq('generated-environment')
+            expect(run_action.env).to eq(generated_environment)
             expect(run_action.args).to match_array(['-outputMetadataJSONFilename=/tmp/result.json', '-dockerRef=the-docker-image'])
             expect(run_action.resource_limits).to eq(::Diego::Bbs::Models::ResourceLimits.new(nofile: 4))
           end
@@ -60,6 +61,27 @@ module VCAP::CloudController
 
               run_action = result.emit_progress_action.action.run_action
               expect(run_action.args).to include('-insecureDockerRegistries=registry-1,registry-2')
+            end
+          end
+
+          context 'where there are docker credentials' do
+            let(:staging_details) do
+              StagingDetails.new.tap do |details|
+                details.package = PackageModel.new(
+                  docker_image: 'the-docker-image',
+                  docker_username: 'dockerusername',
+                  docker_password: 'dockerpassword',
+                )
+                details.environment_variables = env
+              end
+            end
+
+            it 'includes them in the run action args' do
+              result = builder.action
+
+              run_action = result.emit_progress_action.action.run_action
+              expect(run_action.args).to include('-dockerUser=dockerusername')
+              expect(run_action.args).to include('-dockerPassword=dockerpassword')
             end
           end
         end

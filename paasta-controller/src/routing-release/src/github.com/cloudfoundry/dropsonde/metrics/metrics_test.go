@@ -6,6 +6,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/cloudfoundry/dropsonde/metrics"
+	"github.com/cloudfoundry/sonde-go/events"
 )
 
 var _ = Describe("Metrics", func() {
@@ -18,6 +19,13 @@ var _ = Describe("Metrics", func() {
 		metricSender = newMockMetricSender()
 		metricBatcher = newMockMetricBatcher()
 		metrics.Initialize(metricSender, metricBatcher)
+	})
+
+	It("delegates Send", func() {
+		metricSender.SendOutput.Ret0 <- nil
+		event := &events.ValueMetric{}
+		metrics.Send(event)
+		Expect(metricSender.SendInput).To(BeCalled(With(event)))
 	})
 
 	It("delegates Value", func() {
@@ -33,6 +41,12 @@ var _ = Describe("Metrics", func() {
 		Expect(metricSender.ContainerMetricInput).To(BeCalled(
 			With(appGuid, int32(7), 42.42, uint64(1234), uint64(123412341234)),
 		))
+	})
+
+	It("delegates Counter", func() {
+		metricSender.CounterOutput.Ret0 <- nil
+		metrics.Counter("requests")
+		Expect(metricSender.CounterInput).To(BeCalled(With("requests")))
 	})
 
 	It("delegates SendValue", func() {
@@ -107,6 +121,11 @@ var _ = Describe("Metrics", func() {
 			appGuid := "some_app_guid"
 			containerMetric := metrics.ContainerMetric(appGuid, 0, 42.42, 1234, 123412341234)
 			Expect(containerMetric).To(BeNil())
+		})
+
+		It("Counter is a no-op", func() {
+			counter := metrics.Counter("requests")
+			Expect(counter).To(BeNil())
 		})
 	})
 

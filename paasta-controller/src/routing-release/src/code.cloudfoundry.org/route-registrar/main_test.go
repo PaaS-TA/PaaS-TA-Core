@@ -41,7 +41,9 @@ var _ = Describe("Main", func() {
 			"--user", natsUsername,
 			"--pass", natsPassword,
 		)
+
 		err := natsCmd.Start()
+		Expect(err).NotTo(HaveOccurred())
 
 		natsAddress := fmt.Sprintf("127.0.0.1:%d", natsPort)
 

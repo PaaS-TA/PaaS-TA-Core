@@ -5,46 +5,52 @@ import (
 	"math"
 	"time"
 
+	"code.cloudfoundry.org/bbs/db/sqldb/helpers"
 	"code.cloudfoundry.org/lager"
 )
 
 func (db *SQLDB) Domains(logger lager.Logger) ([]string, error) {
-	logger = logger.Session("domains-sqldb")
+	logger = logger.Session("domains")
 	logger.Debug("starting")
 	defer logger.Debug("complete")
 
-	expireTime := db.clock.Now().Round(time.Second).UnixNano()
-	rows, err := db.all(logger, db.db, domainsTable,
-		domainColumns, NoLockRow,
-		"expire_time > ?", expireTime,
-	)
-	if err != nil {
-		logger.Error("failed-query", err)
-		return nil, db.convertSQLError(err)
-	}
-
-	defer rows.Close()
-
-	var domain string
 	var results []string
-	for rows.Next() {
-		err = rows.Scan(&domain)
+	err := db.transact(logger, func(logger lager.Logger, tx *sql.Tx) error {
+		expireTime := db.clock.Now().Round(time.Second).UnixNano()
+		rows, err := db.all(logger, tx, domainsTable,
+			domainColumns, helpers.NoLockRow,
+			"expire_time > ?", expireTime,
+		)
 		if err != nil {
-			logger.Error("failed-scan-row", err)
-			return nil, db.convertSQLError(err)
+			logger.Error("failed-query", err)
+			return err
 		}
-		results = append(results, domain)
-	}
 
-	if rows.Err() != nil {
-		logger.Error("failed-fetching-row", err)
-		return nil, db.convertSQLError(err)
-	}
-	return results, nil
+		defer rows.Close()
+
+		var domain string
+		for rows.Next() {
+			err = rows.Scan(&domain)
+			if err != nil {
+				logger.Error("failed-scan-row", err)
+				return err
+			}
+			results = append(results, domain)
+		}
+
+		if rows.Err() != nil {
+			logger.Error("failed-fetching-row", err)
+			return err
+		}
+
+		return nil
+	})
+
+	return results, err
 }
 
 func (db *SQLDB) UpsertDomain(logger lager.Logger, domain string, ttl uint32) error {
-	logger = logger.Session("upsert-domain-sqldb", lager.Data{"domain": domain, "ttl": ttl})
+	logger = logger.Session("upsert-domain", lager.Data{"domain": domain, "ttl": ttl})
 	logger.Debug("starting")
 	defer logger.Debug("complete")
 
@@ -55,12 +61,12 @@ func (db *SQLDB) UpsertDomain(logger lager.Logger, domain string, ttl uint32) er
 		}
 
 		_, err := db.upsert(logger, tx, domainsTable,
-			SQLAttributes{"domain": domain},
-			SQLAttributes{"expire_time": expireTime},
+			helpers.SQLAttributes{"domain": domain},
+			helpers.SQLAttributes{"expire_time": expireTime},
 		)
 		if err != nil {
 			logger.Error("failed-upsert-domain", err)
-			return db.convertSQLError(err)
+			return err
 		}
 		return nil
 	})

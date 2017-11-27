@@ -59,8 +59,6 @@ func TestDB(t *testing.T) {
 	etcdClient = etcdRunner.Adapter(clientSSLConfig)
 
 	RunSpecs(t, "DB Suite")
-
-	etcdRunner.Stop()
 }
 
 var _ = BeforeSuite(func() {
@@ -108,9 +106,7 @@ var _ = AfterSuite(func() {
 	err = postgresAllocator.Delete()
 	Expect(err).ToNot(HaveOccurred())
 
-	etcdRunner.Stop()
 	etcdRunner.KillWithFire()
-	etcdRunner.GoAway()
 })
 
 var _ = BeforeEach(func() {

@@ -125,14 +125,14 @@
       <h4>Headers</h4>
       <pre class="request headers">Authorization: bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ1c2VyX2lkIjoidWFhLWlkLTQzNiIsImVtYWlsIjoiZW1haWwtMjk4QHNvbWVkb21haW4uY29tIiwic2NvcGUiOlsiY2xvdWRfY29udHJvbGxlci5hZG1pbiJdLCJhdWQiOlsiY2xvdWRfY29udHJvbGxlciJdLCJleHAiOjE0NjYwMDg5MDR9.Drb95OrpnnuZVfBRnT7lcHIG3h9cPlqab07kiMUJq64
 Host: example.org
-Content-Type: application/x-www-form-urlencoded
+Content-Type: application/json
 Cookie: </pre>
 
         <h4>cURL</h4>
         <pre class="request curl">curl &quot;https://api.[your-domain.com]/v2/apps/87dbb133-f9c6-4588-aeea-71d6430f444c/routes/45dbe96e-9ee4-4d48-8b3c-811380f37b31&quot; -d &#39;&#39; -X PUT \
 	-H &quot;Authorization: bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ1c2VyX2lkIjoidWFhLWlkLTQzNiIsImVtYWlsIjoiZW1haWwtMjk4QHNvbWVkb21haW4uY29tIiwic2NvcGUiOlsiY2xvdWRfY29udHJvbGxlci5hZG1pbiJdLCJhdWQiOlsiY2xvdWRfY29udHJvbGxlciJdLCJleHAiOjE0NjYwMDg5MDR9.Drb95OrpnnuZVfBRnT7lcHIG3h9cPlqab07kiMUJq64&quot; \
 	-H &quot;Host: example.org&quot; \
-	-H &quot;Content-Type: application/x-www-form-urlencoded&quot; \
+	-H &quot;Content-Type: application/json&quot; \
 	-H &quot;Cookie: &quot;</pre>
 
         <h3>Response</h3>
@@ -168,18 +168,20 @@ Cookie: </pre>
     "debug": null,
     "staging_task_id": null,
     "package_state": "PENDING",
+    "health_check_http_endpoint": "",
     "health_check_type": "port",
     "health_check_timeout": null,
     "staging_failed_reason": null,
     "staging_failed_description": null,
     "diego": false,
     "docker_image": null,
+    "docker_credentials": {
+      "username": null,
+      "password": null
+    },
     "package_updated_at": "2016-06-08T16:41:44Z",
     "detected_start_command": "",
     "enable_ssh": true,
-    "docker_credentials_json": {
-      "redacted_message": "[PRIVATE DATA HIDDEN]"
-    },
     "ports": null,
     "space_url": "/v2/spaces/e852f283-7d72-4e38-815a-ce098d835ce1",
     "stack_url": "/v2/stacks/140a42ab-7f81-492c-bfad-802e0afe2d57",

@@ -1,0 +1,20 @@
+---
+packages:
+- name: php-buildpack
+  version: f8224ae90a9b5e802252433d13559faee47edf18
+  fingerprint: f8224ae90a9b5e802252433d13559faee47edf18
+  sha1: 6da6317251290d6720dbe0a80deb4e3a7efc649c
+  dependencies: []
+jobs:
+- name: php-buildpack
+  version: 29d809f43b59ffc3c2a14ac3888d7b20eb869c67
+  fingerprint: 29d809f43b59ffc3c2a14ac3888d7b20eb869c67
+  sha1: 5526a993b2a7844303f38d1866f31622ad909cc9
+license:
+  version: e6c4ccc65c76e75e2338d1edabdcf264d37ee663
+  fingerprint: e6c4ccc65c76e75e2338d1edabdcf264d37ee663
+  sha1: 81d5931daade0f6fb2b1ebd5e664311b406416e9
+commit_hash: 03890df8
+uncommitted_changes: true
+name: php-buildpack
+version: 4.3.22

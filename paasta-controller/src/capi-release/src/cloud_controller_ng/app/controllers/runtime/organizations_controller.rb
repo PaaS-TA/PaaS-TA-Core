@@ -1,18 +1,25 @@
 require 'actions/organization_delete'
-require 'queries/organization_user_roles_fetcher'
-require 'messages/isolation_segments_list_message'
+require 'fetchers/organization_user_roles_fetcher'
 
 module VCAP::CloudController
   class OrganizationsController < RestController::ModelController
     def self.dependencies
-      [:username_and_roles_populating_collection_renderer, :username_lookup_uaa_client, :services_event_repository]
+      [
+        :username_and_roles_populating_collection_renderer,
+        :uaa_client,
+        :services_event_repository,
+        :user_event_repository,
+        :organization_event_repository
+      ]
     end
 
     def inject_dependencies(dependencies)
       super
       @user_roles_collection_renderer = dependencies.fetch(:username_and_roles_populating_collection_renderer)
-      @username_lookup_uaa_client = dependencies.fetch(:username_lookup_uaa_client)
+      @uaa_client = dependencies.fetch(:uaa_client)
       @services_event_repository = dependencies.fetch(:services_event_repository)
+      @user_event_repository = dependencies.fetch(:user_event_repository)
+      @organization_event_repository = dependencies.fetch(:organization_event_repository)
     end
 
     define_attributes do
@@ -52,18 +59,44 @@ module VCAP::CloudController
       end
     end
 
-    def before_update(obj)
+    def before_update(org)
       if request_attrs['default_isolation_segment_guid']
-        isolation_segment_guids = obj.isolation_segment_models.map(&:guid)
-        unless isolation_segment_guids.include?(request_attrs['default_isolation_segment_guid'])
-          raise CloudController::Errors::ApiError.new_from_details('InvalidRelation',
-            "Organization does not have access to Isolation Segment with guid: #{request_attrs['default_isolation_segment_guid']}")
+        unless IsolationSegmentModel.first(guid: request_attrs['default_isolation_segment_guid'])
+          raise CloudController::Errors::ApiError.new_from_details(
+            'ResourceNotFound',
+            'Could not find Isolation Segment to set as the default.')
         end
-
-        obj.check_spaces_without_isolation_segments_empty!('Setting')
       end
 
-      super(obj)
+      super(org)
+    end
+
+    def update(guid)
+      json_msg = self.class::UpdateMessage.decode(body)
+      @request_attrs = json_msg.extract(stringify_keys: true)
+      logger.debug 'cc.update', guid: guid, attributes: redact_attributes(:update, request_attrs)
+      raise InvalidRequest unless request_attrs
+
+      org = find_guid(guid)
+
+      before_update(org)
+
+      current_role_guids = {}
+
+      model.db.transaction do
+        org.lock!
+
+        current_role_guids = get_current_role_guids(org)
+
+        validate_access(:read_for_update, org, request_attrs)
+        org.update_from_hash(request_attrs)
+        validate_access(:update, org, request_attrs)
+      end
+
+      generate_role_events_on_update(org, current_role_guids)
+      after_update(org)
+
+      [HTTP::CREATED, object_renderer.render_json(self.class, org, @opts)]
     end
 
     get '/v2/organizations/:guid/user_roles', :enumerate_user_roles
@@ -126,12 +159,13 @@ module VCAP::CloudController
     get '/v2/organizations/:guid/memory_usage', :get_memory_usage
     def get_memory_usage(guid)
       org = find_guid_and_validate_access(:read, guid)
-      [HTTP::OK, MultiJson.dump({ memory_usage_in_mb: OrganizationMemoryCalculator.get_memory_usage(org) })]
+      [HTTP::OK, MultiJson.dump({ memory_usage_in_mb: org.memory_used })]
     end
 
     [:user, :manager, :billing_manager, :auditor].each do |role|
       plural_role = role.to_s.pluralize
 
+      put "/v2/organizations/:guid/#{plural_role}/:user_id", "add_#{role}_by_user_id".to_sym
       put "/v2/organizations/:guid/#{plural_role}", "add_#{role}_by_username".to_sym
 
       define_method("add_#{role}_by_username") do |guid|
@@ -140,7 +174,7 @@ module VCAP::CloudController
         username = parse_and_validate_json(body)['username']
 
         begin
-          user_id = @username_lookup_uaa_client.id_for_username(username)
+          user_id = @uaa_client.id_for_username(username)
         rescue UaaUnavailable
           raise CloudController::Errors::ApiError.new_from_details('UaaUnavailable')
         rescue UaaEndpointDisabled
@@ -148,18 +182,18 @@ module VCAP::CloudController
         end
         raise CloudController::Errors::ApiError.new_from_details('UserNotFound', username) unless user_id
 
-        user = User.where(guid: user_id).first || User.create(guid: user_id)
+        add_role(guid, role, user_id, username)
+      end
 
-        org = find_guid_and_validate_access(:update, guid)
-        org.send("add_#{role}", user)
-
-        [HTTP::CREATED, object_renderer.render_json(self.class, org, @opts)]
+      define_method("add_#{role}_by_user_id") do |guid, user_id|
+        add_role(guid, role, user_id, '')
       end
     end
 
     [:user, :manager, :billing_manager, :auditor].each do |role|
       plural_role = role.to_s.pluralize
 
+      delete "/v2/organizations/:guid/#{plural_role}/:user_id", "remove_#{role}_by_user_id".to_sym
       delete "/v2/organizations/:guid/#{plural_role}", "remove_#{role}_by_username".to_sym
 
       define_method("remove_#{role}_by_username") do |guid|
@@ -168,7 +202,7 @@ module VCAP::CloudController
         username = parse_and_validate_json(body)['username']
 
         begin
-          user_id = @username_lookup_uaa_client.id_for_username(username)
+          user_id = @uaa_client.id_for_username(username)
         rescue UaaUnavailable
           raise CloudController::Errors::ApiError.new_from_details('UaaUnavailable')
         rescue UaaEndpointDisabled
@@ -188,7 +222,32 @@ module VCAP::CloudController
           org.send("remove_#{role}", user)
         end
 
+        @user_event_repository.record_organization_role_remove(
+          org,
+          user,
+          role,
+          UserAuditInfo.from_context(SecurityContext),
+          request_attrs
+        )
+
         [HTTP::NO_CONTENT]
+      end
+
+      define_method("remove_#{role}_by_user_id") do |guid, user_id|
+        response = remove_related(guid, "#{role}s".to_sym, user_id, Organization)
+
+        user = User.first(guid: user_id)
+        user.username = '' unless user.username
+
+        @user_event_repository.record_organization_role_remove(
+          Organization.first(guid: guid),
+          user,
+          role.to_s,
+          UserAuditInfo.from_context(SecurityContext),
+          {}
+        )
+
+        response
       end
     end
 
@@ -200,9 +259,13 @@ module VCAP::CloudController
         raise CloudController::Errors::ApiError.new_from_details('AssociationNotEmpty', 'spaces', Organization.table_name)
       end
 
-      delete_action = OrganizationDelete.new(SpaceDelete.new(current_user.guid, current_user_email, @services_event_repository))
+      delete_action = OrganizationDelete.new(SpaceDelete.new(UserAuditInfo.from_context(SecurityContext), @services_event_repository))
       deletion_job = VCAP::CloudController::Jobs::DeleteActionJob.new(Organization, guid, delete_action)
-      enqueue_deletion_job(deletion_job)
+      response = enqueue_deletion_job(deletion_job)
+
+      @organization_event_repository.record_organization_delete_request(org, UserAuditInfo.from_context(SecurityContext), request_attrs)
+
+      response
     end
 
     def remove_related(guid, name, other_guid, find_model=model)
@@ -217,6 +280,19 @@ module VCAP::CloudController
 
         super(guid, name, other_guid, find_model)
       end
+    end
+
+    delete '/v2/organizations/:guid/default_isolation_segment', :delete_default_isolation_segment
+    def delete_default_isolation_segment(guid)
+      org = find_guid_and_validate_access(:update, guid)
+      validate_access(:update, org, nil)
+
+      org.db.transaction do
+        org.lock!
+        org.update(default_isolation_segment_guid: nil)
+      end
+
+      [HTTP::OK, object_renderer.render_json(self.class, org, @opts)]
     end
 
     put '/v2/organizations/:guid/private_domains/:domain_guid', :share_domain
@@ -235,33 +311,119 @@ module VCAP::CloudController
       [HTTP::MOVED_PERMANENTLY, headers, 'Use DELETE /v2/private_domains/:domain_guid']
     end
 
-    get '/v2/organizations/:guid/isolation_segments', :list_isolation_segments
-    def list_isolation_segments(guid)
-      org = find_guid_and_validate_access(:read, guid)
-
-      dataset = IsolationSegmentModel.dataset.where(organizations: org)
-      message = IsolationSegmentsListMessage.from_params(@params)
-
-      [HTTP::OK, MultiJson.dump(Presenters::V3::PaginatedListPresenter.new(
-        dataset: dataset,
-        path: "/v2/organizations/#{org.guid}/isolation_segments",
-        message: message
-      ).to_hash)]
-    end
-
     define_messages
     define_routes
 
     private
+
+    def add_role(guid, role, user_id, username)
+      user = User.first(guid: user_id) || User.create(guid: user_id)
+
+      user.username = username
+
+      org = find_guid_and_validate_access(:update, guid)
+      org.send("add_#{role}", user)
+
+      @user_event_repository.record_organization_role_add(org, user, role, UserAuditInfo.from_context(SecurityContext), request_attrs)
+
+      [HTTP::CREATED, object_renderer.render_json(self.class, org, @opts)]
+    end
 
     def user_guid_parameter
       @opts[:q][0].split(':')[1] if @opts[:q]
     end
 
     def after_create(organization)
-      return if SecurityContext.admin?
-      organization.add_user(user)
-      organization.add_manager(user)
+      user_audit_info = UserAuditInfo.from_context(SecurityContext)
+
+      @organization_event_repository.record_organization_create(organization, user_audit_info, request_attrs)
+      unless SecurityContext.admin?
+        organization.add_user(user)
+        organization.add_manager(user)
+      end
+
+      organization.users.each do |user|
+        @user_event_repository.record_organization_role_add(organization, user, 'user', user_audit_info, request_attrs)
+      end
+
+      organization.auditors.each do |auditor|
+        @user_event_repository.record_organization_role_add(organization, auditor, 'auditor', user_audit_info, request_attrs)
+      end
+
+      organization.billing_managers.each do |billing_manager|
+        @user_event_repository.record_organization_role_add(organization, billing_manager, 'billing_manager', user_audit_info, request_attrs)
+      end
+
+      organization.managers.each do |manager|
+        @user_event_repository.record_organization_role_add(organization, manager, 'manager', user_audit_info, request_attrs)
+      end
+    end
+
+    def after_update(organization)
+      @organization_event_repository.record_organization_update(organization, UserAuditInfo.from_context(SecurityContext), request_attrs)
+      super(organization)
+    end
+
+    def get_current_role_guids(org)
+      current_role_guids = {}
+
+      %w(user manager billing_manager auditor).each do |role|
+        key = "#{role}_guids"
+
+        if request_attrs[key]
+          current_role_guids[role] = []
+          org.send(role.pluralize.to_sym).each do |user|
+            current_role_guids[role] << user.guid
+          end
+        end
+      end
+
+      current_role_guids
+    end
+
+    def generate_role_events_on_update(organization, current_role_guids)
+      user_audit_info = UserAuditInfo.from_context(SecurityContext)
+
+      %w(manager auditor user billing_manager).each do |role|
+        key = "#{role}_guids"
+
+        user_guids_removed = []
+
+        if request_attrs[key]
+          user_guids_added = request_attrs[key]
+
+          if current_role_guids[role]
+            user_guids_added = request_attrs[key] - current_role_guids[role]
+            user_guids_removed = current_role_guids[role] - request_attrs[key]
+          end
+
+          user_guids_added.each do |user_id|
+            user = User.first(guid: user_id) || User.create(guid: user_id)
+            user.username = '' unless user.username
+
+            @user_event_repository.record_organization_role_add(
+              organization,
+                user,
+                role,
+                user_audit_info,
+                request_attrs
+            )
+          end
+
+          user_guids_removed.each do |user_id|
+            user = User.first(guid: user_id)
+            user.username = '' unless user.username
+
+            @user_event_repository.record_organization_role_remove(
+              organization,
+                user,
+                role,
+                user_audit_info,
+                request_attrs
+            )
+          end
+        end
+      end
     end
   end
 end

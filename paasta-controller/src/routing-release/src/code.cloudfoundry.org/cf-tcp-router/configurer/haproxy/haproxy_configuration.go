@@ -4,16 +4,15 @@ import (
 	"bytes"
 	"fmt"
 
-	"code.cloudfoundry.org/cf-tcp-router"
 	"code.cloudfoundry.org/cf-tcp-router/models"
 )
 
 func BackendServerInfoToHaProxyConfig(bs models.BackendServerInfo) (string, error) {
 	if bs.Address == "" {
-		return "", cf_tcp_router.ErrInvalidField{Field: "backend_server.address"}
+		return "", ErrInvalidField{Field: "backend_server.address"}
 	}
 	if bs.Port == 0 {
-		return "", cf_tcp_router.ErrInvalidField{Field: "backend_server.port"}
+		return "", ErrInvalidField{Field: "backend_server.port"}
 	}
 	name := fmt.Sprintf("server_%s_%d", bs.Address, bs.Port)
 	return fmt.Sprintf("server %s %s:%d\n", name, bs.Address, bs.Port), nil
@@ -21,10 +20,10 @@ func BackendServerInfoToHaProxyConfig(bs models.BackendServerInfo) (string, erro
 
 func RoutingTableEntryToHaProxyConfig(routingKey models.RoutingKey, routingTableEntry models.RoutingTableEntry) (string, error) {
 	if routingKey.Port == 0 {
-		return "", cf_tcp_router.ErrInvalidField{Field: "listen_configuration.port"}
+		return "", ErrInvalidField{Field: "listen_configuration.port"}
 	}
 	if len(routingTableEntry.Backends) == 0 {
-		return "", cf_tcp_router.ErrInvalidField{Field: "listen_configuration.backends"}
+		return "", ErrInvalidField{Field: "listen_configuration.backends"}
 	}
 	name := fmt.Sprintf("listen_cfg_%d", routingKey.Port)
 	var buff bytes.Buffer
@@ -39,4 +38,12 @@ func RoutingTableEntryToHaProxyConfig(routingKey models.RoutingKey, routingTable
 		buff.WriteString(fmt.Sprintf("  %s", str))
 	}
 	return buff.String(), nil
+}
+
+type ErrInvalidField struct {
+	Field string
+}
+
+func (err ErrInvalidField) Error() string {
+	return "Invalid field: " + err.Field
 }

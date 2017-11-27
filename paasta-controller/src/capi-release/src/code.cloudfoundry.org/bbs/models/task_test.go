@@ -77,7 +77,13 @@ var _ = Describe("Task", func() {
 				"log": false
 			}
 		],
-		"completion_callback_url":"http://user:password@a.b.c/d/e/f"
+		"completion_callback_url":"http://user:password@a.b.c/d/e/f",
+		"max_pids": 256,
+		"certificate_properties": {
+			"organizational_unit": ["stuff"]
+		},
+		"image_username": "jake",
+		"image_password": "thedog"
 	}`
 
 		task = models.Task{
@@ -99,6 +105,7 @@ var _ = Describe("Task", func() {
 				}),
 				MemoryMb:    256,
 				DiskMb:      1024,
+				MaxPids:     256,
 				CpuWeight:   42,
 				Privileged:  true,
 				LogGuid:     "123",
@@ -131,6 +138,11 @@ var _ = Describe("Task", func() {
 					},
 				},
 				CompletionCallbackUrl: "http://user:password@a.b.c/d/e/f",
+				CertificateProperties: &models.CertificateProperties{
+					OrganizationalUnit: []string{"stuff"},
+				},
+				ImageUsername: "jake",
+				ImagePassword: "thedog",
 			},
 			TaskGuid:         "some-guid",
 			Domain:           "some-domain",
@@ -487,6 +499,21 @@ var _ = Describe("Task", func() {
 				},
 			},
 			{
+				"max_pids",
+				&models.Task{
+					Domain:   "some-domain",
+					TaskGuid: "task-guid",
+					TaskDefinition: &models.TaskDefinition{
+						RootFs: "some:rootfs",
+						Action: models.WrapAction(&models.RunAction{
+							Path: "ls",
+							User: "me",
+						}),
+						MaxPids: -1,
+					},
+				},
+			},
+			{
 				"egress_rules",
 				&models.Task{
 					Domain:   "some-domain",
@@ -549,6 +576,38 @@ var _ = Describe("Task", func() {
 								ChecksumValue:     "some value",
 							},
 						},
+					},
+				},
+			},
+			{
+				"image_username",
+				&models.Task{
+					Domain:   "some-domain",
+					TaskGuid: "task-guid",
+					TaskDefinition: &models.TaskDefinition{
+						RootFs: "some:rootfs",
+						Action: models.WrapAction(&models.RunAction{
+							Path: "ls",
+							User: "me",
+						}),
+						ImageUsername: "",
+						ImagePassword: "thedog",
+					},
+				},
+			},
+			{
+				"image_password",
+				&models.Task{
+					Domain:   "some-domain",
+					TaskGuid: "task-guid",
+					TaskDefinition: &models.TaskDefinition{
+						RootFs: "some:rootfs",
+						Action: models.WrapAction(&models.RunAction{
+							Path: "ls",
+							User: "me",
+						}),
+						ImageUsername: "jake",
+						ImagePassword: "",
 					},
 				},
 			},

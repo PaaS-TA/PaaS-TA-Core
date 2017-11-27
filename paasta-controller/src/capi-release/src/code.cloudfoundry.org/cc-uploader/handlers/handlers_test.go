@@ -81,7 +81,6 @@ var _ = Describe("Handlers", func() {
 			timeClicker = make(chan time.Time, 4)
 			fakeCloudController.AppendHandlers(ghttp.CombineHandlers(
 				ghttp.VerifyRequest("POST", "/staging/droplet/app-guid/upload"),
-				ghttp.VerifyBasicAuth("bob", "password"),
 				ghttp.RespondWithPtr(&postStatusCode, &postResponseBody),
 				func(w http.ResponseWriter, r *http.Request) {
 					uploadedHeaders = r.Header
@@ -97,7 +96,6 @@ var _ = Describe("Handlers", func() {
 			uploadURL, err = url.Parse(fakeCloudController.URL())
 			Expect(err).NotTo(HaveOccurred())
 
-			uploadURL.User = url.UserPassword("bob", "password")
 			uploadURL.Path = "/staging/droplet/app-guid/upload"
 			uploadURL.RawQuery = url.Values{"async": []string{"true"}}.Encode()
 		})
@@ -208,7 +206,6 @@ var _ = Describe("Handlers", func() {
 
 			fakeCloudController.AppendHandlers(ghttp.CombineHandlers(
 				ghttp.VerifyRequest("POST", "/staging/buildpack_cache/app-guid/upload"),
-				ghttp.VerifyBasicAuth("bob", "password"),
 				ghttp.RespondWithPtr(&postStatusCode, &postResponseBody),
 				func(w http.ResponseWriter, r *http.Request) {
 					uploadedHeaders = r.Header
@@ -224,7 +221,6 @@ var _ = Describe("Handlers", func() {
 			uploadURL, err = url.Parse(fakeCloudController.URL())
 			Expect(err).NotTo(HaveOccurred())
 
-			uploadURL.User = url.UserPassword("bob", "password")
 			uploadURL.Path = "/staging/buildpack_cache/app-guid/upload"
 		})
 

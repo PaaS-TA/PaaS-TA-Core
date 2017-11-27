@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package loggregator.v2;
+
+import "envelope.proto";
+
+service Egress {
+  rpc Receiver(EgressRequest) returns (stream loggregator.v2.Envelope) {}
+}
+
+message EgressRequest {
+  string shard_id = 1;
+  Filter filter = 2;
+}
+
+message Filter {
+  string source_id = 1;
+}

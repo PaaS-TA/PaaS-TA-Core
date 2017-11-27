@@ -30,7 +30,7 @@ var _ = Describe("Client", func() {
 		TCP_CREATE_ROUTE_MAPPINGS_API_URL = "/routing/v1/tcp_routes/create"
 		TCP_DELETE_ROUTE_MAPPINGS_API_URL = "/routing/v1/tcp_routes/delete"
 		TCP_ROUTES_API_URL                = "/routing/v1/tcp_routes"
-		TCP_ROUTER_GROUPS_API_URL         = "/routing/v1/router_groups"
+		ROUTER_GROUPS_API_URL             = "/routing/v1/router_groups"
 		EVENTS_SSE_URL                    = "/routing/v1/events"
 		TCP_EVENTS_SSE_URL                = "/routing/v1/tcp_routes/events"
 	)
@@ -547,16 +547,27 @@ var _ = Describe("Client", func() {
 				)
 			})
 
-			It("Sends a ListRoutes request to the server", func() {
+			It("sends a ListRoutes request to the server", func() {
 				routes, err = client.TcpRouteMappings()
 				Expect(err).NotTo(HaveOccurred())
 				Expect(server.ReceivedRequests()).Should(HaveLen(1))
+				Expect(routes).To(Equal([]models.TcpRouteMapping{tcpRouteMapping1, tcpRouteMapping2}))
 			})
 
-			It("gets a list of routes from the server", func() {
-				routes, err = client.TcpRouteMappings()
+			It("can filter routes from the server", func() {
+				tcpRouteMapping1.IsolationSegment = "is1"
+
+				data, _ = json.Marshal([]models.TcpRouteMapping{tcpRouteMapping1})
+				server.SetHandler(0,
+					ghttp.CombineHandlers(
+						ghttp.VerifyRequest("GET", TCP_ROUTES_API_URL, "isolation_segment=is1"),
+						ghttp.RespondWith(http.StatusOK, data),
+					),
+				)
+				routes, err = client.FilteredTcpRouteMappings([]string{"is1"})
 				Expect(err).NotTo(HaveOccurred())
-				Expect(routes).To(Equal([]models.TcpRouteMapping{tcpRouteMapping1, tcpRouteMapping2}))
+				Expect(server.ReceivedRequests()).Should(HaveLen(1))
+				Expect(routes).To(Equal([]models.TcpRouteMapping{tcpRouteMapping1}))
 			})
 
 			It("does not send a body in the request", func() {
@@ -645,7 +656,7 @@ var _ = Describe("Client", func() {
 
 				server.AppendHandlers(
 					ghttp.CombineHandlers(
-						ghttp.VerifyRequest("GET", TCP_ROUTER_GROUPS_API_URL),
+						ghttp.VerifyRequest("GET", ROUTER_GROUPS_API_URL),
 						ghttp.RespondWith(http.StatusOK, data),
 					),
 				)
@@ -666,7 +677,7 @@ var _ = Describe("Client", func() {
 			It("does not send a body in the request", func() {
 				server.SetHandler(0,
 					ghttp.CombineHandlers(
-						ghttp.VerifyRequest("GET", TCP_ROUTER_GROUPS_API_URL),
+						ghttp.VerifyRequest("GET", ROUTER_GROUPS_API_URL),
 						ghttp.VerifyBody([]byte{}),
 						ghttp.RespondWith(http.StatusOK, data),
 					),
@@ -684,7 +695,7 @@ var _ = Describe("Client", func() {
 				log := string(r)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(log).To(ContainSubstring("REQUEST: "))
-				Expect(log).To(ContainSubstring("GET " + TCP_ROUTER_GROUPS_API_URL + " HTTP/1.1"))
+				Expect(log).To(ContainSubstring("GET " + ROUTER_GROUPS_API_URL + " HTTP/1.1"))
 
 				Expect(log).To(ContainSubstring("RESPONSE: "))
 				Expect(log).To(ContainSubstring("HTTP/1.1 200 OK"))
@@ -696,7 +707,7 @@ var _ = Describe("Client", func() {
 			BeforeEach(func() {
 				server.AppendHandlers(
 					ghttp.CombineHandlers(
-						ghttp.VerifyRequest("GET", TCP_ROUTER_GROUPS_API_URL),
+						ghttp.VerifyRequest("GET", ROUTER_GROUPS_API_URL),
 						ghttp.RespondWith(http.StatusInternalServerError, nil),
 					),
 				)
@@ -717,7 +728,97 @@ var _ = Describe("Client", func() {
 				log := string(r)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(log).To(ContainSubstring("REQUEST: "))
-				Expect(log).To(ContainSubstring("GET " + TCP_ROUTER_GROUPS_API_URL + " HTTP/1.1"))
+				Expect(log).To(ContainSubstring("GET " + ROUTER_GROUPS_API_URL + " HTTP/1.1"))
+
+				Expect(log).To(ContainSubstring("RESPONSE: "))
+				Expect(log).To(ContainSubstring("HTTP/1.1 500 Internal Server Error"))
+				Expect(log).NotTo(ContainSubstring(string(expectedBody)))
+			})
+		})
+	})
+
+	Context("RouterGroupWithName", func() {
+		var (
+			routerGroup1 models.RouterGroup
+			data         []byte
+		)
+
+		BeforeEach(func() {
+			routerGroup1 = models.RouterGroup{
+				Guid:            DefaultRouterGroupGuid,
+				Name:            "pineapple",
+				Type:            DefaultRouterGroupType,
+				ReservablePorts: "1024-65535",
+			}
+		})
+
+		Context("when the server returns a valid response", func() {
+			BeforeEach(func() {
+				data, _ = json.Marshal([]models.RouterGroup{routerGroup1})
+
+				server.AppendHandlers(
+					ghttp.CombineHandlers(
+						ghttp.VerifyRequest("GET", ROUTER_GROUPS_API_URL, "name=pineapple"),
+						ghttp.RespondWith(http.StatusOK, data),
+					),
+				)
+			})
+
+			It("Sends a ListRouterGroups request to the server with the name query", func() {
+				_, err := client.RouterGroupWithName("pineapple")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(server.ReceivedRequests()).Should(HaveLen(1))
+			})
+
+			It("gets the router group with the name from the server", func() {
+				routerGroup, err := client.RouterGroupWithName("pineapple")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(routerGroup).To(Equal(routerGroup1))
+			})
+
+			It("logs the request and response", func() {
+				_, err := client.RouterGroupWithName("pineapple")
+				Expect(err).NotTo(HaveOccurred())
+				expectedBody, _ := json.Marshal(routerGroup1)
+
+				r, err := ioutil.ReadAll(stdout)
+				log := string(r)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(log).To(ContainSubstring("REQUEST: "))
+				Expect(log).To(ContainSubstring("GET " + ROUTER_GROUPS_API_URL + "?name=pineapple HTTP/1.1"))
+
+				Expect(log).To(ContainSubstring("RESPONSE: "))
+				Expect(log).To(ContainSubstring("HTTP/1.1 200 OK"))
+				Expect(log).To(ContainSubstring(string(expectedBody)))
+			})
+		})
+
+		Context("When the server returns an error", func() {
+			BeforeEach(func() {
+				server.AppendHandlers(
+					ghttp.CombineHandlers(
+						ghttp.VerifyRequest("GET", ROUTER_GROUPS_API_URL, "name=pineapple"),
+						ghttp.RespondWith(http.StatusInternalServerError, nil),
+					),
+				)
+			})
+
+			It("returns an error", func() {
+				routerGroup, err := client.RouterGroupWithName("pineapple")
+				Expect(err).To(HaveOccurred())
+				Expect(routerGroup).To(Equal(models.RouterGroup{}))
+			})
+
+			It("logs the request and response", func() {
+				_, err := client.RouterGroupWithName("pineapple")
+				Expect(err).To(HaveOccurred())
+				expectedBody, _ := json.Marshal(routerGroup1)
+
+				r, err := ioutil.ReadAll(stdout)
+				log := string(r)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(log).To(ContainSubstring("REQUEST: "))
+				Expect(log).To(ContainSubstring("GET " + ROUTER_GROUPS_API_URL + "?name=pineapple HTTP/1.1"))
 
 				Expect(log).To(ContainSubstring("RESPONSE: "))
 				Expect(log).To(ContainSubstring("HTTP/1.1 500 Internal Server Error"))
@@ -747,7 +848,7 @@ var _ = Describe("Client", func() {
 
 				server.AppendHandlers(
 					ghttp.CombineHandlers(
-						ghttp.VerifyRequest("PUT", fmt.Sprintf("%s/%s", TCP_ROUTER_GROUPS_API_URL, routerGroup1.Guid)),
+						ghttp.VerifyRequest("PUT", fmt.Sprintf("%s/%s", ROUTER_GROUPS_API_URL, routerGroup1.Guid)),
 						ghttp.RespondWith(http.StatusOK, data),
 					),
 				)
@@ -763,7 +864,7 @@ var _ = Describe("Client", func() {
 			BeforeEach(func() {
 				server.AppendHandlers(
 					ghttp.CombineHandlers(
-						ghttp.VerifyRequest("PUT", fmt.Sprintf("%s/%s", TCP_ROUTER_GROUPS_API_URL, routerGroup1.Guid)),
+						ghttp.VerifyRequest("PUT", fmt.Sprintf("%s/%s", ROUTER_GROUPS_API_URL, routerGroup1.Guid)),
 						ghttp.RespondWith(http.StatusInternalServerError, nil),
 					),
 				)
@@ -771,6 +872,64 @@ var _ = Describe("Client", func() {
 
 			It("returns an error", func() {
 				err = client.UpdateRouterGroup(routerGroup1)
+				Expect(err).To(HaveOccurred())
+			})
+		})
+	})
+
+	Context("CreateRouterGroup", func() {
+
+		var (
+			err          error
+			routerGroup1 models.RouterGroup
+			routerGroup2 models.RouterGroup
+		)
+
+		BeforeEach(func() {
+			routerGroup1 = models.RouterGroup{
+				Name:            DefaultRouterGroupName,
+				Type:            DefaultRouterGroupType,
+				ReservablePorts: "4000-5000",
+			}
+			routerGroup2 = models.RouterGroup{
+				Name: DefaultRouterGroupName,
+				Type: "http",
+			}
+		})
+
+		Context("when the server returns a valid response", func() {
+			BeforeEach(func() {
+				data, _ := json.Marshal(routerGroup1)
+
+				server.AppendHandlers(
+					ghttp.CombineHandlers(
+						ghttp.VerifyBody(data),
+						ghttp.VerifyRequest("POST", ROUTER_GROUPS_API_URL),
+						ghttp.RespondWith(http.StatusCreated, data),
+					),
+				)
+			})
+
+			It("Sends a UpdateRouterGroup request to the server", func() {
+				err = client.CreateRouterGroup(routerGroup1)
+				Expect(server.ReceivedRequests()).Should(HaveLen(1))
+			})
+		})
+
+		Context("When the server returns an error", func() {
+			BeforeEach(func() {
+				data, _ := json.Marshal(routerGroup2)
+				server.AppendHandlers(
+					ghttp.CombineHandlers(
+						ghttp.VerifyBody(data),
+						ghttp.VerifyRequest("POST", ROUTER_GROUPS_API_URL),
+						ghttp.RespondWith(http.StatusInternalServerError, nil),
+					),
+				)
+			})
+
+			It("returns an error", func() {
+				err = client.CreateRouterGroup(routerGroup2)
 				Expect(err).To(HaveOccurred())
 			})
 		})

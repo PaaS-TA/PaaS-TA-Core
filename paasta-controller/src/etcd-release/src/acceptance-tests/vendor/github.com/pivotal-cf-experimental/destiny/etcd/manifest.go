@@ -58,6 +58,9 @@ func NewTLSManifest(config Config, iaasConfig iaas.Config) (Manifest, error) {
 				{
 					Name:    "consul_agent",
 					Release: "consul",
+					Consumes: core.JobConsumes{
+						Consul: "nil",
+					},
 				},
 			},
 		},
@@ -70,6 +73,9 @@ func NewTLSManifest(config Config, iaasConfig iaas.Config) (Manifest, error) {
 				{
 					Name:    "consul_agent",
 					Release: "consul",
+					Consumes: core.JobConsumes{
+						Consul: "nil",
+					},
 				}}, job.Templates...)
 			job.Properties = &core.JobProperties{
 				Consul: &core.JobPropertiesConsul{
@@ -86,6 +92,9 @@ func NewTLSManifest(config Config, iaasConfig iaas.Config) (Manifest, error) {
 				{
 					Name:    "consul_agent",
 					Release: "consul",
+					Consumes: core.JobConsumes{
+						Consul: "nil",
+					},
 				}}, job.Templates...)
 		}
 
@@ -165,7 +174,7 @@ func NewManifest(config Config, iaasConfig iaas.Config) (Manifest, error) {
 		Network:             etcdNetwork1.Name,
 		ReuseCompilationVMs: true,
 		Workers:             3,
-		CloudProperties:     iaasConfig.Compilation(),
+		CloudProperties:     iaasConfig.Compilation("us-east-1a"),
 	}
 
 	update := core.Update{

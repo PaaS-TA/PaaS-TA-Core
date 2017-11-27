@@ -40,6 +40,16 @@ type FakeDB struct {
 		result1 []models.TcpRouteMapping
 		result2 error
 	}
+	ReadFilteredTcpRouteMappingsStub        func(columnName string, values []string) ([]models.TcpRouteMapping, error)
+	readFilteredTcpRouteMappingsMutex       sync.RWMutex
+	readFilteredTcpRouteMappingsArgsForCall []struct {
+		columnName string
+		values     []string
+	}
+	readFilteredTcpRouteMappingsReturns struct {
+		result1 []models.TcpRouteMapping
+		result2 error
+	}
 	SaveTcpRouteMappingStub        func(tcpMapping models.TcpRouteMapping) error
 	saveTcpRouteMappingMutex       sync.RWMutex
 	saveTcpRouteMappingArgsForCall []struct {
@@ -72,12 +82,24 @@ type FakeDB struct {
 		result1 models.RouterGroup
 		result2 error
 	}
+	ReadRouterGroupByNameStub        func(name string) (models.RouterGroup, error)
+	readRouterGroupByNameMutex       sync.RWMutex
+	readRouterGroupByNameArgsForCall []struct {
+		name string
+	}
+	readRouterGroupByNameReturns struct {
+		result1 models.RouterGroup
+		result2 error
+	}
 	SaveRouterGroupStub        func(routerGroup models.RouterGroup) error
 	saveRouterGroupMutex       sync.RWMutex
 	saveRouterGroupArgsForCall []struct {
 		routerGroup models.RouterGroup
 	}
 	saveRouterGroupReturns struct {
+		result1 error
+	}
+	saveRouterGroupReturnsOnCall map[int]struct {
 		result1 error
 	}
 	CancelWatchesStub        func()
@@ -93,14 +115,11 @@ type FakeDB struct {
 		result2 <-chan error
 		result3 context.CancelFunc
 	}
-	invocations      map[string][][]interface{}
-	invocationsMutex sync.RWMutex
 }
 
 func (fake *FakeDB) ReadRoutes() ([]models.Route, error) {
 	fake.readRoutesMutex.Lock()
 	fake.readRoutesArgsForCall = append(fake.readRoutesArgsForCall, struct{}{})
-	fake.recordInvocation("ReadRoutes", []interface{}{})
 	fake.readRoutesMutex.Unlock()
 	if fake.ReadRoutesStub != nil {
 		return fake.ReadRoutesStub()
@@ -128,7 +147,6 @@ func (fake *FakeDB) SaveRoute(route models.Route) error {
 	fake.saveRouteArgsForCall = append(fake.saveRouteArgsForCall, struct {
 		route models.Route
 	}{route})
-	fake.recordInvocation("SaveRoute", []interface{}{route})
 	fake.saveRouteMutex.Unlock()
 	if fake.SaveRouteStub != nil {
 		return fake.SaveRouteStub(route)
@@ -161,7 +179,6 @@ func (fake *FakeDB) DeleteRoute(route models.Route) error {
 	fake.deleteRouteArgsForCall = append(fake.deleteRouteArgsForCall, struct {
 		route models.Route
 	}{route})
-	fake.recordInvocation("DeleteRoute", []interface{}{route})
 	fake.deleteRouteMutex.Unlock()
 	if fake.DeleteRouteStub != nil {
 		return fake.DeleteRouteStub(route)
@@ -192,7 +209,6 @@ func (fake *FakeDB) DeleteRouteReturns(result1 error) {
 func (fake *FakeDB) ReadTcpRouteMappings() ([]models.TcpRouteMapping, error) {
 	fake.readTcpRouteMappingsMutex.Lock()
 	fake.readTcpRouteMappingsArgsForCall = append(fake.readTcpRouteMappingsArgsForCall, struct{}{})
-	fake.recordInvocation("ReadTcpRouteMappings", []interface{}{})
 	fake.readTcpRouteMappingsMutex.Unlock()
 	if fake.ReadTcpRouteMappingsStub != nil {
 		return fake.ReadTcpRouteMappingsStub()
@@ -215,12 +231,45 @@ func (fake *FakeDB) ReadTcpRouteMappingsReturns(result1 []models.TcpRouteMapping
 	}{result1, result2}
 }
 
+func (fake *FakeDB) ReadFilteredTcpRouteMappings(columnName string, values []string) ([]models.TcpRouteMapping, error) {
+	fake.readFilteredTcpRouteMappingsMutex.Lock()
+	fake.readFilteredTcpRouteMappingsArgsForCall = append(fake.readFilteredTcpRouteMappingsArgsForCall, struct {
+		columnName string
+		values     []string
+	}{columnName, values})
+	fake.readFilteredTcpRouteMappingsMutex.Unlock()
+	if fake.ReadFilteredTcpRouteMappingsStub != nil {
+		return fake.ReadFilteredTcpRouteMappingsStub(columnName, values)
+	} else {
+		return fake.readFilteredTcpRouteMappingsReturns.result1, fake.readFilteredTcpRouteMappingsReturns.result2
+	}
+}
+
+func (fake *FakeDB) ReadFilteredTcpRouteMappingsCallCount() int {
+	fake.readFilteredTcpRouteMappingsMutex.RLock()
+	defer fake.readFilteredTcpRouteMappingsMutex.RUnlock()
+	return len(fake.readFilteredTcpRouteMappingsArgsForCall)
+}
+
+func (fake *FakeDB) ReadFilteredTcpRouteMappingsArgsForCall(i int) (string, []string) {
+	fake.readFilteredTcpRouteMappingsMutex.RLock()
+	defer fake.readFilteredTcpRouteMappingsMutex.RUnlock()
+	return fake.readFilteredTcpRouteMappingsArgsForCall[i].columnName, fake.readFilteredTcpRouteMappingsArgsForCall[i].values
+}
+
+func (fake *FakeDB) ReadFilteredTcpRouteMappingsReturns(result1 []models.TcpRouteMapping, result2 error) {
+	fake.ReadFilteredTcpRouteMappingsStub = nil
+	fake.readFilteredTcpRouteMappingsReturns = struct {
+		result1 []models.TcpRouteMapping
+		result2 error
+	}{result1, result2}
+}
+
 func (fake *FakeDB) SaveTcpRouteMapping(tcpMapping models.TcpRouteMapping) error {
 	fake.saveTcpRouteMappingMutex.Lock()
 	fake.saveTcpRouteMappingArgsForCall = append(fake.saveTcpRouteMappingArgsForCall, struct {
 		tcpMapping models.TcpRouteMapping
 	}{tcpMapping})
-	fake.recordInvocation("SaveTcpRouteMapping", []interface{}{tcpMapping})
 	fake.saveTcpRouteMappingMutex.Unlock()
 	if fake.SaveTcpRouteMappingStub != nil {
 		return fake.SaveTcpRouteMappingStub(tcpMapping)
@@ -253,7 +302,6 @@ func (fake *FakeDB) DeleteTcpRouteMapping(tcpMapping models.TcpRouteMapping) err
 	fake.deleteTcpRouteMappingArgsForCall = append(fake.deleteTcpRouteMappingArgsForCall, struct {
 		tcpMapping models.TcpRouteMapping
 	}{tcpMapping})
-	fake.recordInvocation("DeleteTcpRouteMapping", []interface{}{tcpMapping})
 	fake.deleteTcpRouteMappingMutex.Unlock()
 	if fake.DeleteTcpRouteMappingStub != nil {
 		return fake.DeleteTcpRouteMappingStub(tcpMapping)
@@ -284,7 +332,6 @@ func (fake *FakeDB) DeleteTcpRouteMappingReturns(result1 error) {
 func (fake *FakeDB) ReadRouterGroups() (models.RouterGroups, error) {
 	fake.readRouterGroupsMutex.Lock()
 	fake.readRouterGroupsArgsForCall = append(fake.readRouterGroupsArgsForCall, struct{}{})
-	fake.recordInvocation("ReadRouterGroups", []interface{}{})
 	fake.readRouterGroupsMutex.Unlock()
 	if fake.ReadRouterGroupsStub != nil {
 		return fake.ReadRouterGroupsStub()
@@ -312,7 +359,6 @@ func (fake *FakeDB) ReadRouterGroup(guid string) (models.RouterGroup, error) {
 	fake.readRouterGroupArgsForCall = append(fake.readRouterGroupArgsForCall, struct {
 		guid string
 	}{guid})
-	fake.recordInvocation("ReadRouterGroup", []interface{}{guid})
 	fake.readRouterGroupMutex.Unlock()
 	if fake.ReadRouterGroupStub != nil {
 		return fake.ReadRouterGroupStub(guid)
@@ -341,12 +387,44 @@ func (fake *FakeDB) ReadRouterGroupReturns(result1 models.RouterGroup, result2 e
 	}{result1, result2}
 }
 
+func (fake *FakeDB) ReadRouterGroupByName(name string) (models.RouterGroup, error) {
+	fake.readRouterGroupByNameMutex.Lock()
+	fake.readRouterGroupByNameArgsForCall = append(fake.readRouterGroupByNameArgsForCall, struct {
+		name string
+	}{name})
+	fake.readRouterGroupByNameMutex.Unlock()
+	if fake.ReadRouterGroupByNameStub != nil {
+		return fake.ReadRouterGroupByNameStub(name)
+	} else {
+		return fake.readRouterGroupByNameReturns.result1, fake.readRouterGroupByNameReturns.result2
+	}
+}
+
+func (fake *FakeDB) ReadRouterGroupByNameCallCount() int {
+	fake.readRouterGroupByNameMutex.RLock()
+	defer fake.readRouterGroupByNameMutex.RUnlock()
+	return len(fake.readRouterGroupByNameArgsForCall)
+}
+
+func (fake *FakeDB) ReadRouterGroupByNameArgsForCall(i int) string {
+	fake.readRouterGroupByNameMutex.RLock()
+	defer fake.readRouterGroupByNameMutex.RUnlock()
+	return fake.readRouterGroupByNameArgsForCall[i].name
+}
+
+func (fake *FakeDB) ReadRouterGroupByNameReturns(result1 models.RouterGroup, result2 error) {
+	fake.ReadRouterGroupByNameStub = nil
+	fake.readRouterGroupByNameReturns = struct {
+		result1 models.RouterGroup
+		result2 error
+	}{result1, result2}
+}
+
 func (fake *FakeDB) SaveRouterGroup(routerGroup models.RouterGroup) error {
 	fake.saveRouterGroupMutex.Lock()
 	fake.saveRouterGroupArgsForCall = append(fake.saveRouterGroupArgsForCall, struct {
 		routerGroup models.RouterGroup
 	}{routerGroup})
-	fake.recordInvocation("SaveRouterGroup", []interface{}{routerGroup})
 	fake.saveRouterGroupMutex.Unlock()
 	if fake.SaveRouterGroupStub != nil {
 		return fake.SaveRouterGroupStub(routerGroup)
@@ -377,7 +455,6 @@ func (fake *FakeDB) SaveRouterGroupReturns(result1 error) {
 func (fake *FakeDB) CancelWatches() {
 	fake.cancelWatchesMutex.Lock()
 	fake.cancelWatchesArgsForCall = append(fake.cancelWatchesArgsForCall, struct{}{})
-	fake.recordInvocation("CancelWatches", []interface{}{})
 	fake.cancelWatchesMutex.Unlock()
 	if fake.CancelWatchesStub != nil {
 		fake.CancelWatchesStub()
@@ -395,7 +472,6 @@ func (fake *FakeDB) WatchChanges(watchType string) (<-chan db.Event, <-chan erro
 	fake.watchChangesArgsForCall = append(fake.watchChangesArgsForCall, struct {
 		watchType string
 	}{watchType})
-	fake.recordInvocation("WatchChanges", []interface{}{watchType})
 	fake.watchChangesMutex.Unlock()
 	if fake.WatchChangesStub != nil {
 		return fake.WatchChangesStub(watchType)
@@ -423,46 +499,6 @@ func (fake *FakeDB) WatchChangesReturns(result1 <-chan db.Event, result2 <-chan 
 		result2 <-chan error
 		result3 context.CancelFunc
 	}{result1, result2, result3}
-}
-
-func (fake *FakeDB) Invocations() map[string][][]interface{} {
-	fake.invocationsMutex.RLock()
-	defer fake.invocationsMutex.RUnlock()
-	fake.readRoutesMutex.RLock()
-	defer fake.readRoutesMutex.RUnlock()
-	fake.saveRouteMutex.RLock()
-	defer fake.saveRouteMutex.RUnlock()
-	fake.deleteRouteMutex.RLock()
-	defer fake.deleteRouteMutex.RUnlock()
-	fake.readTcpRouteMappingsMutex.RLock()
-	defer fake.readTcpRouteMappingsMutex.RUnlock()
-	fake.saveTcpRouteMappingMutex.RLock()
-	defer fake.saveTcpRouteMappingMutex.RUnlock()
-	fake.deleteTcpRouteMappingMutex.RLock()
-	defer fake.deleteTcpRouteMappingMutex.RUnlock()
-	fake.readRouterGroupsMutex.RLock()
-	defer fake.readRouterGroupsMutex.RUnlock()
-	fake.readRouterGroupMutex.RLock()
-	defer fake.readRouterGroupMutex.RUnlock()
-	fake.saveRouterGroupMutex.RLock()
-	defer fake.saveRouterGroupMutex.RUnlock()
-	fake.cancelWatchesMutex.RLock()
-	defer fake.cancelWatchesMutex.RUnlock()
-	fake.watchChangesMutex.RLock()
-	defer fake.watchChangesMutex.RUnlock()
-	return fake.invocations
-}
-
-func (fake *FakeDB) recordInvocation(key string, args []interface{}) {
-	fake.invocationsMutex.Lock()
-	defer fake.invocationsMutex.Unlock()
-	if fake.invocations == nil {
-		fake.invocations = map[string][][]interface{}{}
-	}
-	if fake.invocations[key] == nil {
-		fake.invocations[key] = [][]interface{}{}
-	}
-	fake.invocations[key] = append(fake.invocations[key], args)
 }
 
 var _ db.DB = new(FakeDB)

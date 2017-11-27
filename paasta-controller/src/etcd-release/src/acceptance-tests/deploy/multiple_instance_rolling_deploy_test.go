@@ -6,12 +6,12 @@ import (
 	"strings"
 	"time"
 
-	etcdclient "acceptance-tests/testing/etcd"
+	etcdclient "github.com/cloudfoundry-incubator/etcd-release/src/acceptance-tests/testing/etcd"
 
-	"acceptance-tests/testing/helpers"
+	"github.com/cloudfoundry-incubator/etcd-release/src/acceptance-tests/testing/helpers"
 
 	"github.com/pivotal-cf-experimental/bosh-test/bosh"
-	"github.com/pivotal-cf-experimental/destiny/etcd"
+	"github.com/pivotal-cf-experimental/destiny/ops"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -20,7 +20,9 @@ import (
 var _ = Describe("Multiple instance rolling deploys", func() {
 	MultipleInstanceRollingDeploy := func(enableSSL bool) {
 		var (
-			manifest   etcd.Manifest
+			manifest     string
+			manifestName string
+
 			etcdClient etcdclient.Client
 			spammer    *helpers.Spammer
 
@@ -35,22 +37,31 @@ var _ = Describe("Multiple instance rolling deploys", func() {
 			testKey = "etcd-key-" + guid
 			testValue = "etcd-value-" + guid
 
-			manifest, err = helpers.DeployEtcdWithInstanceCount("multiple_instance_rolling_deploy", 3, client, config, enableSSL)
+			deploymentName := "multiple-instance-rolling-deploy-non-tls"
+			if enableSSL {
+				deploymentName = "multiple-instance-rolling-deploy-tls"
+			}
+			manifest, err = helpers.DeployEtcdWithInstanceCount(deploymentName, 3, enableSSL, boshClient)
+			Expect(err).NotTo(HaveOccurred())
+
+			manifestName, err = ops.ManifestName(manifest)
 			Expect(err).NotTo(HaveOccurred())
 
 			Eventually(func() ([]bosh.VM, error) {
-				return helpers.DeploymentVMs(client, manifest.Name)
+				return helpers.DeploymentVMs(boshClient, manifestName)
 			}, "1m", "10s").Should(ConsistOf(helpers.GetVMsFromManifest(manifest)))
 
-			testConsumerIndex, err := helpers.FindJobIndexByName(manifest, "testconsumer_z1")
+			testConsumerIPs, err := helpers.GetVMIPs(boshClient, manifestName, "testconsumer")
 			Expect(err).NotTo(HaveOccurred())
-			etcdClient = etcdclient.NewClient(fmt.Sprintf("http://%s:6769", manifest.Jobs[testConsumerIndex].Networks[0].StaticIPs[0]))
+
+			etcdClient = etcdclient.NewClient(fmt.Sprintf("http://%s:6769", testConsumerIPs[0]))
+
 			spammer = helpers.NewSpammer(etcdClient, 1*time.Second, "multi-instance-rolling-deploy")
 		})
 
 		AfterEach(func() {
 			if !CurrentGinkgoTestDescription().Failed {
-				err := client.DeleteDeployment(manifest.Name)
+				err := boshClient.DeleteDeployment(manifestName)
 				Expect(err).NotTo(HaveOccurred())
 			}
 		})
@@ -62,21 +73,21 @@ var _ = Describe("Multiple instance rolling deploys", func() {
 			})
 
 			By("deploying", func() {
-				manifest.Properties.Etcd.HeartbeatIntervalInMilliseconds = 51
-
-				yaml, err := manifest.ToYAML()
-				Expect(err).NotTo(HaveOccurred())
-
-				yaml, err = client.ResolveManifestVersions(yaml)
+				var err error
+				manifest, err = ops.ApplyOp(manifest, ops.Op{
+					Type:  "replace",
+					Path:  "/instance_groups/name=etcd/properties/etcd/heartbeat_interval_in_milliseconds",
+					Value: 51,
+				})
 				Expect(err).NotTo(HaveOccurred())
 
 				spammer.Spam()
 
-				_, err = client.Deploy(yaml)
+				_, err = boshClient.Deploy([]byte(manifest))
 				Expect(err).NotTo(HaveOccurred())
 
 				Eventually(func() ([]bosh.VM, error) {
-					return helpers.DeploymentVMs(client, manifest.Name)
+					return helpers.DeploymentVMs(boshClient, manifestName)
 				}, "1m", "10s").Should(ConsistOf(helpers.GetVMsFromManifest(manifest)))
 
 				spammer.Stop()

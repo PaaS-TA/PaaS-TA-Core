@@ -1,3 +1,5 @@
+require 'models/helpers/process_types'
+
 module VCAP::CloudController
   class ServiceBinding < Sequel::Model
     include Serializer
@@ -8,11 +10,11 @@ module VCAP::CloudController
     many_to_one :service_instance, key: :service_instance_guid, primary_key: :guid, without_guid_generation: true
 
     one_through_one :v2_app,
-      class: 'VCAP::CloudController::App',
+      class: 'VCAP::CloudController::ProcessModel',
       join_table:        AppModel.table_name,
       left_primary_key:  :app_guid, left_key: :guid,
       right_primary_key: :app_guid, right_key: :guid,
-      conditions: { type: 'web' }
+      conditions: { type: ProcessTypes::WEB }
 
     encrypt :credentials, salt: :salt
     serializes_via_json :credentials
@@ -36,6 +38,7 @@ module VCAP::CloudController
       validate_cannot_change_binding
 
       validates_max_length 65_535, :volume_mounts if volume_mounts.present?
+      validates_max_length 10_000, :syslog_drain_url, allow_nil: true
 
       errors.add(:app, :invalid_relation) unless app.is_a?(AppModel)
     end

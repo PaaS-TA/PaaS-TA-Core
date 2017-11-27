@@ -1,10 +1,12 @@
 package deploy_test
 
 import (
+	"fmt"
+
 	"github.com/cloudfoundry-incubator/consul-release/src/acceptance-tests/testing/consulclient"
 	"github.com/cloudfoundry-incubator/consul-release/src/acceptance-tests/testing/helpers"
 	"github.com/pivotal-cf-experimental/bosh-test/bosh"
-	"github.com/pivotal-cf-experimental/destiny/consul"
+	"github.com/pivotal-cf-experimental/destiny/ops"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -12,8 +14,11 @@ import (
 
 var _ = Describe("Single instance rolling deploys", func() {
 	var (
-		manifest  consul.ManifestV2
-		kv        consulclient.HTTPKV
+		manifest     string
+		manifestName string
+
+		kv consulclient.HTTPKV
+
 		testKey   string
 		testValue string
 	)
@@ -25,17 +30,25 @@ var _ = Describe("Single instance rolling deploys", func() {
 		testKey = "consul-key-" + guid
 		testValue = "consul-value-" + guid
 
-		manifest, kv, err = helpers.DeployConsulWithInstanceCount("single-instance-rolling-deploy", 1, boshClient, config)
+		manifest, err = helpers.DeployConsulWithInstanceCount("single-instance-rolling-deploy", 1, config.WindowsClients, boshClient)
+		Expect(err).NotTo(HaveOccurred())
+
+		manifestName, err = ops.ManifestName(manifest)
 		Expect(err).NotTo(HaveOccurred())
 
 		Eventually(func() ([]bosh.VM, error) {
-			return helpers.DeploymentVMs(boshClient, manifest.Name)
-		}, "1m", "10s").Should(ConsistOf(helpers.GetVMsFromManifest(manifest)))
+			return helpers.DeploymentVMs(boshClient, manifestName)
+		}, "5m", "10s").Should(ConsistOf(helpers.GetVMsFromManifest(manifest)))
+
+		testConsumerIPs, err := helpers.GetVMIPs(boshClient, manifestName, "testconsumer")
+		Expect(err).NotTo(HaveOccurred())
+
+		kv = consulclient.NewHTTPKV(fmt.Sprintf("http://%s:6769", testConsumerIPs[0]))
 	})
 
 	AfterEach(func() {
 		if !CurrentGinkgoTestDescription().Failed {
-			err := boshClient.DeleteDeployment(manifest.Name)
+			err := boshClient.DeleteDeployment(manifestName)
 			Expect(err).NotTo(HaveOccurred())
 		}
 	})
@@ -47,20 +60,20 @@ var _ = Describe("Single instance rolling deploys", func() {
 		})
 
 		By("deploying", func() {
-			manifest.Properties.Consul.Agent.LogLevel = "trace"
-
-			yaml, err := manifest.ToYAML()
+			var err error
+			manifest, err = ops.ApplyOp(manifest, ops.Op{
+				Type:  "replace",
+				Path:  "/instance_groups/name=consul/properties/consul/agent/log_level?",
+				Value: "trace",
+			})
 			Expect(err).NotTo(HaveOccurred())
 
-			yaml, err = boshClient.ResolveManifestVersions(yaml)
-			Expect(err).NotTo(HaveOccurred())
-
-			_, err = boshClient.Deploy(yaml)
+			_, err = boshClient.Deploy([]byte(manifest))
 			Expect(err).NotTo(HaveOccurred())
 
 			Eventually(func() ([]bosh.VM, error) {
-				return helpers.DeploymentVMs(boshClient, manifest.Name)
-			}, "1m", "10s").Should(ConsistOf(helpers.GetVMsFromManifest(manifest)))
+				return helpers.DeploymentVMs(boshClient, manifestName)
+			}, "5m", "10s").Should(ConsistOf(helpers.GetVMsFromManifest(manifest)))
 		})
 
 		By("reading the value from consul", func() {

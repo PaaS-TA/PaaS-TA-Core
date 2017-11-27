@@ -1,6 +1,10 @@
 package db
 
-import "github.com/jinzhu/gorm"
+import (
+	"database/sql"
+
+	"github.com/jinzhu/gorm"
+)
 
 //go:generate counterfeiter -o fakes/fake_client.go . Client
 type Client interface {
@@ -17,6 +21,12 @@ type Client interface {
 	Rollback() error
 	Commit() error
 	HasTable(value interface{}) bool
+	AddUniqueIndex(indexName string, columns ...string) (Client, error)
+	RemoveIndex(indexName string) (Client, error)
+	Model(value interface{}) Client
+	Exec(query string, args ...interface{}) int64
+	Rows(tableName string) (*sql.Rows, error)
+	DropColumn(column string) error
 }
 
 type gormClient struct {
@@ -26,11 +36,29 @@ type gormClient struct {
 func NewGormClient(db *gorm.DB) Client {
 	return &gormClient{db: db}
 }
-
+func (c *gormClient) DropColumn(name string) error {
+	return c.db.DropColumn(name).Error
+}
 func (c *gormClient) Close() error {
 	return c.db.Close()
 }
+func (c *gormClient) AddUniqueIndex(indexName string, columns ...string) (Client, error) {
+	var newClient gormClient
+	newClient.db = c.db.AddUniqueIndex(indexName, columns...)
+	return &newClient, newClient.db.Error
+}
 
+func (c *gormClient) RemoveIndex(indexName string) (Client, error) {
+	var newClient gormClient
+	newClient.db = c.db.RemoveIndex(indexName)
+	return &newClient, newClient.db.Error
+}
+
+func (c *gormClient) Model(value interface{}) Client {
+	var newClient gormClient
+	newClient.db = c.db.Model(value)
+	return &newClient
+}
 func (c *gormClient) Where(query interface{}, args ...interface{}) Client {
 	var newClient gormClient
 	newClient.db = c.db.Where(query, args...)
@@ -85,4 +113,14 @@ func (c *gormClient) Commit() error {
 
 func (c *gormClient) HasTable(value interface{}) bool {
 	return c.db.HasTable(value)
+}
+
+func (c *gormClient) Exec(query string, args ...interface{}) int64 {
+	dbClient := c.db.Exec(query, args)
+	return dbClient.RowsAffected
+}
+
+func (c *gormClient) Rows(tablename string) (*sql.Rows, error) {
+	tableDb := c.db.Table(tablename)
+	return tableDb.Rows()
 }

@@ -1,0 +1,15 @@
+bin/*.sh
+!bin/test
+!bin/env
+!bin/go
+/pkg
+*.test
+*.swp
+/tmp
+*.iml
+.idea/
+tags
+.DS_Store
+*.coverprofile
+gorouter
+test_util/rss/rss

@@ -1,4 +1,4 @@
 ---
 name: php-buildpack
 files:
-- php-buildpack/php_buildpack-cached-*.zip
+- php-buildpack/php?buildpack-v*.zip

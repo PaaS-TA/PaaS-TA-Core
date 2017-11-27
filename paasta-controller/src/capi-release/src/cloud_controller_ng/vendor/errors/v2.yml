@@ -11,7 +11,7 @@
 1002:
   name: InvalidRelation
   http_code: 400
-  message: "Invalid relation: %s"
+  message: "%s"
 
 1003:
   name: InvalidContentType
@@ -61,7 +61,7 @@
 10008:
   name: UnprocessableEntity
   http_code: 422
-  message: "The request is semantically invalid: %s"
+  message: "%s"
 
 10009:
   name: UnableToPerform
@@ -143,6 +143,11 @@
   http_code: 403
   message: "Cannot remove last User in org"
 
+30007:
+  name: OrganizationAlreadySet
+  http_code: 400
+  message: 'Cannot change organization'
+
 40001:
   name: SpaceInvalid
   http_code: 400
@@ -162,26 +167,6 @@
   name: SpaceNotFound
   http_code: 404
   message: "The app space could not be found: %s"
-
-50001:
-  name: ServiceAuthTokenInvalid
-  http_code: 400
-  message: "The service auth token is invalid: %s"
-
-50002:
-  name: ServiceAuthTokenLabelTaken
-  http_code: 400
-  message: "The service auth token label is taken: %s"
-
-50003:
-  name: ServiceAuthTokenNotFound
-  http_code: 404
-  message: "The service auth token could not be found: %s"
-
-50004:
-  name: MissingServiceAuthToken
-  http_code: 500
-  message: "Missing service auth token: %s"
 
 60001:
   name: ServiceInstanceNameEmpty
@@ -371,7 +356,7 @@
 90005:
   name: UnbindableService
   http_code: 400
-  message: "The service doesn't support binding."
+  message: "The service instance doesn't support binding."
 
 90006:
   name: InvalidLoggingServiceBinding
@@ -396,7 +381,7 @@
 100005:
   name: AppMemoryQuotaExceeded
   http_code: 400
-  message: "You have exceeded your organization's memory limit."
+  message: "You have exceeded your organization's memory limit: %s"
 
 100006:
   name: AppMemoryInvalid
@@ -528,6 +513,11 @@
   http_code: 500
   message: "Failed to perform blobstore operation after three retries."
 
+150008:
+  name: DockerImageMissing
+  http_code: 400
+  message: "Docker credentials can only be supplied for apps with a 'docker_image'"
+
 160001:
   name: AppBitsUploadInvalid
   http_code: 400
@@ -603,6 +593,11 @@
   http_code: 500
   message: "Stager error: %s"
 
+170014:
+  name: RunnerInvalidRequest
+  http_code: 500
+  message: "Runner invalid request: %s"
+
 170015:
   name: RunnerUnavailable
   http_code: 503
@@ -616,7 +611,7 @@
 170017:
   name: StagingInProgress
   http_code: 422
-  message: "Only one package can be staged at a time per application."
+  message: "Only one build can be STAGING at a time per application."
 
 170018:
   name: InvalidTaskAddress
@@ -626,7 +621,7 @@
 170019:
   name: TaskError
   http_code: 500
-  message: "task failed: %s"
+  message: "Task failed: %s"
 
 170020:
   name: TaskWorkersUnavailable
@@ -727,11 +722,6 @@
   name: InstancesUnavailable
   http_code: 503
   message: "Instances information unavailable: %s"
-
-230001:
-  name: BillingEventQueryInvalid
-  http_code: 400
-  message: "Billing event query start_date and/or end_date are missing or invalid"
 
 230002:
   name: EventNotFound
@@ -936,7 +926,7 @@
 310003:
   name: SpaceQuotaMemoryLimitExceeded
   http_code: 400
-  message: "You have exceeded your space's memory limit."
+  message: "You have exceeded your space's memory limit: %s"
 
 310004:
   name: SpaceQuotaInstanceMemoryLimitExceeded
@@ -1018,6 +1008,11 @@
   http_code: 404
   message: "The service instance could not be found: %s"
 
+340002:
+  name: UserProvidedServiceInstanceHandlerNeeded
+  http_code: 400
+  message: "Please use the User Provided Services API to manage this resource."
+
 350001:
   name: ProcessInvalid
   http_code: 400
@@ -1059,10 +1054,10 @@
   http_code: 503
   message: "The Routing API is currently unavailable"
 
-370002:
-  name: TcpRoutingDisabled
+370003:
+  name: RoutingApiDisabled
   http_code: 403
-  message: "Support for TCP routing is disabled"
+  message: "Routing API is disabled"
 
 380001:
   name: EnvironmentVariableGroupInvalid

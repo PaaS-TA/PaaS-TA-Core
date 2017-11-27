@@ -1,8 +1,17 @@
 package metric_sender
 
 import (
+	"fmt"
+	"time"
+	"unicode/utf8"
+
 	"github.com/cloudfoundry/sonde-go/events"
 	"github.com/gogo/protobuf/proto"
+)
+
+const (
+	maxTagLen = 256
+	maxTags   = 10
 )
 
 type EventEmitter interface {
@@ -21,6 +30,12 @@ type ContainerMetricChainer interface {
 	Send() error
 }
 
+type CounterChainer interface {
+	SetTag(key, value string) CounterChainer
+	Increment() error
+	Add(delta uint64) error
+}
+
 // A MetricSender emits metric events.
 type MetricSender struct {
 	eventEmitter EventEmitter
@@ -29,6 +44,11 @@ type MetricSender struct {
 // NewMetricSender instantiates a MetricSender with the given EventEmitter.
 func NewMetricSender(eventEmitter EventEmitter) *MetricSender {
 	return &MetricSender{eventEmitter: eventEmitter}
+}
+
+// Send sends an events.Event.
+func (ms *MetricSender) Send(ev events.Event) error {
+	return ms.eventEmitter.Emit(ev)
 }
 
 // SendValue sends a metric with the given name, value and unit. See
@@ -60,6 +80,8 @@ func (ms *MetricSender) SendContainerMetric(applicationId string, instanceIndex 
 	return ms.eventEmitter.Emit(&events.ContainerMetric{ApplicationId: &applicationId, InstanceIndex: &instanceIndex, CpuPercentage: &cpuPercentage, MemoryBytes: &memoryBytes, DiskBytes: &diskBytes})
 }
 
+// Value creates a value metric that can be manipulated via cascading calls
+// and then sent.
 func (ms *MetricSender) Value(name string, value float64, unit string) ValueChainer {
 	chainer := valueChainer{}
 	chainer.emitter = ms.eventEmitter
@@ -75,7 +97,8 @@ func (ms *MetricSender) Value(name string, value float64, unit string) ValueChai
 	return chainer
 }
 
-// doc bytes % etc
+// ContainerMetric creates a container metric that can be manipulated via
+// cascading calls and then sent.
 func (ms *MetricSender) ContainerMetric(appID string, instance int32, cpu float64, mem, disk uint64) ContainerMetricChainer {
 	chainer := containerMetricChainer{}
 	chainer.emitter = ms.eventEmitter
@@ -93,6 +116,21 @@ func (ms *MetricSender) ContainerMetric(appID string, instance int32, cpu float6
 	return chainer
 }
 
+// Counter creates a counter event that can be manipulated via cascading calls
+// and then sent via Increment or Add.
+func (ms *MetricSender) Counter(name string) CounterChainer {
+	chainer := counterChainer{}
+	chainer.emitter = ms.eventEmitter
+	chainer.envelope = &events.Envelope{
+		Origin:    proto.String(ms.eventEmitter.Origin()),
+		EventType: events.Envelope_CounterEvent.Enum(),
+		CounterEvent: &events.CounterEvent{
+			Name: proto.String(name),
+		},
+	}
+	return chainer
+}
+
 type envelopeEmitter interface {
 	EmitEnvelope(*events.Envelope) error
 }
@@ -100,17 +138,34 @@ type envelopeEmitter interface {
 type chainer struct {
 	emitter  envelopeEmitter
 	envelope *events.Envelope
+	err      error
 }
 
 func (c chainer) SetTag(key, value string) chainer {
 	if c.envelope.Tags == nil {
 		c.envelope.Tags = make(map[string]string)
 	}
+	if utf8.RuneCountInString(key) > maxTagLen || utf8.RuneCountInString(value) > maxTagLen {
+		return chainer{
+			err: fmt.Errorf("Tag exceeds max length of %d", maxTagLen),
+		}
+	}
+
 	c.envelope.Tags[key] = value
+	if len(c.envelope.Tags) > maxTags {
+		return chainer{
+			err: fmt.Errorf("Too many tags. Max of %d", maxTags),
+		}
+	}
 	return c
 }
 
 func (c chainer) Send() error {
+	if c.err != nil {
+		return c.err
+	}
+
+	c.envelope.Timestamp = proto.Int64(time.Now().UnixNano())
 	return c.emitter.EmitEnvelope(c.envelope)
 }
 
@@ -119,7 +174,7 @@ type valueChainer struct {
 }
 
 func (c valueChainer) SetTag(key, value string) ValueChainer {
-	c.chainer.SetTag(key, value)
+	c.chainer = c.chainer.SetTag(key, value)
 	return c
 }
 
@@ -128,6 +183,32 @@ type containerMetricChainer struct {
 }
 
 func (c containerMetricChainer) SetTag(key, value string) ContainerMetricChainer {
-	c.chainer.SetTag(key, value)
+	c.chainer = c.chainer.SetTag(key, value)
 	return c
+}
+
+type counterChainer struct {
+	chainer
+}
+
+func (c counterChainer) SetTag(key, value string) CounterChainer {
+	c.chainer = c.chainer.SetTag(key, value)
+	return c
+}
+
+func (c counterChainer) Add(delta uint64) error {
+	if c.err != nil {
+		return c.err
+	}
+
+	c.envelope.CounterEvent.Delta = proto.Uint64(delta)
+	return c.chainer.Send()
+}
+
+func (c counterChainer) Increment() error {
+	if c.err != nil {
+		return c.err
+	}
+
+	return c.Add(1)
 }

@@ -81,6 +81,12 @@ func (b *BuildpackRecipeBuilder) BuildTask(task *cc_messages.TaskRequestFromCC) 
 
 	rootFSPath := models.PreloadedRootFS(task.RootFs)
 
+	placementTags := []string{}
+
+	if task.IsolationSegment != "" {
+		placementTags = []string{task.IsolationSegment}
+	}
+
 	taskDefinition := &models.TaskDefinition{
 		Privileged:            b.config.PrivilegedContainers,
 		LogGuid:               task.LogGuid,
@@ -100,6 +106,7 @@ func (b *BuildpackRecipeBuilder) BuildTask(task *cc_messages.TaskRequestFromCC) 
 		TrustedSystemCertificatesPath: TrustedSystemCertificatesPath,
 		LogSource:                     task.LogSource,
 		VolumeMounts:                  convertVolumeMounts(task.VolumeMounts),
+		PlacementTags:                 placementTags,
 	}
 
 	return taskDefinition, nil
@@ -160,7 +167,9 @@ func (b *BuildpackRecipeBuilder) Build(desiredApp *cc_messages.DesireAppRequestF
 
 	switch desiredApp.HealthCheckType {
 	case cc_messages.PortHealthCheckType, cc_messages.UnspecifiedHealthCheckType:
-		monitor = models.Timeout(getParallelAction(desiredAppPorts, "vcap"), 30*time.Second)
+		monitor = models.Timeout(getParallelAction(desiredAppPorts, "vcap", ""), 10*time.Minute)
+	case cc_messages.HTTPHealthCheckType:
+		monitor = models.Timeout(getParallelAction(desiredAppPorts, "vcap", desiredApp.HealthCheckHTTPEndpoint), 10*time.Minute)
 	}
 
 	downloadAction := &models.DownloadAction{
@@ -184,7 +193,7 @@ func (b *BuildpackRecipeBuilder) Build(desiredApp *cc_messages.DesireAppRequestF
 			desiredApp.StartCommand,
 			desiredApp.ExecutionMetadata,
 		),
-		Env:       createLrpEnv(desiredApp.Environment, desiredAppPorts),
+		Env:       createLrpEnv(desiredApp.Environment, desiredAppPorts, true),
 		LogSource: getAppLogSource(desiredApp.LogSource),
 		ResourceLimits: &models.ResourceLimits{
 			Nofile: &numFiles,
@@ -220,7 +229,7 @@ func (b *BuildpackRecipeBuilder) Build(desiredApp *cc_messages.DesireAppRequestF
 				"-inheritDaemonEnv",
 				"-logLevel=fatal",
 			},
-			Env: createLrpEnv(desiredApp.Environment, desiredAppPorts),
+			Env: createLrpEnv(desiredApp.Environment, desiredAppPorts, true),
 			ResourceLimits: &models.ResourceLimits{
 				Nofile: &numFiles,
 			},
@@ -244,6 +253,12 @@ func (b *BuildpackRecipeBuilder) Build(desiredApp *cc_messages.DesireAppRequestF
 
 	setupAction := models.Serial(setup...)
 	actionAction := models.Codependent(actions...)
+
+	placementTags := []string{}
+
+	if desiredApp.IsolationSegment != "" {
+		placementTags = []string{desiredApp.IsolationSegment}
+	}
 
 	return &models.DesiredLRP{
 		Privileged: b.config.PrivilegedContainers,
@@ -283,6 +298,7 @@ func (b *BuildpackRecipeBuilder) Build(desiredApp *cc_messages.DesireAppRequestF
 
 		TrustedSystemCertificatesPath: TrustedSystemCertificatesPath,
 		VolumeMounts:                  convertVolumeMounts(desiredApp.VolumeMounts),
+		PlacementTags:                 placementTags,
 	}, nil
 }
 

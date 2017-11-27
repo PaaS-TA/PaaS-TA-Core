@@ -1,0 +1,74 @@
+resources:
+- name: postgres-release
+  type: git
+  source:
+    uri: https://github.com/cloudfoundry/postgres-release.git
+    branch: develop
+
+jobs:
+- name: delete-deployments-cf-diego
+  serial_groups: [cleanup]
+  plan:
+  - aggregate:
+    - get: postgres-release
+      resource: postgres-release
+  - task: delete-diego-fresh-deployment
+    file: postgres-release/ci/scripts/run-bosh-delete/task.yml
+    params: &base_params_fresh
+      BOSH_DIRECTOR: {{fresh_bosh_director}}
+      BOSH_CLIENT: {{fresh_bosh_user}}
+      BOSH_CLIENT_SECRET: {{fresh_bosh_password}}
+      BOSH_CA_CERT: {{fresh_ca_cert}}
+      DEPLOYMENT_NAME: {{fresh_diego_deployment}}
+  - task: delete-cf-fresh-deployment
+    file: postgres-release/ci/scripts/run-bosh-delete/task.yml
+    params:
+      <<: *base_params_fresh
+      DEPLOYMENT_NAME: {{fresh_cf_deployment}}
+  - task: delete-diego-old-deployment
+    file: postgres-release/ci/scripts/run-bosh-delete/task.yml
+    params: &base_params_old
+      BOSH_DIRECTOR: {{old_bosh_director}}
+      BOSH_CLIENT: {{old_bosh_user}}
+      BOSH_CLIENT_SECRET: {{old_bosh_password}}
+      BOSH_CA_CERT: {{old_ca_cert}}
+      DEPLOYMENT_NAME: {{old_diego_deployment}}
+  - task: delete-cf-old-deployment
+    file: postgres-release/ci/scripts/run-bosh-delete/task.yml
+    params:
+      <<: *base_params_old
+      DEPLOYMENT_NAME: {{old_cf_deployment}}
+  - task: delete-diego-older-deployment
+    file: postgres-release/ci/scripts/run-bosh-delete/task.yml
+    params: &base_params_older
+      BOSH_DIRECTOR: {{older_bosh_director}}
+      BOSH_CLIENT: {{older_bosh_user}}
+      BOSH_CLIENT_SECRET: {{older_bosh_password}}
+      BOSH_CA_CERT: {{older_ca_cert}}
+      DEPLOYMENT_NAME: {{older_diego_deployment}}
+  - task: delete-cf-older-deployment
+    file: postgres-release/ci/scripts/run-bosh-delete/task.yml
+    params:
+      <<: *base_params_older
+      DEPLOYMENT_NAME: {{older_cf_deployment}}
+
+- name: cleanup-resources
+  serial_groups: [cleanup]
+  plan:
+  - aggregate:
+    - get: postgres-release
+      resource: postgres-release
+      passed: [delete-deployments-cf-diego]
+      trigger: true
+  - task: cleanup-releases-fresh
+    file: postgres-release/ci/scripts/run-bosh-cleanup/task.yml
+    params:
+      <<: *base_params_fresh
+  - task: cleanup-releases-old
+    file: postgres-release/ci/scripts/run-bosh-cleanup/task.yml
+    params:
+      <<: *base_params_old
+  - task: cleanup-releases-older
+    file: postgres-release/ci/scripts/run-bosh-cleanup/task.yml
+    params:
+      <<: *base_params_older

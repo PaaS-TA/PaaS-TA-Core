@@ -1,0 +1,48 @@
+### Assign an isolation segment
+
+```
+Example Request
+```
+
+```shell
+curl "https://api.example.org/v3/spaces/[guid]/relationships/isolation_segment" \
+  -X PATCH \
+  -H "Authorization: bearer [token]" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "data": {
+      "guid": "[iso-seg-guid]"
+    }
+   }'
+```
+
+```
+Example Response
+```
+
+```http
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+<%= yield_content :space_isolation_segment_relationship, '/v3/spaces' %>
+```
+
+This endpoint assigns an isolation segment to the space.
+The isolatoin segment must be entitled to the space's parent organization.
+
+<aside calss="notice">Apps will not run in the newly assigned isolation segment until they are restarted.</aside>
+
+#### Definition
+`PATCH /v3/spaces/:guid/relationships/isolation_segment`
+
+#### Required Parameters
+
+Name | Type | Description
+---- | ---- | -----------
+**data** | [_to-one relationship_](#to-one-relationships) | Isolation segment relationship. Apps will run in this isolation segment. Set data to `null` to remove the relationship.
+
+#### Permitted Roles
+ |
+--- | ---
+Org Manager |
+Admin |

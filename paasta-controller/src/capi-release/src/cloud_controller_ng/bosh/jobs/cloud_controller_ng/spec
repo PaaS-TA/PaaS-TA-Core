@@ -4,37 +4,43 @@ name: cloud_controller_ng
 description: "The Cloud Controller provides primary Cloud Foundry API that is by the CF CLI. The Cloud Controller uses a database to keep tables for organizations, spaces, apps, services, service instances, user roles, and more. Typically multiple instances of Cloud Controller are load balanced."
 
 templates:
-  nginx_ctl.erb: bin/nginx_ctl
-  nginx.conf.erb: config/nginx.conf
-  drain.rb: bin/drain
-  restart_drain.rb: bin/restart_drain
-  mime.types: config/mime.types
-  cloud_controller_api.yml.erb: config/cloud_controller_ng.yml
-  cloud_controller_api_ctl.erb: bin/cloud_controller_ng_ctl
-  cloud_controller_api_worker_ctl.erb: bin/cloud_controller_worker_ctl
-  setup_local_blobstore.sh.erb: bin/setup_local_blobstore.sh
-  stacks.yml.erb: config/stacks.yml
-  newrelic.yml.erb: config/newrelic.yml
-  nginx_newrelic_plugin_ctl.erb: bin/nginx_newrelic_plugin_ctl
-  newrelic_plugin.yml.erb: config/newrelic_plugin.yml
-  ruby_version.sh.erb: bin/ruby_version.sh
-  console.erb: bin/console
-  dns_health_check.erb: bin/dns_health_check
   blobstore_waiter.sh.erb: bin/blobstore_waiter.sh
   buildpacks_ca_cert.pem.erb: config/certs/buildpacks_ca_cert.pem
-  droplets_ca_cert.pem.erb: config/certs/droplets_ca_cert.pem
-  packages_ca_cert.pem.erb: config/certs/packages_ca_cert.pem
-  resource_pool_ca_cert.pem.erb: config/certs/resource_pool_ca_cert.pem
+  cc-drain.rb: bin/cc-drain
+  cloud_controller_api.yml.erb: config/cloud_controller_ng.yml
+  cloud_controller_api_ctl.erb: bin/cloud_controller_ng_ctl
+  cloud_controller_api_health_check.erb: bin/cloud_controller_ng_health_check
+  cloud_controller_api_worker_ctl.erb: bin/cloud_controller_worker_ctl
+  console.erb: bin/console
   dea_ca.crt.erb: config/certs/dea_ca.crt
   dea_client.crt.erb: config/certs/dea_client.crt
   dea_client.key.erb: config/certs/dea_client.key
-  bbs_ca.crt.erb: config/certs/bbs_ca.crt
-  bbs_client.crt.erb: config/certs/bbs_client.crt
-  bbs_client.key.erb: config/certs/bbs_client.key
-  pre-start.sh.erb: bin/pre-start
-  post-start.sh.erb: bin/post-start
+  dns_health_check.erb: bin/dns_health_check
+  drain.sh.erb: bin/drain
+  droplets_ca_cert.pem.erb: config/certs/droplets_ca_cert.pem
   migrate_db.sh.erb: bin/migrate_db
+  mime.types: config/mime.types
+  mutual_tls.crt.erb: config/certs/mutual_tls.crt
+  mutual_tls.key.erb: config/certs/mutual_tls.key
+  mutual_tls_ca.crt.erb: config/certs/mutual_tls_ca.crt
+  newrelic.yml.erb: config/newrelic.yml
+  newrelic_plugin.yml.erb: config/newrelic_plugin.yml
+  nginx.conf.erb: config/nginx.conf
+  nginx_ctl.erb: bin/nginx_ctl
+  nginx_newrelic_plugin_ctl.erb: bin/nginx_newrelic_plugin_ctl
+  packages_ca_cert.pem.erb: config/certs/packages_ca_cert.pem
+  post-start.sh.erb: bin/post-start
+  pre-start.sh.erb: bin/pre-start
+  public_upload.conf.erb: config/public_upload.conf
+  resource_pool_ca_cert.pem.erb: config/certs/resource_pool_ca_cert.pem
+  restart_drain.rb: bin/restart_drain
+  ruby_version.sh.erb: bin/ruby_version.sh
   seed_db.sh.erb: bin/seed_db
+  setup_local_blobstore.sh.erb: bin/setup_local_blobstore.sh
+  stacks.yml.erb: config/stacks.yml
+  uaa_ca.crt.erb: config/certs/uaa_ca.crt
+  db_ca.crt.erb: config/certs/db_ca.crt
+
 
 packages:
   - capi_utils
@@ -44,6 +50,21 @@ packages:
   - libpq
   - libmariadb
   - ruby-2.3
+
+provides:
+- name: cloud_controller
+  type: cloud_controller
+  properties:
+  - system_domain
+  - app_domains
+
+consumes:
+- name: database
+  type: database
+  optional: true
+- name: cc_uploader
+  type: cc_uploader
+  optional: true
 
 properties:
   ssl.skip_cert_verify:
@@ -56,7 +77,7 @@ properties:
     description: "Domain reserved for CF operator, base URL where the login, uaa, and other non-user apps listen"
   system_domain_organization:
     description: "An organization that will be created as part of the seeding process. When the system_domain is not shared with (in the list of) app_domains, this is required as the system_domain will be created as a PrivateDomain in this organization."
-    default: ""
+    default: "system"
   app_domains:
     description: "Array of domains for user apps (example: 'user.app.space.foo', a user app called 'neat' will listen at 'http://neat.user.app.space.foo')"
     example:  |
@@ -65,7 +86,14 @@ properties:
         router_group_name: default-tcp
 
   app_ssh.host_key_fingerprint:
-    description: "MD5 fingerprint of the host key of the SSH proxy that brokers connections to application instances"
+    description: >-
+      Fingerprint of the host key of the SSH proxy that brokers connections to
+      application instances.
+      Supported fingerprint formats: SHA256 (recommended), SHA1 and MD5
+      Example fingerprints by format:
+        SHA256: 0KmvfcwFCnwQRviOJEwZtnz5qoi76BVb8dm3/vgilCI
+        SHA1: b8:80:2c:8c:d7:25:ad:2a:b4:8c:02:34:52:06:f7:ba:1f:0d:02:de
+        MD5: d2:d6:b9:d7:f9:c4:15:70:de:af:c7:36:88:3a:60:12
     default: ~
   app_ssh.port:
     description: "External port for SSH access to application instances"
@@ -73,15 +101,6 @@ properties:
   app_ssh.oauth_client_id:
     description: "The oauth client ID of the SSH proxy"
     default: ssh-proxy
-
-  nats.user:
-    description: "Username for cc client to connect to NATS"
-  nats.password:
-    description: "Password for cc client to connect to NATS"
-  nats.port:
-    description: "IP port of Cloud Foundry NATS server"
-  nats.machines:
-    description: "IP of each NATS cluster member."
 
   nfs_server.address:
     description: "NFS server for droplets and apps (not used in an AWS deploy, use s3 instead)"
@@ -112,19 +131,23 @@ properties:
   cc.info.custom:
     description: "Custom attribute keys and values for /v2/info endpoint"
 
+  cc.nginx.ip:
+    description: "IP for nginx"
+    default: ""
   cc.external_port:
     description: "External Cloud Controller port"
     default: 9022
+  cc.tls_port:
+    description: "Port for internal TLS communication"
+    default: 9023
   cc.internal_service_hostname:
     description: "Internal hostname used to resolve the address of the Cloud Controller"
     default: "cloud-controller-ng.service.cf.internal"
 
   cc.jobs.global.timeout_in_seconds:
-    description: "The longest any job can take before it is cancelled unless overriden per job"
+    description: "The longest any job can take before it is cancelled unless overridden per job"
     default: 14400 # 4 hours
   cc.jobs.app_bits_packer.timeout_in_seconds:
-    description: "The longest this job can take before it is cancelled"
-  cc.jobs.app_events_cleanup.timeout_in_seconds:
     description: "The longest this job can take before it is cancelled"
   cc.jobs.app_usage_events_cleanup.timeout_in_seconds:
     description: "The longest this job can take before it is cancelled"
@@ -137,9 +160,6 @@ properties:
   cc.jobs.droplet_upload.timeout_in_seconds:
     description: "The longest this job can take before it is cancelled"
 
-  cc.app_events.cutoff_age_in_days:
-    description: "How old an app event should stay in cloud controller database before being cleaned up"
-    default: 31
   cc.app_usage_events.cutoff_age_in_days:
     description: "How old an app usage event should stay in cloud controller database before being cleaned up"
     default: 31
@@ -329,7 +349,7 @@ properties:
     description: "The ca cert to use when communicating with webdav"
     default: ""
   cc.packages.app_package_directory_key:
-    description: "Directory (bucket) used store app packages.  It does not have be pre-created."
+    description: "Directory (bucket) used store app packages.  It does not have be pre-created.  Should contain only alphanumeric characters, '-', '_', and '.'"
     default: "cc-packages"
   cc.packages.max_package_size:
     description: "Maximum size of application package"
@@ -374,7 +394,7 @@ properties:
     description: "The ca cert to use when communicating with webdav"
     default: ""
   cc.droplets.droplet_directory_key:
-    description: "Directory (bucket) used store droplets.  It does not have be pre-created."
+    description: "Directory (bucket) used store droplets.  It does not have be pre-created.  Should contain only alphanumeric characters, '-', '_', and '.'"
     default: "cc-droplets"
   cc.droplets.max_staged_droplets_stored:
     description: "Number of recent, staged droplets stored per app (not including current droplet)"
@@ -416,7 +436,7 @@ properties:
     description: "The ca cert to use when communicating with webdav"
     default: ""
   cc.buildpacks.buildpack_directory_key:
-    description: "Directory (bucket) used store buildpacks.  It does not have be pre-created."
+    description: "Directory (bucket) used store buildpacks.  It does not have be pre-created.  Should contain only alphanumeric characters, '-', '_', and '.'"
     default: "cc-buildpacks"
   cc.buildpacks.fog_connection:
     description: "Fog connection hash"
@@ -447,11 +467,27 @@ properties:
   ccdb.pool_timeout:
     default: 10
     description: "The timeout for Sequel pooled connections"
+  ccdb.ca_cert:
+    default: ~
+    description: "The ca cert to use when communicating with the database over SSL"
+  ccdb.ssl_verify_hostname:
+    default: false
+    description: "Verify that the database SSL certificate matches the host to which the connection is attempted"
 
   uaa.cc.token_secret:
     description: "Symmetric secret used to decode uaa tokens. Used for testing."
   uaa.url:
     description: "URL of the UAA server"
+  uaa.ca_cert:
+    description: "The certificate authority being used by UAA"
+  uaa.ssl.port:
+    description: "The port used by UAA for ssl connections"
+    default: 8443
+  uaa.port:
+    description: "The port used by UAA for non-ssl connections"
+  cc.uaa.internal_url:
+    description: "The internal url used by UAA"
+    default: "uaa.service.cf.internal"
   login.protocol:
     description: "http or https"
     default: "https"
@@ -464,9 +500,6 @@ properties:
     description: "Port of the hm9000 Api Server"
     default: 5155
 
-  uaa.jwt.verification_key:
-    default: ""
-    description: "ssl cert defined in the manifest by the UAA, required by the cc to communicate with UAA"
   login.enabled:
     default: true
     description: "whether use login as the authorization endpoint or not"
@@ -478,16 +511,6 @@ properties:
     description: "The port used to emit messages to the Metron agent"
     default: 3457
 
-  logger_endpoint.use_ssl:
-    description: "Whether to use ssl for logger endpoint listed at /v2/info"
-    default: true
-  logger_endpoint.port:
-    description: "Port for logger endpoint listed at /v2/info"
-    default: 443
-
-  doppler.enabled:
-    description: "Whether to expose the doppler_logging_endpoint listed at /v2/info"
-    default: true
   doppler.use_ssl:
     description: "Whether to use ssl for the doppler_logging_endpoint listed at /v2/info"
     default: true
@@ -511,12 +534,12 @@ properties:
   cc.users_can_select_backend:
     default: true
     description: "Allow non-admin users to switch their apps between DEA and Diego backends"
-  cc.default_to_diego_backend:
-    default: false
-    description: "Use Diego backend by default for new apps"
   cc.allow_app_ssh_access:
     default: true
     description: "Allow users to change the value of the app-level allow_ssh attribute"
+  cc.default_app_ssh_access:
+    default: true
+    description: "When ssh is allowed and not explicitly set in the application, new applications will start with ssh service enabled"
   cc.flapping_crash_count_threshold:
     default: 3
     description: "The threshold of crashes after which the app is marked as flapping"
@@ -603,6 +626,10 @@ properties:
         location: ~ ^/v2/spaces/(.*)
         limit: 10r/s
         burst: 100
+
+  cc.server_keepalive_timeout:
+    description: "Configure keep alive timeout for connections to cloud controller. This is a temporary field used for testing."
+    default: 75
 
   cc.jobs.local.number_of_workers:
     default: 2
@@ -748,6 +775,12 @@ properties:
   cc.bits_service.private_endpoint:
     description: "Private url for the bits-service service"
     default: ""
+  cc.bits_service.username:
+    description: "Username for the bits-service"
+    default: ""
+  cc.bits_service.password:
+    description: "Password for the bits-service"
+    default: ""
 
   cc.rate_limiter.enabled:
     description: "Enable rate limiting for UAA-authenticated endpoints per user or client"
@@ -768,15 +801,13 @@ properties:
   cc.diego.bbs.url:
     description: "URL of the BBS Server"
     default: https://bbs.service.cf.internal:8889
-  cc.diego.bbs.ca_cert:
-    description: "PEM-encoded CA certificate for communication with the BBS"
-    default: "temporary default, remove with temporary_local_staging"
-  cc.diego.bbs.client_cert:
-    description: "PEM-encoded server certificate for communication with the BBS"
-    default: "temporary default, remove with temporary_local_staging"
-  cc.diego.bbs.client_key:
-    description: "PEM-encoded server key for communication with the BBS"
-    default: "temporary default, remove with temporary_local_staging"
+
+  cc.mutual_tls.ca_cert:
+    description: "PEM-encoded CA certificate for secure, mutually authenticated TLS communication"
+  cc.mutual_tls.public_cert:
+    description: "PEM-encoded certificate for secure, mutually authenticated TLS communication"
+  cc.mutual_tls.private_key:
+    description: "PEM-encoded key for secure, mutually authenticated TLS communication"
 
   cc.diego.nsync_url:
     default: http://nsync.service.cf.internal:8787
@@ -791,8 +822,14 @@ properties:
     description: "URL of file server"
     default: http://file-server.service.cf.internal:8080
   cc.diego.cc_uploader_url:
-    description: "URL of cc uploader"
+    description: "URL of cc uploader. Not used if BOSH link 'cc_uploader' is present."
     default: http://cc-uploader.service.cf.internal:9090
+  cc.diego.cc_uploader_https_url:
+    description: "URL of cc uploader. Not used if BOSH link 'cc_uploader' is present."
+    default: https://cc-uploader.service.cf.internal:9091
+  cc.diego.use_privileged_containers_for_running:
+    description: "Whether or not to use privileged containers for running buildpack apps and tasks."
+    default: false
   cc.diego.use_privileged_containers_for_staging:
     description: "Whether or not to use privileged containers for staging tasks."
     default: false
@@ -812,3 +849,30 @@ properties:
   cc.diego.temporary_local_staging:
     description: "Temporary flag to enable staging directly to the bbs from cc"
     default: false
+  cc.diego.temporary_local_tasks:
+    description: "Temporary flag to run tasks directly to the bbs from cc"
+    default: false
+  cc.diego.temporary_local_apps:
+    description: "Temporary flag to manage app state directly to the bbs from cc"
+    default: false
+  cc.diego.temporary_local_sync:
+    description: "Temporary flag to run sync job between cc and bbs"
+    default: false
+  cc.diego.temporary_local_tps:
+    description: "Temporary flag to fetch app instances directly to the bbs from cc"
+    default: false
+  cc.diego.temporary_cc_uploader_mtls:
+    description: "Temporary flag to ensure droplet upload callback endpoints require mTLS"
+    default: false
+  cc.diego.temporary_droplet_download_mtls:
+    description: "Temporary flag to enable mTLS droplet download to the bbs from cc"
+    default: false
+  cc.diego.temporary_oci_buildpack_mode:
+    description: "Temporary flag to enable OCI buildpack flow. Valid values: 'oci-phase-1'"
+  cc.diego.pid_limit:
+    description: "Maximum pid limit for containerized work running user-provided code"
+    default: 1024
+
+  cc.loggregator.internal_url:
+    description: "Internal url used to communicate with traffic_controller"
+    default: "http://loggregator-trafficcontroller.service.cf.internal:8081"

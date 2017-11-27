@@ -1,0 +1,21 @@
+[submodule "src/acceptance-tests/vendor/github.com/lib/pq"]
+	path = src/acceptance-tests/vendor/github.com/lib/pq
+	url = https://github.com/lib/pq
+[submodule "src/acceptance-tests/vendor/github.com/onsi/ginkgo"]
+	path = src/acceptance-tests/vendor/github.com/onsi/ginkgo
+	url = https://github.com/onsi/ginkgo
+[submodule "src/acceptance-tests/vendor/github.com/onsi/gomega"]
+	path = src/acceptance-tests/vendor/github.com/onsi/gomega
+	url = https://github.com/onsi/gomega
+[submodule "src/acceptance-tests/vendor/github.com/cloudfoundry/bosh-utils"]
+	path = src/acceptance-tests/vendor/github.com/cloudfoundry/bosh-utils
+	url = https://github.com/cloudfoundry/bosh-utils
+[submodule "src/acceptance-tests/vendor/gopkg.in/yaml.v2"]
+	path = src/acceptance-tests/vendor/gopkg.in/yaml.v2
+	url = https://gopkg.in/yaml.v2
+[submodule "src/acceptance-tests/vendor/github.com/DATA-DOG/go-sqlmock"]
+	path = src/acceptance-tests/vendor/github.com/DATA-DOG/go-sqlmock
+	url = https://github.com/DATA-DOG/go-sqlmock
+[submodule "src/acceptance-tests/vendor/github.com/cloudfoundry/config-server"]
+	path = src/acceptance-tests/vendor/github.com/cloudfoundry/config-server
+	url = https://github.com/cloudfoundry/config-server.git

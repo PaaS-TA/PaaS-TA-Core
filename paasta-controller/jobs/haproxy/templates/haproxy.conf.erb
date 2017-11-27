@@ -40,7 +40,7 @@ listen health_check_http_url
 <% if p("ha_proxy.ssl_pem") %>
 frontend https-in
     mode http
-    bind :443 ssl crt /var/vcap/jobs/haproxy/config/cert.pem no-sslv3 ciphers <%= p("ha_proxy.ssl_ciphers") %>
+    bind :443 ssl crt /var/vcap/jobs/haproxy/config/cert.pem no-sslv3 no-tlsv10 no-tlsv11 ciphers <%= p("ha_proxy.ssl_ciphers") %>
     option httplog
     option forwardfor
     reqadd X-Forwarded-Proto:\ https
@@ -48,15 +48,25 @@ frontend https-in
 
 frontend ssl-in
     mode tcp
-    bind :4443 ssl crt /var/vcap/jobs/haproxy/config/cert.pem no-sslv3 ciphers <%= p("ha_proxy.ssl_ciphers") %>
+    bind :4443 ssl crt /var/vcap/jobs/haproxy/config/cert.pem no-sslv3 no-tlsv10 no-tlsv11 ciphers <%= p("ha_proxy.ssl_ciphers") %>
     default_backend tcp-routers
 <% end %>
+
+<%
+  ips = []
+
+  if_p("router.servers") do |servers|
+    ips = servers
+  end.else_if_link("router") do |router|
+    ips = router.instances.map(&:address)
+  end
+%>
 
 backend http-routers
     mode http
     balance roundrobin
 
-    <% p("router.servers").each_with_index do |ip, index| %>
+    <% ips.each_with_index do |ip, index| %>
         server node<%= index %> <%= ip %>:<%= p("router.port") %> check inter 1000
     <% end %>
 
@@ -64,6 +74,22 @@ backend tcp-routers
     mode tcp
     balance roundrobin
 
-    <% p("router.servers").each_with_index do |ip, index| %>
+    <% ips.each_with_index do |ip, index| %>
         server node<%= index %> <%= ip %>:<%= p("router.port") %> check inter 1000
     <% end %>
+
+<% if p("cc.allow_app_ssh_access") %>
+<% if_link("ssh_proxy") do |ssh_proxy| %>
+frontend ssh
+    mode tcp
+    bind :<%= p("app_ssh.port") %>
+    default_backend ssh
+
+backend ssh
+    mode tcp
+    option tcp-check
+    balance leastconn<% ssh_proxy.instances.map do |instance| %>
+    server <%= instance.id %> <%= instance.address %>:2222 check<% end %>
+    timeout server 2h
+<% end %>
+<% end %>

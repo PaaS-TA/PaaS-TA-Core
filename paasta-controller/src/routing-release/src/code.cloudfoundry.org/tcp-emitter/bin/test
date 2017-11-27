@@ -4,9 +4,10 @@ set -e -u -x
 
 go install -v github.com/onsi/ginkgo/ginkgo
 
-for file in $(find {cmd,config,watcher,syncer,routing_table} \( -name "*.go" -not -iname "*test.go" \))
-do
-    go tool vet -v -all -shadow=true $file
-done
+# for file in $(find {cmd,config,watcher,syncer,routing_table} \( -name "*.go" -not -iname "*test.go" \))
+# do
+#     go tool vet -v -all -shadow=true $file
+# done
+go vet ./...
 
 ginkgo -r -failOnPending -randomizeAllSpecs -race "$@"

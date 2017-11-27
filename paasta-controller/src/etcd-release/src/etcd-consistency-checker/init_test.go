@@ -20,7 +20,7 @@ var (
 var _ = BeforeSuite(func() {
 	var err error
 
-	pathToEtcdCC, err = gexec.Build("etcd-consistency-checker")
+	pathToEtcdCC, err = gexec.Build("github.com/cloudfoundry-incubator/etcd-release/src/etcd-consistency-checker")
 	Expect(err).NotTo(HaveOccurred())
 })
 

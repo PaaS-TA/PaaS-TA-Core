@@ -1,0 +1,63 @@
+#!/bin/sh
+set -e
+
+scripts_folder=$(dirname $0)
+ca_name="postgres-ca"
+common_name=''
+
+generate_end_entity_certs() {
+  local out_name=$1
+  local cn=$2
+
+  certstrap --depot-path ${depot_path} request-cert --passphrase '' --common-name $cn
+  certstrap --depot-path ${depot_path} sign $cn --CA ${ca_name}
+  mv -f ${depot_path}/$cn.key ${depot_path}/${out_name}.key
+  mv -f ${depot_path}/$cn.csr ${depot_path}/${out_name}.csr
+  mv -f ${depot_path}/$cn.crt ${depot_path}/${out_name}.crt
+}
+
+show_help() {
+  echo "Usage: generate_postgres_cert --common-name <HOSTNAME|IP_ADDRESS> [ --client-name <USER_NAME> ]"
+  echo "Output Options:"
+  echo "  -n --common-name [REQUIRED]     The common name for the server certificate. It must be set to the DNS hostname if any or to the ip address of the PostgreSQL server (see Note below)"
+  echo "  -c --client-name [OPTIONAL]     Specify it if you want to generate the client certificates for certificates authentication. It must be set to the user name for the database connection."
+  echo "  -h --help                       Show a help message"
+  echo "Note: In ssl mode 'verify-full', the hostname is matched against the common-name."
+  echo "If the connection is made using an IP address instead of a host name, the IP address will be matched (without doing any DNS lookups)."
+
+  exit 0
+}
+
+while true; do
+  case "$1" in
+    -n | --common-name ) common_name="$2"; shift 2;;
+    -c | --client-name ) client_name="$2"; shift 2;;
+    -h | --help )
+      show_help ;;
+    * ) break ;;
+  esac
+done
+
+if [ "${common_name}" == "" ]; then
+  show_help
+fi
+
+# Install certstrap
+go get -v github.com/square/certstrap
+
+# Place keys and certificates here
+depot_path="${scripts_folder}/../postgres-certs"
+mkdir -p ${depot_path}
+
+# Certitication authority
+certstrap --depot-path ${depot_path} init --passphrase '' --common-name ${ca_name}
+
+# Server certificate for postgres server to act as a TLS server
+generate_end_entity_certs "server" $common_name
+# Client certificate for postgres authentication
+if [ "${client_name}" == "" ]; then
+  echo "Skipping client certiticates generation"
+else
+  ${scripts_folder}/generate-postgres-client-certs -n $client_name -c "${depot_path}/${ca_name}.crt" -k "${depot_path}/${ca_name}.key"
+fi
+

@@ -1,12 +1,13 @@
 package deploy_test
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/cloudfoundry-incubator/consul-release/src/acceptance-tests/testing/consulclient"
 	"github.com/cloudfoundry-incubator/consul-release/src/acceptance-tests/testing/helpers"
 	"github.com/pivotal-cf-experimental/bosh-test/bosh"
-	"github.com/pivotal-cf-experimental/destiny/consul"
+	"github.com/pivotal-cf-experimental/destiny/ops"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -14,11 +15,14 @@ import (
 
 var _ = Describe("Multiple instance rolling deploys", func() {
 	var (
-		manifest  consul.ManifestV2
-		kv        consulclient.HTTPKV
+		manifest     string
+		manifestName string
+
 		testKey   string
 		testValue string
-		spammer   *helpers.Spammer
+
+		kv      consulclient.HTTPKV
+		spammer *helpers.Spammer
 	)
 
 	BeforeEach(func() {
@@ -28,19 +32,27 @@ var _ = Describe("Multiple instance rolling deploys", func() {
 		testKey = "consul-key-" + guid
 		testValue = "consul-value-" + guid
 
-		manifest, kv, err = helpers.DeployConsulWithInstanceCount("multiple-instance-rolling-deploy", 3, boshClient, config)
+		manifest, err = helpers.DeployConsulWithInstanceCount("multiple-instance-rolling-deploy", 3, config.WindowsClients, boshClient)
+		Expect(err).NotTo(HaveOccurred())
+
+		manifestName, err = ops.ManifestName(manifest)
 		Expect(err).NotTo(HaveOccurred())
 
 		Eventually(func() ([]bosh.VM, error) {
-			return helpers.DeploymentVMs(boshClient, manifest.Name)
-		}, "1m", "10s").Should(ConsistOf(helpers.GetVMsFromManifest(manifest)))
+			return helpers.DeploymentVMs(boshClient, manifestName)
+		}, "5m", "10s").Should(ConsistOf(helpers.GetVMsFromManifest(manifest)))
 
-		spammer = helpers.NewSpammer(kv, 1*time.Second, "test-consumer-0")
+		testConsumerIPs, err := helpers.GetVMIPs(boshClient, manifestName, "testconsumer")
+		Expect(err).NotTo(HaveOccurred())
+
+		kv = consulclient.NewHTTPKV(fmt.Sprintf("http://%s:6769", testConsumerIPs[0]))
+
+		spammer = helpers.NewSpammer(kv, 1*time.Second, "testconsumer")
 	})
 
 	AfterEach(func() {
 		if !CurrentGinkgoTestDescription().Failed {
-			err := boshClient.DeleteDeployment(manifest.Name)
+			err := boshClient.DeleteDeployment(manifestName)
 			Expect(err).NotTo(HaveOccurred())
 		}
 	})
@@ -52,19 +64,22 @@ var _ = Describe("Multiple instance rolling deploys", func() {
 		})
 
 		By("deploying", func() {
-			manifest.InstanceGroups[0].Properties.Consul.Agent.LogLevel = "trace"
-
-			yaml, err := manifest.ToYAML()
+			var err error
+			manifest, err = ops.ApplyOp(manifest, ops.Op{
+				Type:  "replace",
+				Path:  "/instance_groups/name=consul/properties/consul/agent/log_level?",
+				Value: "trace",
+			})
 			Expect(err).NotTo(HaveOccurred())
 
 			spammer.Spam()
 
-			_, err = boshClient.Deploy(yaml)
+			_, err = boshClient.Deploy([]byte(manifest))
 			Expect(err).NotTo(HaveOccurred())
 
 			Eventually(func() ([]bosh.VM, error) {
-				return helpers.DeploymentVMs(boshClient, manifest.Name)
-			}, "1m", "10s").Should(ConsistOf(helpers.GetVMsFromManifest(manifest)))
+				return helpers.DeploymentVMs(boshClient, manifestName)
+			}, "5m", "10s").Should(ConsistOf(helpers.GetVMsFromManifest(manifest)))
 
 			spammer.Stop()
 		})

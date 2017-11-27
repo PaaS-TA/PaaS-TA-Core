@@ -29,8 +29,6 @@ var _ = Describe("Watcher", func() {
 		uaaClient        *testUaaClient.FakeClient
 		testWatcher      *watcher.Watcher
 		process          ifrit.Process
-		eventChannel     chan routing_api.TcpEvent
-		errorChannel     chan error
 		syncChannel      chan struct{}
 		updater          *fake_routing_table.FakeUpdater
 	)
@@ -49,23 +47,6 @@ var _ = Describe("Watcher", func() {
 		routingApiClient.SubscribeToTcpEventsReturns(eventSource, nil)
 		syncChannel = make(chan struct{})
 		testWatcher = watcher.New(routingApiClient, updater, uaaClient, 1, syncChannel, logger)
-
-		eventChannel = make(chan routing_api.TcpEvent)
-		errorChannel = make(chan error)
-
-		eventSource.CloseStub = func() error {
-			errorChannel <- errors.New("closed")
-			return nil
-		}
-
-		eventSource.NextStub = func() (routing_api.TcpEvent, error) {
-			select {
-			case event := <-eventChannel:
-				return event, nil
-			case err := <-errorChannel:
-				return routing_api.TcpEvent{}, err
-			}
-		}
 	})
 
 	JustBeforeEach(func() {
@@ -83,7 +64,7 @@ var _ = Describe("Watcher", func() {
 			tcpEvent routing_api.TcpEvent
 		)
 
-		JustBeforeEach(func() {
+		BeforeEach(func() {
 			tcpEvent = routing_api.TcpEvent{
 				TcpRouteMapping: models.NewTcpRouteMapping(
 					routerGroupGuid,
@@ -94,11 +75,11 @@ var _ = Describe("Watcher", func() {
 				),
 				Action: "Upsert",
 			}
-			eventChannel <- tcpEvent
+			eventSource.NextReturns(tcpEvent, nil)
 		})
 
 		It("calls updater HandleEvent", func() {
-			Eventually(updater.HandleEventCallCount, 5*time.Second, 300*time.Millisecond).Should(Equal(1))
+			Eventually(updater.HandleEventCallCount).Should(BeNumerically(">=", 1))
 			upsertEvent := updater.HandleEventArgsForCall(0)
 			Expect(upsertEvent).Should(Equal(tcpEvent))
 		})
@@ -109,7 +90,7 @@ var _ = Describe("Watcher", func() {
 			tcpEvent routing_api.TcpEvent
 		)
 
-		JustBeforeEach(func() {
+		BeforeEach(func() {
 			tcpEvent = routing_api.TcpEvent{
 				TcpRouteMapping: models.NewTcpRouteMapping(
 					routerGroupGuid,
@@ -120,11 +101,11 @@ var _ = Describe("Watcher", func() {
 				),
 				Action: "Delete",
 			}
-			eventChannel <- tcpEvent
+			eventSource.NextReturns(tcpEvent, nil)
 		})
 
 		It("calls updater HandleEvent", func() {
-			Eventually(updater.HandleEventCallCount, 5*time.Second, 300*time.Millisecond).Should(Equal(1))
+			Eventually(updater.HandleEventCallCount).Should(BeNumerically(">=", 1))
 			deleteEvent := updater.HandleEventArgsForCall(0)
 			Expect(deleteEvent).Should(Equal(tcpEvent))
 		})
@@ -136,19 +117,22 @@ var _ = Describe("Watcher", func() {
 		})
 
 		It("calls updater Sync", func() {
-			Eventually(updater.SyncCallCount, 5*time.Second, 300*time.Millisecond).Should(Equal(1))
+			Eventually(updater.SyncCallCount).Should(Equal(1))
 		})
 	})
 
 	Context("when eventSource returns error", func() {
-		JustBeforeEach(func() {
-			Eventually(routingApiClient.SubscribeToTcpEventsCallCount).Should(Equal(1))
-			errorChannel <- errors.New("buzinga...")
+		BeforeEach(func() {
+			eventSource.NextReturns(routing_api.TcpEvent{}, errors.New("buzinga.."))
 		})
 
 		It("resubscribes to SSE from routing api", func() {
-			Eventually(routingApiClient.SubscribeToTcpEventsCallCount, 5*time.Second, 300*time.Millisecond).Should(Equal(2))
+			Eventually(routingApiClient.SubscribeToTcpEventsCallCount).Should(BeNumerically(">=", 2))
 			Eventually(logger).Should(gbytes.Say("failed-to-get-next-routing-api-event"))
+		})
+
+		It("closes the current eventSource", func() {
+			Eventually(eventSource.CloseCallCount).Should(BeNumerically(">=", 1))
 		})
 	})
 

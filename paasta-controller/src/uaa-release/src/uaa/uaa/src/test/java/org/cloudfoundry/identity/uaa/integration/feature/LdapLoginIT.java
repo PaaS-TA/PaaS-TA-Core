@@ -1,7 +1,6 @@
 package org.cloudfoundry.identity.uaa.integration.feature;
 
 import org.cloudfoundry.identity.uaa.ServerRunning;
-import org.cloudfoundry.identity.uaa.constants.OriginKeys;
 import org.cloudfoundry.identity.uaa.integration.util.IntegrationTestUtils;
 import org.cloudfoundry.identity.uaa.integration.util.ScreenshotOnFail;
 import org.cloudfoundry.identity.uaa.login.test.LoginServerClassRunner;
@@ -25,6 +24,7 @@ import org.springframework.web.client.RestTemplate;
 
 import java.util.Arrays;
 
+import static org.cloudfoundry.identity.uaa.constants.OriginKeys.LDAP;
 import static org.cloudfoundry.identity.uaa.integration.util.IntegrationTestUtils.doesSupportZoneDNS;
 import static org.cloudfoundry.identity.uaa.provider.LdapIdentityProviderDefinition.LDAP_TLS_NONE;
 import static org.cloudfoundry.identity.uaa.provider.LdapIdentityProviderDefinition.LDAP_TLS_SIMPLE;
@@ -55,6 +55,7 @@ public class LdapLoginIT {
     TestClient testClient;
 
     ServerRunning serverRunning = ServerRunning.isRunning();
+    private String zoneAdminToken;
 
     @Before
     public void clearWebDriverOfCookies() throws Exception {
@@ -66,15 +67,25 @@ public class LdapLoginIT {
     }
     @Test
     public void ldapLogin_with_StartTLS() throws Exception {
-        performLdapLogin("testzone2", "ldap://52.87.212.253:389/", true, true);
+        Long beforeTest = System.currentTimeMillis();
+        performLdapLogin("testzone2", "ldap://52.87.212.253:389/", true, true, "marissa4", "ldap4");
+        Long afterTest = System.currentTimeMillis();
         assertThat(webDriver.findElement(By.cssSelector("h1")).getText(), Matchers.containsString("Where to?"));
+        ScimUser user = IntegrationTestUtils.getUserByZone(zoneAdminToken, baseUrl, "testzone2", "marissa4");
+        IntegrationTestUtils.validateUserLastLogon(user, beforeTest, afterTest);
         IntegrationTestUtils.validateAccountChooserCookie(baseUrl.replace("localhost","testzone2.localhost"), webDriver);
     }
 
-    private void performLdapLogin(String subdomain, String ldapUrl) throws Exception {
-        performLdapLogin(subdomain, ldapUrl, false, false);
+    @Test
+    public void ldap_login_using_utf8_characters() throws Exception {
+        performLdapLogin("testzone2", "ldap://52.87.212.253:389/", true, true, "\u7433\u8D3A", "koala");
+        assertThat(webDriver.findElement(By.cssSelector("h1")).getText(), Matchers.containsString("Where to?"));
     }
-    private void performLdapLogin(String subdomain, String ldapUrl, boolean startTls, boolean skipSSLVerification) throws Exception {
+
+    private void performLdapLogin(String subdomain, String ldapUrl) throws Exception {
+        performLdapLogin(subdomain, ldapUrl, false, false, "marissa4", "ldap4");
+    }
+    private void performLdapLogin(String subdomain, String ldapUrl, boolean startTls, boolean skipSSLVerification, String username, String password) throws Exception {
         //ensure we are able to resolve DNS for hostname testzone2.localhost
         assumeTrue("Expected testzone1/2/3/4.localhost to resolve to 127.0.0.1", doesSupportZoneDNS());
         //ensure that certs have been added to truststore via gradle
@@ -98,7 +109,7 @@ public class LdapLoginIT {
         IntegrationTestUtils.makeZoneAdmin(identityClient, baseUrl, user.getId(), zoneId);
 
         //get the zone admin token
-        String zoneAdminToken =
+        zoneAdminToken =
           IntegrationTestUtils.getAuthorizationCodeToken(serverRunning,
             UaaTestAccounts.standard(serverRunning),
             "identity",
@@ -126,16 +137,16 @@ public class LdapLoginIT {
 
         IdentityProvider provider = new IdentityProvider();
         provider.setIdentityZoneId(zoneId);
-        provider.setType(OriginKeys.LDAP);
+        provider.setType(LDAP);
         provider.setActive(true);
         provider.setConfig(ldapIdentityProviderDefinition);
-        provider.setOriginKey(OriginKeys.LDAP);
+        provider.setOriginKey(LDAP);
         provider.setName("simplesamlphp for uaa");
         IntegrationTestUtils.createOrUpdateProvider(zoneAdminToken,baseUrl,provider);
 
         webDriver.get(zoneUrl + "/login");
-        webDriver.findElement(By.name("username")).sendKeys("marissa4");
-        webDriver.findElement(By.name("password")).sendKeys("ldap4");
+        webDriver.findElement(By.name("username")).sendKeys(username);
+        webDriver.findElement(By.name("password")).sendKeys(password);
         webDriver.findElement(By.xpath("//input[@value='Sign in']")).click();
     }
 }

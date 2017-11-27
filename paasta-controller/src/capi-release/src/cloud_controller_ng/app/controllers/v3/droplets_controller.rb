@@ -1,13 +1,11 @@
 require 'presenters/v3/droplet_presenter'
 require 'presenters/v3/paginated_list_presenter'
-require 'queries/droplet_delete_fetcher'
-require 'queries/droplet_list_fetcher'
+require 'fetchers/droplet_delete_fetcher'
+require 'fetchers/droplet_list_fetcher'
 require 'actions/droplet_delete'
 require 'actions/droplet_copy'
-require 'actions/droplet_create'
-require 'messages/droplet_create_message'
-require 'messages/droplets_list_message'
-require 'messages/droplet_copy_message'
+require 'messages/droplets/droplets_list_message'
+require 'messages/droplets/droplet_copy_message'
 require 'cloud_controller/membership'
 require 'controllers/v3/mixins/sub_resource'
 
@@ -25,7 +23,7 @@ class DropletsController < ApplicationController
       package, dataset = DropletListFetcher.new(message: message).fetch_for_package
       package_not_found! unless package && can_read?(package.space.guid, package.space.organization.guid)
     else
-      dataset = if roles.admin? || roles.admin_read_only?
+      dataset = if can_read_globally?
                   DropletListFetcher.new(message: message).fetch_all
                 else
                   DropletListFetcher.new(message: message).fetch_for_spaces(space_guids: readable_space_guids)
@@ -47,64 +45,30 @@ class DropletsController < ApplicationController
 
     unauthorized! unless can_write?(space.guid)
 
-    droplet_deletor = DropletDelete.new(current_user.guid, current_user_email, stagers)
-    droplet_deletor.delete(droplet)
+    delete_action = DropletDelete.new(user_audit_info)
+    deletion_job  = VCAP::CloudController::Jobs::DeleteActionJob.new(DropletModel, droplet.guid, delete_action)
+    pollable_job = Jobs::Enqueuer.new(deletion_job, queue: 'cc-generic').enqueue_pollable
 
-    head :no_content
+    url_builder = VCAP::CloudController::Presenters::ApiUrlBuilder.new
+    head HTTP::ACCEPTED, 'Location' => url_builder.build_url(path: "/v3/jobs/#{pollable_job.guid}")
   end
 
   def copy
     message = DropletCopyMessage.create_from_http_request(params[:body])
     unprocessable!(message.errors.full_messages) unless message.valid?
 
-    source_droplet = DropletModel.where(guid: params[:guid]).eager(:space, space: :organization).all.first
+    source_droplet = DropletModel.where(guid: params[:source_guid]).eager(:space, space: :organization).all.first
     droplet_not_found! unless source_droplet && can_read?(source_droplet.space.guid, source_droplet.space.organization.guid)
 
     destination_app = AppModel.where(guid: message.app_guid).eager(:space, :organization).all.first
     app_not_found! unless destination_app && can_read?(destination_app.space.guid, destination_app.organization.guid)
     unauthorized! unless can_write?(destination_app.space.guid)
 
-    droplet = DropletCopy.new(source_droplet).copy(destination_app, current_user.guid, current_user_email)
+    droplet = DropletCopy.new(source_droplet).copy(destination_app, user_audit_info)
 
     render status: :created, json: Presenters::V3::DropletPresenter.new(droplet)
   rescue DropletCopy::InvalidCopyError => e
     unprocessable!(e.message)
-  end
-
-  def create
-    staging_message = DropletCreateMessage.create_from_http_request(params[:body])
-    unprocessable!(staging_message.errors.full_messages) unless staging_message.valid?
-
-    package = PackageModel.where(guid: params[:package_guid]).eager(:app, :space, space: :organization, app: :buildpack_lifecycle_data).all.first
-    package_not_found! unless package && can_read?(package.space.guid, package.space.organization.guid)
-    staging_in_progress! if package.app.staging_in_progress?
-
-    if package.type == VCAP::CloudController::PackageModel::DOCKER_TYPE
-      FeatureFlag.raise_unless_enabled!(:diego_docker)
-    end
-
-    unauthorized! unless can_write?(package.space.guid)
-
-    lifecycle = LifecycleProvider.provide(package, staging_message)
-    unprocessable!(lifecycle.errors.full_messages) unless lifecycle.valid?
-
-    droplet = DropletCreate.new.create_and_stage(
-      package:    package,
-      lifecycle:  lifecycle,
-      message:    staging_message,
-      user:       current_user,
-      user_email: current_user_email
-    )
-
-    render status: :created, json: Presenters::V3::DropletPresenter.new(droplet)
-  rescue DropletCreate::InvalidPackage => e
-    invalid_request!(e.message)
-  rescue DropletCreate::SpaceQuotaExceeded
-    unprocessable!("space's memory limit exceeded")
-  rescue DropletCreate::OrgQuotaExceeded
-    unprocessable!("organization's memory limit exceeded")
-  rescue DropletCreate::DiskLimitExceeded
-    unprocessable!('disk limit exceeded')
   end
 
   private
@@ -119,9 +83,5 @@ class DropletsController < ApplicationController
 
   def package_not_found!
     resource_not_found!(:package)
-  end
-
-  def staging_in_progress!
-    raise CloudController::Errors::ApiError.new_from_details('StagingInProgress')
   end
 end

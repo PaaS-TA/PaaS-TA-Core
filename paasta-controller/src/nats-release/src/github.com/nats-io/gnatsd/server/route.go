@@ -15,6 +15,8 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
+
+	"github.com/nats-io/gnatsd/util"
 )
 
 // RouteType designates the router type
@@ -153,9 +155,60 @@ func (c *client) processRouteInfo(info *Info) {
 			// Now let the known servers know about this new route
 			s.forwardNewRouteInfoToKnownServers(info)
 		}
+		// If the server Info did not have these URLs, update and send an INFO
+		// protocol to all clients that support it (unless the feature is disabled).
+		if s.updateServerINFO(info.ClientConnectURLs) {
+			s.sendAsyncInfoToClients()
+		}
 	} else {
 		c.Debugf("Detected duplicate remote route %q", info.ID)
 		c.closeConnection()
+	}
+}
+
+// sendAsyncInfoToClients sends an INFO protocol to all
+// connected clients that accept async INFO updates.
+func (s *Server) sendAsyncInfoToClients() {
+	s.mu.Lock()
+	// If there are no clients supporting async INFO protocols, we are done.
+	if s.cproto == 0 {
+		s.mu.Unlock()
+		return
+	}
+
+	// Capture under lock
+	proto := s.infoJSON
+
+	// Make a copy of ALL clients so we can release server lock while
+	// sending the protocol to clients. We could check the conditions
+	// (proto support, first PONG sent) here and so have potentially
+	// a limited number of clients, but that would mean grabbing the
+	// client's lock here, which we don't want since we would still
+	// need it in the second loop.
+	clients := make([]*client, 0, len(s.clients))
+	for _, c := range s.clients {
+		clients = append(clients, c)
+	}
+	s.mu.Unlock()
+
+	for _, c := range clients {
+		c.mu.Lock()
+		// If server did not yet receive the CONNECT protocol, check later
+		// when sending the first PONG.
+		if !c.flags.isSet(connectReceived) {
+			c.flags.set(infoUpdated)
+		} else if c.opts.Protocol >= ClientProtoInfo {
+			// Send only if first PONG was sent
+			if c.flags.isSet(firstPongSent) {
+				// sendInfo takes care of checking if the connection is still
+				// valid or not, so don't duplicate tests here.
+				c.sendInfo(proto)
+			} else {
+				// Otherwise, notify that INFO has changed and check later.
+				c.flags.set(infoUpdated)
+			}
+		}
+		c.mu.Unlock()
 	}
 }
 
@@ -188,7 +241,7 @@ func (s *Server) processImplicitRoute(info *Info) {
 		return
 	}
 	if info.AuthRequired {
-		r.User = url.UserPassword(s.opts.ClusterUsername, s.opts.ClusterPassword)
+		r.User = url.UserPassword(s.opts.Cluster.Username, s.opts.Cluster.Password)
 	}
 	s.startGoRoutine(func() { s.connectToRoute(r, false) })
 }
@@ -288,7 +341,7 @@ func (s *Server) createRoute(conn net.Conn, rURL *url.URL) *client {
 	// Check for TLS
 	if tlsRequired {
 		// Copy off the config to add in ServerName if we
-		tlsConfig := *s.opts.ClusterTLSConfig
+		tlsConfig := util.CloneTLSConfig(s.opts.Cluster.TLSConfig)
 
 		// If we solicited, we will act like the client, otherwise the server.
 		if didSolicit {
@@ -296,16 +349,16 @@ func (s *Server) createRoute(conn net.Conn, rURL *url.URL) *client {
 			// Specify the ServerName we are expecting.
 			host, _, _ := net.SplitHostPort(rURL.Host)
 			tlsConfig.ServerName = host
-			c.nc = tls.Client(c.nc, &tlsConfig)
+			c.nc = tls.Client(c.nc, tlsConfig)
 		} else {
 			c.Debugf("Starting TLS route server handshake")
-			c.nc = tls.Server(c.nc, &tlsConfig)
+			c.nc = tls.Server(c.nc, tlsConfig)
 		}
 
 		conn := c.nc.(*tls.Conn)
 
 		// Setup the timeout
-		ttl := secondsToDuration(s.opts.ClusterTLSTimeout)
+		ttl := secondsToDuration(s.opts.Cluster.TLSTimeout)
 		time.AfterFunc(ttl, func() { tlsTimeout(c, conn) })
 		conn.SetReadDeadline(time.Now().Add(ttl))
 
@@ -367,7 +420,7 @@ func (s *Server) createRoute(conn net.Conn, rURL *url.URL) *client {
 
 	// Check for Auth required state for incoming connections.
 	if authRequired && !didSolicit {
-		ttl := secondsToDuration(s.opts.ClusterAuthTimeout)
+		ttl := secondsToDuration(s.opts.Cluster.AuthTimeout)
 		c.setAuthTimer(ttl)
 	}
 
@@ -524,30 +577,34 @@ func (s *Server) broadcastUnSubscribe(sub *subscription) {
 	}
 	rsid := routeSid(sub)
 	maxStr := _EMPTY_
+	sub.client.mu.Lock()
 	// Set max if we have it set and have not tripped auto-unsubscribe
 	if sub.max > 0 && sub.nm < sub.max {
 		maxStr = fmt.Sprintf(" %d", sub.max)
 	}
+	sub.client.mu.Unlock()
 	proto := fmt.Sprintf(unsubProto, rsid, maxStr)
 	s.broadcastInterestToRoutes(proto)
 }
 
 func (s *Server) routeAcceptLoop(ch chan struct{}) {
-	hp := fmt.Sprintf("%s:%d", s.opts.ClusterHost, s.opts.ClusterPort)
+	hp := net.JoinHostPort(s.opts.Cluster.Host, strconv.Itoa(s.opts.Cluster.Port))
 	Noticef("Listening for route connections on %s", hp)
 	l, e := net.Listen("tcp", hp)
 	if e != nil {
-		Fatalf("Error listening on router port: %d - %v", s.opts.Port, e)
+		// We need to close this channel to avoid a deadlock
+		close(ch)
+		Fatalf("Error listening on router port: %d - %v", s.opts.Cluster.Port, e)
 		return
 	}
-
-	// Let them know we are up
-	close(ch)
 
 	// Setup state that can enable shutdown
 	s.mu.Lock()
 	s.routeListener = l
 	s.mu.Unlock()
+
+	// Let them know we are up
+	close(ch)
 
 	tmpDelay := ACCEPT_MIN_SLEEP
 
@@ -579,22 +636,34 @@ func (s *Server) routeAcceptLoop(ch chan struct{}) {
 
 // StartRouting will start the accept loop on the cluster host:port
 // and will actively try to connect to listed routes.
-func (s *Server) StartRouting() {
+func (s *Server) StartRouting(clientListenReady chan struct{}) {
+	defer s.grWG.Done()
+
+	// Wait for the client listen port to be opened, and
+	// the possible ephemeral port to be selected.
+	<-clientListenReady
+
+	// Get all possible URLs (when server listens to 0.0.0.0).
+	// This is going to be sent to other Servers, so that they can let their
+	// clients know about us.
+	clientConnectURLs := s.getClientConnectURLs()
+
 	// Check for TLSConfig
-	tlsReq := s.opts.ClusterTLSConfig != nil
+	tlsReq := s.opts.Cluster.TLSConfig != nil
 	info := Info{
-		ID:           s.info.ID,
-		Version:      s.info.Version,
-		Host:         s.opts.ClusterHost,
-		Port:         s.opts.ClusterPort,
-		AuthRequired: false,
-		TLSRequired:  tlsReq,
-		SSLRequired:  tlsReq,
-		TLSVerify:    tlsReq,
-		MaxPayload:   s.info.MaxPayload,
+		ID:                s.info.ID,
+		Version:           s.info.Version,
+		Host:              s.opts.Cluster.Host,
+		Port:              s.opts.Cluster.Port,
+		AuthRequired:      false,
+		TLSRequired:       tlsReq,
+		SSLRequired:       tlsReq,
+		TLSVerify:         tlsReq,
+		MaxPayload:        s.info.MaxPayload,
+		ClientConnectURLs: clientConnectURLs,
 	}
 	// Check for Auth items
-	if s.opts.ClusterUsername != "" {
+	if s.opts.Cluster.Username != "" {
 		info.AuthRequired = true
 	}
 	s.routeInfo = info

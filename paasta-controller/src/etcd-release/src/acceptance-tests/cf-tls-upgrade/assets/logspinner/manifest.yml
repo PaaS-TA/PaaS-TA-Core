@@ -1,0 +1,10 @@
+---
+applications:
+- name: logspinner
+  memory: 256M
+  buildpack: go_buildpack
+  instances: 4
+  path: .
+  env:
+    GOVERSION: go1.8
+    GOPACKAGENAME: main

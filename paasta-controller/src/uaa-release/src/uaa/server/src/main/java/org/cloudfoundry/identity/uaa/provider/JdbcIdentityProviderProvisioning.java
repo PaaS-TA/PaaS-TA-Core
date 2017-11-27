@@ -61,6 +61,7 @@ public class JdbcIdentityProviderProvisioning implements IdentityProviderProvisi
 
     protected final JdbcTemplate jdbcTemplate;
 
+
     private final RowMapper<IdentityProvider> mapper = new IdentityProviderRowMapper();
 
     public JdbcIdentityProviderProvisioning(JdbcTemplate jdbcTemplate) {
@@ -167,6 +168,19 @@ public class JdbcIdentityProviderProvisioning implements IdentityProviderProvisi
     public int deleteByOrigin(String origin, String zoneId) {
         return jdbcTemplate.update(DELETE_IDENTITY_PROVIDER_BY_ORIGIN_SQL, zoneId, origin);
     }
+
+    @Override
+    public int deleteByClient(String clientId, String zoneId) {
+        //no op - nothing to do here
+        return 0;
+    }
+
+    @Override
+    public int deleteByUser(String userId, String zoneId) {
+        //no op - nothing to do here
+        return 0;
+    }
+
 
     @Override
     public Log getLogger() {

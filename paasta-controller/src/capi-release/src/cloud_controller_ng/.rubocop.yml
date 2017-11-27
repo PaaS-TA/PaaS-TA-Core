@@ -1,19 +1,70 @@
+require:
+- ./spec/linters/migration/add_constraint_name.rb
+- ./spec/linters/migration/include_string_size.rb
+
 AllCops:
-  TargetRubyVersion: 2.2
+  TargetRubyVersion: 2.3
   Include:
     - '**/Gemfile'
     - '**/Rakefile'
   Exclude:
     - vendor/**/*
-    - db/migrations/**/*
-    - lib/diego/bbs/models/*
+    - lib/diego/bbs/models/**/*
+
+Layout/AlignParameters:
+  Enabled: false
+
+Layout/ClosingParenthesisIndentation:
+  Enabled: false
+
+Layout/DotPosition:
+  EnforcedStyle: trailing
+
+Layout/IndentArray:
+  EnforcedStyle: consistent
+
+Layout/IndentHash:
+  Enabled: false
+
+Layout/MultilineArrayBraceLayout:
+  Enabled: false
+
+Layout/MultilineBlockLayout:
+  Enabled: false
+
+Layout/MultilineHashBraceLayout:
+  Enabled: false
+
+Layout/MultilineMethodCallBraceLayout:
+  Enabled: false
+
+Layout/MultilineMethodDefinitionBraceLayout:
+  Enabled: false
+
+Layout/MultilineOperationIndentation:
+  Enabled: false
+
+Layout/SpaceAroundEqualsInParameterDefault:
+  EnforcedStyle: no_space
+
+Lint/AmbiguousBlockAssociation:
+  Enabled: false
 
 Lint/AmbiguousRegexpLiteral:
   Enabled: false
 
-# enable me for #85546748
 Lint/HandleExceptions:
   Enabled: false
+
+Lint/ShadowedException:
+  Enabled: false
+
+Lint/ScriptPermission:
+  Enabled: false
+
+Lint/UnifiedInteger:
+  Exclude:
+    - db/migrations/**/*
 
 Lint/UnusedBlockArgument:
   Enabled: false
@@ -23,6 +74,15 @@ Lint/UnusedMethodArgument:
 
 Metrics/AbcSize:
   Enabled: false
+
+Metrics/BlockLength:
+  Exclude:
+    - db/migrations/**/*
+    - spec/**/*
+    - lib/cloud_controller/config.rb
+    - config/routes.rb
+    - lib/tasks/db.rake
+  Max: 50
 
 Metrics/ClassLength:
   Enabled: false
@@ -45,6 +105,20 @@ Metrics/ParameterLists:
 Metrics/PerceivedComplexity:
   Enabled: false
 
+Migration/AddConstraintName:
+  Include:
+    - 'db/migrations/**/*'
+  Exclude:
+    # skip old migration files since we do not want to fix them after they are in the wild
+    - !ruby/regexp /db/migrations/201([0-6]|70[1-6]).+\.rb$/
+
+Migration/IncludeStringSize:
+  Include:
+    - 'db/migrations/**/*'
+  Exclude:
+    # skip old migration files since we do not want to fix them after they are in the wild
+    - !ruby/regexp /db/migrations/201([0-6]|70[1-6]|707[01]).+\.rb$/
+
 Performance/Casecmp:
   Enabled: false
 
@@ -53,9 +127,6 @@ Performance/Sample:
 
 Style/Alias:
   EnforcedStyle: prefer_alias_method
-
-Style/AlignParameters:
-  Enabled: false
 
 Style/BlockDelimiters:
   Enabled: false
@@ -66,14 +137,8 @@ Style/BracesAroundHashParameters:
 Style/ClassAndModuleChildren:
   Enabled: false
 
-Style/ClosingParenthesisIndentation:
-  Enabled: false
-
 Style/Documentation:
   Enabled: false
-
-Style/DotPosition:
-  EnforcedStyle: trailing
 
 Style/DoubleNegation:
   Enabled: false
@@ -81,19 +146,20 @@ Style/DoubleNegation:
 Style/EachWithObject:
   Enabled: false
 
+Style/FileName:
+  Exclude:
+    - Guardfile
+
 Style/FormatString:
   EnforcedStyle: sprintf
+
+Style/FrozenStringLiteralComment:
+  Enabled: false
 
 Style/GuardClause:
   Enabled: false
 
 Style/IfUnlessModifier:
-  Enabled: false
-
-Style/IndentArray:
-  EnforcedStyle: consistent
-
-Style/IndentHash:
   Enabled: false
 
 Style/Lambda:
@@ -102,19 +168,22 @@ Style/Lambda:
 Style/MultilineBlockChain:
   Enabled: false
 
-Style/MultilineBlockLayout:
-  Enabled: false
-
-Style/MultilineOperationIndentation:
-  Enabled: false
-
 Style/NegatedIf:
   Enabled: false
 
 Style/Next:
   Enabled: false
 
+Style/NumericLiteralPrefix:
+  Enabled: false
+
 Style/NumericLiterals:
+  Enabled: false
+
+Style/NumericPredicate:
+  Enabled: false
+
+Style/PercentLiteralDelimiters:
   Enabled: false
 
 Style/PredicateName:
@@ -129,16 +198,22 @@ Style/RedundantSelf:
 Style/RescueModifier:
   Enabled: false
 
+Style/SafeNavigation:
+  Enabled: false
+
 Style/SignalException:
   Enabled: false
 
 Style/SingleLineBlockParams:
   Enabled: false
 
-Style/SpaceAroundEqualsInParameterDefault:
-  EnforcedStyle: no_space
-
 Style/StructInheritance:
+  Enabled: false
+
+Style/SymbolArray:
+  Enabled: false
+
+Style/TernaryParentheses:
   Enabled: false
 
 Style/TrailingCommaInArguments:
@@ -151,6 +226,9 @@ Style/TrailingUnderscoreVariable:
   Enabled: false
 
 Style/TrivialAccessors:
+  Enabled: false
+
+Style/VariableNumber:
   Enabled: false
 
 Style/WordArray:

@@ -6,7 +6,18 @@ A go library for Cloud Foundry [UAA](https://github.com/cloudfoundry/uaa) that p
 - decode tokens
 - get token signing key
 
-**Note**: This repository should be imported as `code.cloudfoundry.org/uaa-go-client`.
+
+## Setup
+
+As dependecies for uaa-go-client are not vendored, you should clone the [routing-release](https://github.com/cloudfoundry-incubator/routing-release) repo to get compatible versions of its dependencies.
+```bash
+git clone https://github.com/cloudfoundry-incubator/routing-release
+cd routing-release
+./scripts/update
+cd src/code.cloudfoundry.org/uaa-go-client
+```
+
+If you are using this client as a dependency in your own go project, import it from `code.cloudfoundry.org/uaa-go-client`, then determine compatible versions of this projects dependencies by cloning [routing-release](https://github.com/cloudfoundry-incubator/routing-release).
 
 ## Example
 This example client connects to UAA using https and skips cert verification.

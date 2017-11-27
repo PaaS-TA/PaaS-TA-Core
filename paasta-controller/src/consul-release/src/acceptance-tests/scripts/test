@@ -7,7 +7,6 @@ function main() {
   local root_dir
   root_dir=$(cd "${scripts_dir}/.." && pwd)
 
-  export GO15VENDOREXPERIMENT=1
   export PATH="${root_dir}/bin:${PATH}"
 
   install_ginkgo "${root_dir}"
@@ -27,7 +26,6 @@ function main() {
       -randomizeAllSpecs \
       -randomizeSuites \
       -skipPackage precheck \
-      -skipPackage turbulence \
       -slowSpecThreshold 300 \
       "$@"
   popd > /dev/null

@@ -104,6 +104,7 @@ func (f *FakeEventEmitter) Reset() {
 	defer f.Unlock()
 
 	f.isClosed = false
-	f.messages = []Message{}
+	f.messages = nil
+	f.envelopes = nil
 	f.ReturnError = nil
 }

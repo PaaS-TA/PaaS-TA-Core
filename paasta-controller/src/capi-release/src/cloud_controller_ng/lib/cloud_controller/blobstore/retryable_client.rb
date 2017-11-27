@@ -3,6 +3,8 @@ require 'cloud_controller/blobstore/retryable_blob'
 module CloudController
   module Blobstore
     class RetryableClient
+      extend Forwardable
+
       def initialize(client:, errors:, logger:, num_retries: 3)
         @wrapped_client   = client
         @retryable_errors = errors
@@ -10,9 +12,9 @@ module CloudController
         @num_retries = num_retries
       end
 
-      def local?
-        @wrapped_client.local?
-      end
+      def_delegators :@wrapped_client,
+        :local?,
+        :root_dir
 
       def exists?(key)
         with_retries(__method__.to_s, {
@@ -119,12 +121,22 @@ module CloudController
         end
       end
 
+      def files_for(prefix, ignored_directory_prefixes=[])
+        with_retries(__method__.to_s, {
+          args: {
+            prefix: prefix,
+            ignored_directory_prefixes: ignored_directory_prefixes
+          }
+        }) do
+          @wrapped_client.files_for(prefix, ignored_directory_prefixes)
+        end
+      end
+
       private
 
       def with_retries(log_prefix, log_data)
         retries ||= @num_retries
         yield
-
       rescue *@retryable_errors => e
         retries -= 1
 

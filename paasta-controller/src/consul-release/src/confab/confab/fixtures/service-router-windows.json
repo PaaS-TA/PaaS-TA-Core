@@ -1,0 +1,11 @@
+{
+    "service": {
+        "check": {
+            "interval": "3s",
+            "name": "dns_health_check",
+            "script": "powershell -Command /var/vcap/jobs/router/bin/dns_health_check.ps1; Exit $LASTEXITCODE"
+        },
+        "name": "gorouter",
+        "tags": ["my-node-3"]
+    }
+}

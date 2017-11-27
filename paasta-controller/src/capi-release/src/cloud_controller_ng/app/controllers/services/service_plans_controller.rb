@@ -17,6 +17,7 @@ module VCAP::CloudController
     # searching on parameters that are not directly associated with the model
 
     allow_unauthenticated_access only: :enumerate
+
     def enumerate
       if SecurityContext.missing_token?
         single_filter = @opts[:q][0] if @opts[:q]
@@ -37,10 +38,22 @@ module VCAP::CloudController
           {}
         )
       elsif SecurityContext.invalid_token?
-        raise CloudController::Errors::ApiError.new_from_details('InvalidAuthToken')
+        raise CloudController::Errors::InvalidAuthToken
       else
         super
       end
+    end
+
+    # # Read operation
+    # #
+    # # @param [String] guid The GUID of the object to read.
+    # This method is needed so the service plan is read during rendering
+    # with the same service-instance-based privilege escalation that
+    # is used when access to the object is validated.
+    def read(guid)
+      obj = find_guid(guid)
+      validate_access(:read, obj)
+      object_renderer.render_json_with_read_privileges(self.class, obj, @opts)
     end
 
     def create
@@ -94,7 +107,7 @@ module VCAP::CloudController
       single_filter = opts[:q][0] if opts[:q]
 
       if single_filter && single_filter.start_with?('service_broker_guid')
-        service_broker_guid = single_filter.split(':')[1]
+        service_broker_guid = single_filter.split(/(:| IN )/)[2]
 
         Query.
           filtered_dataset_from_query_params(model, ds, qp, { q: '' }).

@@ -102,6 +102,9 @@ var _ = Describe("NewTLSUpgradeManifest", func() {
 				{
 					Name:    "consul_agent",
 					Release: "consul",
+					Consumes: core.JobConsumes{
+						Consul: "nil",
+					},
 				},
 			},
 			Properties: &core.JobProperties{
@@ -130,6 +133,9 @@ var _ = Describe("NewTLSUpgradeManifest", func() {
 				{
 					Name:    "consul_agent",
 					Release: "consul",
+					Consumes: core.JobConsumes{
+						Consul: "nil",
+					},
 				},
 				{
 					Name:    "etcd",
@@ -183,6 +189,9 @@ var _ = Describe("NewTLSUpgradeManifest", func() {
 				{
 					Name:    "consul_agent",
 					Release: "consul",
+					Consumes: core.JobConsumes{
+						Consul: "nil",
+					},
 				},
 				{
 					Name:    "etcd_proxy",
@@ -210,6 +219,9 @@ var _ = Describe("NewTLSUpgradeManifest", func() {
 				{
 					Name:    "consul_agent",
 					Release: "consul",
+					Consumes: core.JobConsumes{
+						Consul: "nil",
+					},
 				},
 				{
 					Name:    "etcd_testconsumer",
@@ -370,6 +382,9 @@ var _ = Describe("NewTLSUpgradeManifest", func() {
 				{
 					Name:    "consul_agent",
 					Release: "consul",
+					Consumes: core.JobConsumes{
+						Consul: "nil",
+					},
 				},
 			},
 			Properties: &core.JobProperties{
@@ -398,6 +413,9 @@ var _ = Describe("NewTLSUpgradeManifest", func() {
 				{
 					Name:    "consul_agent",
 					Release: "consul",
+					Consumes: core.JobConsumes{
+						Consul: "nil",
+					},
 				},
 				{
 					Name:    "etcd",
@@ -451,6 +469,9 @@ var _ = Describe("NewTLSUpgradeManifest", func() {
 				{
 					Name:    "consul_agent",
 					Release: "consul",
+					Consumes: core.JobConsumes{
+						Consul: "nil",
+					},
 				},
 				{
 					Name:    "etcd_proxy",
@@ -478,6 +499,9 @@ var _ = Describe("NewTLSUpgradeManifest", func() {
 				{
 					Name:    "consul_agent",
 					Release: "consul",
+					Consumes: core.JobConsumes{
+						Consul: "nil",
+					},
 				},
 				{
 					Name:    "etcd_testconsumer",

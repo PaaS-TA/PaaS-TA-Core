@@ -23,6 +23,16 @@ module VCAP::CloudController
         connection_options[key] = opts[key] if opts[key]
       end
 
+      if opts[:ca_cert_path]
+        if opts[:database].start_with?('mysql')
+          connection_options[:sslca] = opts[:ca_cert_path]
+          connection_options[:sslmode] = opts[:ssl_verify_hostname] ? :verify_identity : :verify_ca
+        elsif opts[:database].start_with?('postgres')
+          connection_options[:sslrootcert] = opts[:ca_cert_path]
+          connection_options[:sslmode] = opts[:ssl_verify_hostname] ? 'verify-full' : 'verify-ca'
+        end
+      end
+
       if opts[:database].index('mysql') == 0
         connection_options[:charset] = 'utf8'
       end
@@ -39,10 +49,7 @@ module VCAP::CloudController
       db = Sequel.connect(opts[:database], connection_options)
       db.logger = logger
       db.sql_log_level = opts[:log_level] || :debug2
-
-      if db.database_type == :mysql
-        Sequel::MySQL.default_collate = 'utf8_bin'
-      end
+      db.default_collate = 'utf8_bin' if db.database_type == :mysql
 
       db
     end
@@ -50,6 +57,13 @@ module VCAP::CloudController
     def self.load_models(db_config, logger)
       db = connect(db_config, logger)
       DBMigrator.new(db).check_migrations!
+
+      require 'models'
+      require 'delayed_job_sequel'
+    end
+
+    def self.load_models_without_migrations_check(db_config, logger)
+      connect(db_config, logger)
 
       require 'models'
       require 'delayed_job_sequel'
@@ -70,15 +84,23 @@ Sequel::Database.extension(:current_datetime_timestamp)
 require 'cloud_controller/encryptor'
 Sequel::Model.include VCAP::CloudController::Encryptor::FieldEncryptor
 
-# monkey patch sequel to make it easier to map validation failures to custom
-# exceptions, e.g.
-#
-# rescue Sequel::ValidationFailed => e
-#   if e.errors.on(:some_attribute).include(:unique)
-#     ...
-#
-Sequel::Plugins::ValidationHelpers::DEFAULT_OPTIONS.each do |k, v|
-  Sequel::Plugins::ValidationHelpers::DEFAULT_OPTIONS[k][:message] = k
+Sequel.split_symbols = true
+
+class Sequel::Model
+  private
+
+  # monkey patch sequel to make it easier to map validation failures to custom
+  # exceptions, e.g.
+  #
+  # rescue Sequel::ValidationFailed => e
+  #   if e.errors.on(:some_attribute).include(:unique)
+
+  def default_validation_helpers_options(type)
+    val = super(type)
+    val[:message] = type
+
+    val
+  end
 end
 
 # Helper to create migrations.  This was added because

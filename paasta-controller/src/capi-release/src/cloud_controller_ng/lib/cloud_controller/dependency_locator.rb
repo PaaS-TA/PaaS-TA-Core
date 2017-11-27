@@ -1,14 +1,23 @@
 require 'repositories/app_event_repository'
+require 'repositories/build_event_repository'
 require 'repositories/space_event_repository'
+require 'repositories/organization_event_repository'
 require 'repositories/route_event_repository'
+require 'repositories/user_event_repository'
 require 'cloud_controller/rest_controller/object_renderer'
 require 'cloud_controller/rest_controller/paginated_collection_renderer'
 require 'cloud_controller/upload_handler'
 require 'cloud_controller/blob_sender/nginx_blob_sender'
 require 'cloud_controller/blob_sender/default_blob_sender'
 require 'cloud_controller/blob_sender/missing_blob_handler'
+require 'traffic_controller/client'
+require 'cloud_controller/diego/task_recipe_builder'
+require 'cloud_controller/diego/app_recipe_builder'
 require 'cloud_controller/diego/stager_client'
+require 'cloud_controller/diego/bbs_apps_client'
 require 'cloud_controller/diego/bbs_stager_client'
+require 'cloud_controller/diego/bbs_task_client'
+require 'cloud_controller/diego/bbs_instances_client'
 require 'cloud_controller/diego/tps_client'
 require 'cloud_controller/diego/messenger'
 require 'cloud_controller/blobstore/client_provider'
@@ -25,11 +34,13 @@ module CloudController
     include VCAP::CloudController
 
     LARGE_COLLECTION_SIZE = 10_000
+    BUILDPACK_CACHE_DIR = 'buildpack_cache'.freeze
+    RESOURCE_POOL_DIR = 'app_bits_cache'.freeze
 
     attr_accessor :config
 
     def initialize
-      @config = VCAP::CloudController::Config.config
+      @config       = VCAP::CloudController::Config.config
       @dependencies = {}
     end
 
@@ -39,10 +50,6 @@ module CloudController
 
     def register(name, value)
       @dependencies[name] = value
-    end
-
-    def health_manager_client
-      @dependencies[:health_manager_client] || raise('health_manager_client not set')
     end
 
     def runners
@@ -61,12 +68,28 @@ module CloudController
       @dependencies[:stager_client] || raise('stager_client not set')
     end
 
+    def bbs_apps_client
+      @dependencies[:bbs_apps_client] || register(:bbs_apps_client, build_bbs_apps_client)
+    end
+
     def bbs_stager_client
       @dependencies[:bbs_stager_client] || register(:bbs_stager_client, build_bbs_stager_client)
     end
 
+    def bbs_task_client
+      @dependencies[:bbs_task_client] || register(:bbs_task_client, build_bbs_task_client)
+    end
+
+    def bbs_instances_client
+      @dependencies[:bbs_instances_client] || register(:bbs_instances_client, build_bbs_instances_client)
+    end
+
     def tps_client
       @dependencies[:tps_client] || raise('tps_client not set')
+    end
+
+    def traffic_controller_client
+      @dependencies[:traffic_controller_client] || register(:traffic_controller_client, build_traffic_controller_client)
     end
 
     def upload_handler
@@ -89,7 +112,7 @@ module CloudController
       options = @config.fetch(:droplets)
 
       Blobstore::ClientProvider.provide(
-        options: options,
+        options:       options,
         directory_key: options.fetch(:droplet_directory_key),
         resource_type: :droplets
       )
@@ -99,9 +122,9 @@ module CloudController
       options = @config.fetch(:droplets)
 
       Blobstore::ClientProvider.provide(
-        options: options,
+        options:       options,
         directory_key: options.fetch(:droplet_directory_key),
-        root_dir: 'buildpack_cache',
+        root_dir:      BUILDPACK_CACHE_DIR,
         resource_type: :buildpack_cache
       )
     end
@@ -110,9 +133,18 @@ module CloudController
       options = @config.fetch(:packages)
 
       Blobstore::ClientProvider.provide(
-        options: options,
+        options:       options,
         directory_key: options.fetch(:app_package_directory_key),
         resource_type: :packages
+      )
+    end
+
+    def legacy_global_app_bits_cache
+      options = @config.fetch(:resource_pool)
+
+      Blobstore::ClientProvider.provide(
+        options:       options,
+        directory_key: options.fetch(:resource_directory_key),
       )
     end
 
@@ -120,8 +152,9 @@ module CloudController
       options = @config.fetch(:resource_pool)
 
       Blobstore::ClientProvider.provide(
-        options: options,
-        directory_key: options.fetch(:resource_directory_key)
+        options:       options,
+        directory_key: options.fetch(:resource_directory_key),
+        root_dir:      RESOURCE_POOL_DIR,
       )
     end
 
@@ -129,7 +162,7 @@ module CloudController
       options = @config.fetch(:buildpacks)
 
       Blobstore::ClientProvider.provide(
-        options: options,
+        options:       options,
         directory_key: options.fetch(:buildpack_directory_key, 'cc-buildpacks'),
         resource_type: :buildpacks
       )
@@ -137,10 +170,12 @@ module CloudController
 
     def blobstore_url_generator
       connection_options = {
-        blobstore_host: @config[:internal_service_hostname],
-        blobstore_port: @config[:external_port],
-        user: @config[:staging][:auth][:user],
-        password: @config[:staging][:auth][:password]
+        blobstore_host:          @config[:internal_service_hostname],
+        blobstore_external_port: @config[:external_port],
+        blobstore_tls_port:      @config[:tls_port],
+        user:                    @config[:staging][:auth][:user],
+        password:                @config[:staging][:auth][:password],
+        mtls:                    HashUtils.dig(@config, :diego, :temporary_cc_uploader_mtls)
       }
 
       Blobstore::UrlGenerator.new(
@@ -152,8 +187,24 @@ module CloudController
       )
     end
 
+    def droplet_url_generator
+      VCAP::CloudController::Diego::Buildpack::DropletUrlGenerator.new(
+        internal_service_hostname: @config[:internal_service_hostname],
+        external_port:             @config[:external_port],
+        tls_port:                  @config[:tls_port],
+        mtls:                      HashUtils.dig(@config, :diego, :temporary_droplet_download_mtls))
+    end
+
     def space_event_repository
       Repositories::SpaceEventRepository.new
+    end
+
+    def organization_event_repository
+      Repositories::OrganizationEventRepository.new
+    end
+
+    def user_event_repository
+      Repositories::UserEventRepository.new
     end
 
     def route_event_repository
@@ -161,10 +212,7 @@ module CloudController
     end
 
     def services_event_repository
-      Repositories::ServiceEventRepository.new(
-        user: SecurityContext.current_user,
-        user_email: SecurityContext.current_user_email
-      )
+      Repositories::ServiceEventRepository.new(UserAuditInfo.from_context(SecurityContext))
     end
 
     def service_manager
@@ -176,12 +224,11 @@ module CloudController
     end
 
     def object_renderer
-      eager_loader = VCAP::CloudController::RestController::SecureEagerLoader.new
-      serializer   = VCAP::CloudController::RestController::PreloadedObjectSerializer.new
+      create_object_renderer
+    end
 
-      VCAP::CloudController::RestController::ObjectRenderer.new(eager_loader, serializer, {
-        max_inline_relations_depth: @config[:renderer][:max_inline_relations_depth],
-      })
+    def username_populating_object_renderer
+      create_object_renderer(object_transformer: UsernamePopulator.new(uaa_client))
     end
 
     def paginated_collection_renderer
@@ -193,36 +240,39 @@ module CloudController
     end
 
     def username_populating_collection_renderer
-      create_paginated_collection_renderer(collection_transformer: UsernamePopulator.new(username_lookup_uaa_client))
+      create_paginated_collection_renderer(collection_transformer: UsernamePopulator.new(uaa_client))
     end
 
     def username_and_roles_populating_collection_renderer
-      create_paginated_collection_renderer(collection_transformer: UsernamesAndRolesPopulator.new(username_lookup_uaa_client))
+      create_paginated_collection_renderer(collection_transformer: UsernamesAndRolesPopulator.new(uaa_client))
     end
 
     def router_group_type_populating_collection_renderer
       create_paginated_collection_renderer(collection_transformer: RouterGroupTypePopulator.new(routing_api_client))
     end
 
-    def username_lookup_uaa_client
-      client_id = @config[:cloud_controller_username_lookup_client_name]
-      secret = @config[:cloud_controller_username_lookup_client_secret]
-      target = @config[:uaa][:url]
-      skip_cert_verify = @config[:skip_cert_verify]
-      UaaClient.new(target, client_id, secret, { skip_ssl_validation: skip_cert_verify })
+    def uaa_client
+      UaaClient.new(
+        uaa_target: @config[:uaa][:internal_url],
+        client_id:  @config[:cloud_controller_username_lookup_client_name],
+        secret:     @config[:cloud_controller_username_lookup_client_secret],
+        ca_file:    @config[:uaa][:ca_file]
+      )
     end
 
     def routing_api_client
       return RoutingApi::DisabledClient.new if @config[:routing_api].nil?
+
+      uaa_client = UaaClient.new(
+        uaa_target: @config[:uaa][:internal_url],
+        client_id:  HashUtils.dig(@config, :routing_api, :routing_client_name),
+        secret:     HashUtils.dig(@config, :routing_api, :routing_client_secret),
+        ca_file:    @config[:uaa][:ca_file]
+      )
+
       skip_cert_verify = @config[:skip_cert_verify]
-
-      client_id = @config[:routing_api] && @config[:routing_api][:routing_client_name]
-      secret = @config[:routing_api] && @config[:routing_api][:routing_client_secret]
-      uaa_target = @config[:uaa][:url]
-      token_issuer = CF::UAA::TokenIssuer.new(uaa_target, client_id, secret, { skip_ssl_validation: skip_cert_verify })
-
-      routing_api_url = @config[:routing_api] && @config[:routing_api][:url]
-      RoutingApi::Client.new(routing_api_url, token_issuer, skip_cert_verify)
+      routing_api_url  = HashUtils.dig(@config, :routing_api, :url)
+      RoutingApi::Client.new(routing_api_url, uaa_client, skip_cert_verify)
     end
 
     def missing_blob_handler
@@ -241,7 +291,7 @@ module CloudController
       return nil unless use_bits_service
 
       BitsService::ResourcePool.new(
-        endpoint: bits_service_options[:private_endpoint],
+        endpoint:                   bits_service_options[:private_endpoint],
         request_timeout_in_seconds: @config[:request_timeout_in_seconds]
       )
     end
@@ -283,6 +333,54 @@ module CloudController
       VCAP::CloudController::Diego::BbsStagerClient.new(bbs_client)
     end
 
+    def build_bbs_apps_client
+      bbs_client = ::Diego::Client.new(
+        url:              HashUtils.dig(@config, :diego, :bbs, :url),
+        ca_cert_file:     HashUtils.dig(@config, :diego, :bbs, :ca_file),
+        client_cert_file: HashUtils.dig(@config, :diego, :bbs, :cert_file),
+        client_key_file:  HashUtils.dig(@config, :diego, :bbs, :key_file)
+      )
+
+      VCAP::CloudController::Diego::BbsAppsClient.new(bbs_client)
+    end
+
+    def build_bbs_task_client
+      bbs_client = ::Diego::Client.new(
+        url:              HashUtils.dig(@config, :diego, :bbs, :url),
+        ca_cert_file:     HashUtils.dig(@config, :diego, :bbs, :ca_file),
+        client_cert_file: HashUtils.dig(@config, :diego, :bbs, :cert_file),
+        client_key_file:  HashUtils.dig(@config, :diego, :bbs, :key_file)
+      )
+
+      VCAP::CloudController::Diego::BbsTaskClient.new(bbs_client)
+    end
+
+    def build_bbs_instances_client
+      bbs_client = ::Diego::Client.new(
+        url:              HashUtils.dig(@config, :diego, :bbs, :url),
+        ca_cert_file:     HashUtils.dig(@config, :diego, :bbs, :ca_file),
+        client_cert_file: HashUtils.dig(@config, :diego, :bbs, :cert_file),
+        client_key_file:  HashUtils.dig(@config, :diego, :bbs, :key_file)
+      )
+
+      VCAP::CloudController::Diego::BbsInstancesClient.new(bbs_client)
+    end
+
+    def build_traffic_controller_client
+      TrafficController::Client.new(url: HashUtils.dig(@config, :loggregator, :internal_url))
+    end
+
+    def create_object_renderer(opts={})
+      eager_loader       = VCAP::CloudController::RestController::SecureEagerLoader.new
+      serializer         = VCAP::CloudController::RestController::PreloadedObjectSerializer.new
+      object_transformer = opts[:object_transformer]
+
+      VCAP::CloudController::RestController::ObjectRenderer.new(eager_loader, serializer, {
+        max_inline_relations_depth: @config[:renderer][:max_inline_relations_depth],
+        object_transformer:         object_transformer
+      })
+    end
+
     def create_paginated_collection_renderer(opts={})
       eager_loader               = opts[:eager_loader] || VCAP::CloudController::RestController::SecureEagerLoader.new
       serializer                 = opts[:serializer] || VCAP::CloudController::RestController::PreloadedObjectSerializer.new
@@ -295,7 +393,7 @@ module CloudController
         max_results_per_page:       max_results_per_page,
         default_results_per_page:   default_results_per_page,
         max_inline_relations_depth: max_inline_relations_depth,
-        collection_transformer: collection_transformer
+        collection_transformer:     collection_transformer
       })
     end
   end

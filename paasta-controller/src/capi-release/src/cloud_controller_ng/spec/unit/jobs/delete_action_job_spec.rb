@@ -60,6 +60,40 @@ module VCAP::CloudController
           end
         end
       end
+
+      describe '#resource_type' do
+        it 'returns a display name for the resource being deleted' do
+          expect(job.resource_type).to eq('space')
+        end
+
+        context 'when the class contains the word Model' do
+          subject(:job) { DeleteActionJob.new(DropletModel, 'unused', nil) }
+
+          it 'returns a display name without the word Model' do
+            expect(job.resource_type).to eq('droplet')
+          end
+        end
+      end
+
+      describe '#display_name' do
+        it 'returns a display name for this action' do
+          expect(job.display_name).to eq('space.delete')
+        end
+
+        context 'when the class contains the word Model' do
+          subject(:job) { DeleteActionJob.new(DropletModel, 'unused', nil) }
+
+          it 'returns a display name without the word Model' do
+            expect(job.display_name).to eq('droplet.delete')
+          end
+        end
+      end
+
+      describe '#resource_guid' do
+        it 'returns the given resource guid' do
+          expect(job.resource_guid).to eq(space.guid)
+        end
+      end
     end
   end
 end

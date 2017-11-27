@@ -1,5 +1,6 @@
 require 'spec_helper'
 require_relative 'lifecycle_protocol_shared'
+require 'isolation_segment_assign'
 
 module VCAP::CloudController
   module Diego
@@ -12,7 +13,7 @@ module VCAP::CloudController
         { 'more' => 'data', 'start_command' => '/usr/local/bin/party' }
       end
 
-      def action_builder(_, _)
+      def staging_action_builder(_, _)
         nil
       end
     end
@@ -29,8 +30,16 @@ module VCAP::CloudController
       let(:config) { TestConfig.config }
       let(:egress_rules) { instance_double(EgressRules) }
       let(:fake_lifecycle_protocol) { FakeLifecycleProtocol.new }
+      let(:running_env) { { 'KEY' => 'running_value' } }
 
       before do
+        group = EnvironmentVariableGroup.running
+        group.environment_json = running_env
+        group.save
+
+        allow(egress_rules).to receive(:running).and_return(['running_egress_rule'])
+        allow(LifecycleProtocol).to receive(:protocol_for_type).and_return(fake_lifecycle_protocol)
+
         allow(EgressRules).to receive(:new).and_return(egress_rules)
       end
 
@@ -40,13 +49,19 @@ module VCAP::CloudController
         let(:droplet) { DropletModel.make(package: package, app: app) }
         let(:staging_details) do
           Diego::StagingDetails.new.tap do |details|
-            details.droplet               = droplet
+            details.staging_guid          = droplet.guid
             details.package               = package
             details.environment_variables = { 'nightshade_fruit' => 'potato' }
             details.staging_memory_in_mb  = 42
             details.staging_disk_in_mb    = 51
-            details.start_after_staging = true
+            details.start_after_staging   = true
+            details.lifecycle             = lifecycle
           end
+        end
+        let(:lifecycle_type) { 'buildpack' }
+        let(:staging_message) { BuildCreateMessage.new(lifecycle: { data: {}, type: lifecycle_type }) }
+        let(:lifecycle) do
+          LifecycleProvider.provide(package, staging_message)
         end
         let(:config) do
           {
@@ -67,17 +82,16 @@ module VCAP::CloudController
         let(:external_port) { '7777' }
         let(:user) { 'user' }
         let(:password) { 'password' }
+        let(:result) { protocol.stage_package_request(config, staging_details) }
 
         before do
           allow(LifecycleProtocol).to receive(:protocol_for_type).and_return(fake_lifecycle_protocol)
-          allow(egress_rules).to receive(:staging).and_return(['staging_egress_rule'])
+          expect(egress_rules).to receive(:staging).with(app_guid: app.guid).and_return(['staging_egress_rule'])
         end
 
         it 'contains the correct payload for staging a package' do
-          result = protocol.stage_package_request(config, staging_details)
-
           expect(result).to eq({
-            app_id:              staging_details.droplet.guid,
+            app_id:              staging_details.staging_guid,
             log_guid:            app.guid,
             memory_mb:           staging_details.staging_memory_in_mb,
             disk_mb:             staging_details.staging_disk_in_mb,
@@ -85,10 +99,10 @@ module VCAP::CloudController
             environment:         VCAP::CloudController::Diego::NormalEnvHashToDiegoEnvArrayPhilosopher.muse(staging_details.environment_variables),
             egress_rules:        ['staging_egress_rule'],
             timeout:             90,
-            lifecycle:           droplet.lifecycle_type,
+            lifecycle:           lifecycle_type,
             lifecycle_data:      { 'some' => 'data' },
             completion_callback: "http://#{user}:#{password}@#{internal_service_hostname}:#{external_port}" \
-                                   "/internal/v3/staging/#{droplet.guid}/droplet_completed?start=#{staging_details.start_after_staging}"
+            "/internal/v3/staging/#{droplet.guid}/build_completed?start=#{staging_details.start_after_staging}"
           })
         end
       end
@@ -109,13 +123,12 @@ module VCAP::CloudController
       end
 
       describe '#desire_app_message' do
-        let(:process) { AppFactory.make(diego: true, ports: ports, type: type, health_check_timeout: 12) }
+        let(:space) { Space.make }
+        let(:process) { AppFactory.make(space: space, diego: true, ports: ports, type: type, health_check_timeout: 12) }
         let(:default_health_check_timeout) { 99 }
         let(:message) { protocol.desire_app_message(process, default_health_check_timeout) }
         let(:ports) { [2222, 3333] }
         let(:type) { 'web' }
-
-        let(:running_env) { { 'KEY' => 'running_value' } }
 
         let(:route_without_service) { Route.make(space: process.space) }
         let(:route_with_service) do
@@ -136,6 +149,7 @@ module VCAP::CloudController
 
           allow(egress_rules).to receive(:running).with(process).and_return(['running_egress_rule'])
           allow(LifecycleProtocol).to receive(:protocol_for_type).and_return(fake_lifecycle_protocol)
+          allow(VCAP::CloudController::IsolationSegmentSelector).to receive(:for_space).and_return('segment-from-selector')
         end
 
         it 'is a message with the information nsync needs to desire the app' do
@@ -146,6 +160,7 @@ module VCAP::CloudController
             'file_descriptors' => process.file_descriptors,
             'health_check_type' => process.health_check_type,
             'health_check_timeout_in_seconds' => process.health_check_timeout,
+            'health_check_http_endpoint' => '',
             'log_guid' => process.app.guid,
             'log_source' => 'APP/PROC/WEB',
             'memory_mb' => process.memory,
@@ -161,7 +176,7 @@ module VCAP::CloudController
               'http_routes' => [
                 { 'hostname' => route_without_service.uri,
                   'port' => 2222,
-                },
+              },
                 { 'hostname' => route_with_service.uri,
                   'route_service_url' => route_with_service.route_binding.route_service_url,
                   'port' => 2222,
@@ -180,7 +195,8 @@ module VCAP::CloudController
                 'org_id' => process.organization.guid,
               }
             },
-            'volume_mounts' => an_instance_of(Array)
+            'volume_mounts' => an_instance_of(Array),
+            'isolation_segment' => 'segment-from-selector'
           }.merge(fake_lifecycle_protocol.desired_app_message(double(:app))))
         end
 
@@ -227,6 +243,16 @@ module VCAP::CloudController
 
           it 'uses the default app health check from the config' do
             expect(message['health_check_timeout_in_seconds']).to eq(default_health_check_timeout)
+          end
+        end
+
+        context 'when the app health check http endpoint is set' do
+          let(:default_health_check_http_endpoint) { '/check' }
+          before do
+            process.health_check_http_endpoint = default_health_check_http_endpoint
+          end
+          it 'uses the app health check http endpoint' do
+            expect(message['health_check_http_endpoint']).to eq(default_health_check_http_endpoint)
           end
         end
 

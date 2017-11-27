@@ -1,0 +1,48 @@
+### Update an app
+
+```
+Example Request
+```
+
+```shell
+curl "https://api.example.org/v3/apps/[guid]" \
+  -X PATCH \
+  -H "Authorization: bearer [token]" \
+  -H "Content-type: application/json" \
+  -d '{
+    "name": "my_app",
+    "lifecycle": {
+      "type": "buildpack",
+      "data": {
+        "buildpacks": ["java_buildpack"],
+      }
+    }
+  }'
+```
+
+```
+Example Response
+```
+
+```http
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+<%= yield_content :app_with_state, 'STARTED' %>
+```
+
+#### Definition
+`PATCH /v3/apps/:guid`
+
+#### Optional Parameters
+
+Name | Type | Description
+---- | ---- | -----------
+**name** | _string_ | Name of the app.
+**lifecycle** | [_lifecycle object_](#the-lifecycle-object) | Lifecycle to be used when updating the app. Note: `data` is a required field in lifecycle if lifecycle is updated.
+
+#### Permitted Roles
+ |
+--- | ---
+Space Developer |
+Admin |

@@ -11,7 +11,7 @@ module VCAP::CloudController
       @config = config
     end
 
-    def create(app, message, user_guid, user_email, droplet: nil)
+    def create(app, message, user_audit_info, droplet: nil)
       droplet ||= app.droplet
       no_assigned_droplet! unless droplet
       validate_maximum_disk!(message)
@@ -34,12 +34,16 @@ module VCAP::CloudController
         app.update(max_task_sequence_id: app.max_task_sequence_id + 1)
 
         app_usage_event_repository.create_from_task(task, 'TASK_STARTED')
-        task_event_repository.record_task_create(task, user_guid, user_email)
+        task_event_repository.record_task_create(task, user_audit_info)
       end
 
-      dependency_locator.nsync_client.desire_task(task)
+      submit_task(task)
 
       task
+    rescue Diego::Buildpack::LifecycleProtocol::InvalidDownloadUri,
+           Diego::LifecycleBundleUriGenerator::InvalidStack,
+           Diego::LifecycleBundleUriGenerator::InvalidCompiler => e
+      raise CloudController::Errors::ApiError.new_from_details('TaskError', e.message)
     rescue Sequel::ValidationFailed => e
       raise InvalidTask.new(e.message)
     end
@@ -47,6 +51,25 @@ module VCAP::CloudController
     private
 
     attr_reader :config
+
+    def submit_task(task)
+      if bypass_bridge?
+        begin
+          task_definition = Diego::TaskRecipeBuilder.new.build_app_task(config, task)
+          dependency_locator.bbs_task_client.desire_task(task.guid, task_definition, Diego::TASKS_DOMAIN)
+          mark_task_as_running(task)
+        rescue => e
+          fail_task(task)
+          raise e
+        end
+      else
+        dependency_locator.nsync_client.desire_task(task)
+      end
+    end
+
+    def bypass_bridge?
+      config[:diego] && config[:diego][:temporary_local_tasks]
+    end
 
     def use_requested_name_or_generate_name(message)
       message.requested?(:name) ? message.name : Random.new.bytes(4).unpack('H*').first
@@ -71,6 +94,23 @@ module VCAP::CloudController
 
     def task_event_repository
       Repositories::TaskEventRepository.new
+    end
+
+    def fail_task(task)
+      task.db.transaction do
+        task.lock!
+        task.state = TaskModel::FAILED_STATE
+        task.failure_reason = 'Unable to request task to be run'
+        task.save
+      end
+    end
+
+    def mark_task_as_running(task)
+      task.db.transaction do
+        task.lock!
+        task.state = TaskModel::RUNNING_STATE
+        task.save
+      end
     end
   end
 end

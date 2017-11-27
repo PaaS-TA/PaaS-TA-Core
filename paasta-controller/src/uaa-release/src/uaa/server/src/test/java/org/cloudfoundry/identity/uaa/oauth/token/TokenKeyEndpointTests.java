@@ -32,9 +32,9 @@ import org.springframework.security.core.authority.AuthorityUtils;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.jwt.crypto.sign.RsaSigner;
 import org.springframework.security.jwt.crypto.sign.RsaVerifier;
-import org.springframework.util.Base64Utils;
 
 import java.security.Principal;
+import java.util.Base64;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -43,6 +43,7 @@ import java.util.stream.Collectors;
 
 import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -66,11 +67,11 @@ public class TokenKeyEndpointTests {
     public void sharedSecretIsReturnedFromTokenKeyEndpoint() throws Exception {
         configureKeysForDefaultZone(Collections.singletonMap("someKeyId", "someKey"));
         VerificationKeyResponse response = tokenKeyEndpoint.getKey(validUaaResource);
-        assertEquals("HMACSHA256", response.getAlgorithm());
+        assertEquals("HS256", response.getAlgorithm());
         assertEquals("someKey", response.getKey());
         assertEquals("someKeyId", response.getId());
         assertEquals("MAC", response.getType());
-        assertEquals("sig", response.getUse());
+        assertEquals("sig", response.getUse().name());
     }
 
     private void configureKeysForDefaultZone(Map<String,String> keys) {
@@ -102,7 +103,7 @@ public class TokenKeyEndpointTests {
         String serialized = JsonUtils.writeValueAsString(response);
 
         Map<String, String> deserializedMap = JsonUtils.readValue(serialized, Map.class);
-        assertEquals("HMACSHA256", deserializedMap.get("alg"));
+        assertEquals("HS256", deserializedMap.get("alg"));
         assertEquals("someKey", deserializedMap.get("value"));
         assertEquals("MAC", deserializedMap.get("kty"));
         assertEquals("sig", deserializedMap.get("use"));
@@ -130,14 +131,16 @@ public class TokenKeyEndpointTests {
         IdentityZoneHolder.set(zone);
 
         VerificationKeyResponse response = tokenKeyEndpoint.getKey(mock(Principal.class));
+        Base64.Encoder encoder = Base64.getUrlEncoder().withoutPadding();
+        Base64.Decoder decoder = Base64.getUrlDecoder();
 
-        assertEquals(response.getModulus(), Base64Utils.encodeToUrlSafeString(Base64Utils.decodeFromUrlSafeString(response.getModulus())));
-        assertEquals(response.getExponent(), Base64Utils.encodeToUrlSafeString(Base64Utils.decodeFromUrlSafeString(response.getExponent())));
+        assertEquals(response.getModulus(), encoder.encodeToString(decoder.decode(response.getModulus())));
+        assertEquals(response.getExponent(), encoder.encodeToString(decoder.decode((response.getExponent()))));
 
-        assertEquals("SHA256withRSA", response.getAlgorithm());
+        assertEquals("RS256", response.getAlgorithm());
         assertEquals("key1", response.getId());
         assertEquals("RSA", response.getType());
-        assertEquals("sig", response.getUse());
+        assertEquals("sig", response.getUse().name());
     }
 
     @Test
@@ -148,11 +151,11 @@ public class TokenKeyEndpointTests {
 
         VerificationKeyResponse response = tokenKeyEndpoint.getKey(validUaaResource);
 
-        assertEquals("HMACSHA256", response.getAlgorithm());
+        assertEquals("HS256", response.getAlgorithm());
         assertEquals("someKey", response.getKey());
         assertEquals("someKeyId", response.getId());
         assertEquals("MAC", response.getType());
-        assertEquals("sig", response.getUse());
+        assertEquals("sig", response.getUse().name());
     }
 
     @Test
@@ -216,6 +219,14 @@ public class TokenKeyEndpointTests {
         rsaSigner = new RsaSigner(signingKey3);
         rsaVerifier = new RsaVerifier(key3Response.getKey());
         rsaVerifier.verify(bytes, rsaSigner.sign(bytes));
+
+        //ensure that none of the keys are padded
+        keys.stream().forEach(
+            key ->
+                assertFalse("Invalid padding for key:"+key.getKid(),
+                           key.getExponent().endsWith("=") ||
+                           key.getModulus().endsWith("="))
+        );
     }
 
     @Test

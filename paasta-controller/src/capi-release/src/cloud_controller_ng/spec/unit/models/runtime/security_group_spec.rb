@@ -1,4 +1,5 @@
 # encoding: utf-8
+
 require 'spec_helper'
 
 module VCAP::CloudController
@@ -229,6 +230,28 @@ module VCAP::CloudController
 
     describe 'Associations' do
       it { is_expected.to have_associated :spaces }
+
+      describe 'spaces' do
+        it { is_expected.to have_associated :spaces }
+
+        it 'can be delete when it has associated spaces' do
+          security_group = SecurityGroup.make
+          security_group.add_space(Space.make)
+
+          expect { security_group.destroy }.not_to raise_error
+        end
+      end
+
+      describe 'staging_spaces' do
+        it { is_expected.to have_associated :staging_spaces, associated_instance: ->(_) { Space.make } }
+
+        it 'can be delete when it has associated staging_spaces' do
+          security_group = SecurityGroup.make
+          security_group.add_staging_space(Space.make)
+
+          expect { security_group.destroy }.not_to raise_error
+        end
+      end
     end
 
     describe 'Validations' do
@@ -535,6 +558,16 @@ module VCAP::CloudController
               end
 
               context 'bad' do
+                context 'when its empty' do
+                  let(:rule) { build_all_rule('destination' => '') }
+
+                  it 'is not valid' do
+                    expect(subject).not_to be_valid
+                    expect(subject.errors[:rules].length).to eq 1
+                    expect(subject.errors[:rules][0]).to start_with 'rule number 1 contains invalid destination'
+                  end
+                end
+
                 context 'when it contains non-CIDR characters' do
                   let(:rule) { build_all_rule('destination' => 'asdf') }
 
@@ -725,6 +758,84 @@ module VCAP::CloudController
             expect(subject.errors.on(:rules)).to include "length must not exceed #{SecurityGroup::MAX_RULES_CHAR_LENGTH} characters"
           end
         end
+      end
+    end
+
+    describe '.user_visibility_filter' do
+      let(:security_group) { SecurityGroup.make }
+      let(:space) { Space.make }
+      let(:user) { User.make }
+
+      subject(:filtered_security_groups) do
+        SecurityGroup.where(SecurityGroup.user_visibility_filter(user))
+      end
+
+      before do
+        space.organization.add_user(user)
+      end
+
+      it 'includes running security groups associated to spaces where the user is a developer' do
+        space.add_developer(user)
+        space.add_security_group(security_group)
+        expect(filtered_security_groups).to contain_exactly(security_group)
+      end
+
+      it 'includes running security groups associated to spaces where the user is a manager' do
+        space.add_manager(user)
+        space.add_security_group(security_group)
+        expect(filtered_security_groups).to contain_exactly(security_group)
+      end
+
+      it 'includes running security groups associated to spaces where the user is a auditor' do
+        space.add_auditor(user)
+        space.add_security_group(security_group)
+        expect(filtered_security_groups).to contain_exactly(security_group)
+      end
+
+      it 'includes running security groups associated to spaces where the user is an organization manager' do
+        space.organization.add_manager(user)
+        space.add_security_group(security_group)
+        expect(filtered_security_groups).to contain_exactly(security_group)
+      end
+
+      it 'includes staging security groups associated to spaces where the user is a developer' do
+        space.add_developer(user)
+        space.add_staging_security_group(security_group)
+        expect(filtered_security_groups).to contain_exactly(security_group)
+      end
+
+      it 'includes staging security groups associated to spaces where the user is a manager' do
+        space.add_manager(user)
+        space.add_staging_security_group(security_group)
+        expect(filtered_security_groups).to contain_exactly(security_group)
+      end
+
+      it 'includes staging security groups associated to spaces where the user is a auditor' do
+        space.add_auditor(user)
+        space.add_staging_security_group(security_group)
+        expect(filtered_security_groups).to contain_exactly(security_group)
+      end
+
+      it 'includes staging security groups associated to spaces where the user is an organization manager' do
+        space.organization.add_manager(user)
+        space.add_staging_security_group(security_group)
+        expect(filtered_security_groups).to contain_exactly(security_group)
+      end
+
+      it 'includes security groups that are the running default' do
+        security_group.running_default = true
+        security_group.save
+        expect(filtered_security_groups).to contain_exactly(security_group)
+      end
+
+      it 'includes security groups that are the staging default' do
+        security_group.staging_default = true
+        security_group.save
+        expect(filtered_security_groups).to contain_exactly(security_group)
+      end
+
+      it 'excludes all other security groups' do
+        expect(filtered_security_groups).not_to include(security_group)
       end
     end
 

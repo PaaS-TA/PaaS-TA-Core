@@ -3,15 +3,13 @@ require 'spec_helper'
 RSpec.describe 'Route Mappings' do
   let(:space) { VCAP::CloudController::Space.make }
   let(:app_model) { VCAP::CloudController::AppModel.make(space: space) }
-  let(:process) { VCAP::CloudController::App.make(:process, app: app_model, type: 'worker', ports: [8888]) }
+  let(:process) { VCAP::CloudController::ProcessModel.make(:process, app: app_model, type: 'worker', ports: [8080]) }
   let(:route) { VCAP::CloudController::Route.make(space: space) }
   let(:developer) { make_developer_for_space(space) }
+  let(:user_name) { 'roto' }
   let(:developer_headers) do
-    headers_for(developer)
+    headers_for(developer, user_name: user_name)
   end
-  let(:scheme) { TestConfig.config[:external_protocol] }
-  let(:host) { TestConfig.config[:external_domain] }
-  let(:link_prefix) { "#{scheme}://#{host}" }
 
   before do
     allow(ApplicationController).to receive(:configuration).and_return(TestConfig.config)
@@ -20,7 +18,6 @@ RSpec.describe 'Route Mappings' do
   describe 'POST /v3/route_mappings' do
     it 'creates a route mapping for a specific process on an app on a specific port' do
       body = {
-        app_port:      8888,
         relationships: {
           app:     { guid: app_model.guid },
           route:   { guid: route.guid },
@@ -28,13 +25,12 @@ RSpec.describe 'Route Mappings' do
         }
       }
 
-      post '/v3/route_mappings', body, developer_headers
+      post '/v3/route_mappings', body.to_json, developer_headers
 
       route_mapping = VCAP::CloudController::RouteMappingModel.last
 
       expected_response = {
         'guid'       => route_mapping.guid,
-        'app_port'   => 8888,
         'created_at' => iso8601,
         'updated_at' => iso8601,
 
@@ -58,7 +54,7 @@ RSpec.describe 'Route Mappings' do
       expect(route_mapping.app_guid).to eq(app_model.guid)
       expect(route_mapping.route_guid).to eq(route.guid)
       expect(route_mapping.process_type).to eq('worker')
-      expect(route_mapping.app_port).to eq(8888)
+      expect(route_mapping.app_port).to eq(8080)
 
       # verify audit event
       event = VCAP::CloudController::Event.last
@@ -69,10 +65,11 @@ RSpec.describe 'Route Mappings' do
         actee_name:        app_model.name,
         actor:             developer.guid,
         actor_type:        'user',
+        actor_username:    user_name,
         space_guid:        space.guid,
         metadata:          {
                              route_guid:         route.guid,
-                             app_port:           8888,
+                             app_port:           8080,
                              route_mapping_guid: route_mapping.guid,
                              process_type:       'worker'
                            }.to_json,
@@ -102,7 +99,6 @@ RSpec.describe 'Route Mappings' do
         'resources' => [
           {
             'guid'       => route_mapping1.guid,
-            'app_port'   => nil,
             'created_at' => iso8601,
             'updated_at' => iso8601,
 
@@ -115,7 +111,6 @@ RSpec.describe 'Route Mappings' do
           },
           {
             'guid'       => route_mapping2.guid,
-            'app_port'   => nil,
             'created_at' => iso8601,
             'updated_at' => iso8601,
 
@@ -192,14 +187,13 @@ RSpec.describe 'Route Mappings' do
   end
 
   describe 'GET /v3/route_mappings/:route_mapping_guid' do
-    let(:route_mapping) { VCAP::CloudController::RouteMappingModel.make(app: app_model, route: route, process_type: 'worker', app_port: 8888) }
+    let(:route_mapping) { VCAP::CloudController::RouteMappingModel.make(app: app_model, route: route, process_type: 'worker', app_port: 8080) }
 
     it 'retrieves the requests route mapping' do
       get "/v3/route_mappings/#{route_mapping.guid}", nil, developer_headers
 
       expected_response = {
         'guid'       => route_mapping.guid,
-        'app_port'   => 8888,
         'created_at' => iso8601,
         'updated_at' => iso8601,
 
@@ -238,6 +232,7 @@ RSpec.describe 'Route Mappings' do
         actee_name:        app_model.name,
         actor:             developer.guid,
         actor_type:        'user',
+        actor_username:    user_name,
         space_guid:        space.guid,
         metadata:          {
                              route_guid:         route.guid,
@@ -269,7 +264,6 @@ RSpec.describe 'Route Mappings' do
         'resources' => [
           {
             'guid'       => route_mapping1.guid,
-            'app_port'   => nil,
             'created_at' => iso8601,
             'updated_at' => iso8601,
 
@@ -282,7 +276,6 @@ RSpec.describe 'Route Mappings' do
           },
           {
             'guid'       => route_mapping2.guid,
-            'app_port'   => nil,
             'created_at' => iso8601,
             'updated_at' => iso8601,
 

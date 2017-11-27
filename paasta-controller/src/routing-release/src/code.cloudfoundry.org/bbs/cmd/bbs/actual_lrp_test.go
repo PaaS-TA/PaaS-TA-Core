@@ -74,7 +74,7 @@ var _ = Describe("ActualLRP API", func() {
 	)
 
 	BeforeEach(func() {
-		bbsRunner = testrunner.New(bbsBinPath, bbsArgs)
+		bbsRunner = testrunner.New(bbsBinPath, bbsConfig)
 		bbsProcess = ginkgomon.Invoke(bbsRunner)
 
 		filter = models.ActualLRPFilter{}
@@ -89,7 +89,7 @@ var _ = Describe("ActualLRP API", func() {
 		otherLRPKey = models.NewActualLRPKey(otherProcessGuid, otherIndex, otherDomain)
 		otherLRPInstanceKey = models.NewActualLRPInstanceKey(otherInstanceGuid, otherCellID)
 
-		netInfo = models.NewActualLRPNetInfo("127.0.0.1", models.NewPortMapping(8080, 80))
+		netInfo = models.NewActualLRPNetInfo("127.0.0.1", "10.10.10.10", models.NewPortMapping(8080, 80))
 
 		unclaimedLRPKey = models.NewActualLRPKey(unclaimedProcessGuid, unclaimedIndex, unclaimedDomain)
 

@@ -1,0 +1,4 @@
+#!/bin/bash -exu
+
+mkdir -p "${BOSH_INSTALL_TARGET}/src/github.com/cloudfoundry/postgres-release/src/acceptance-tests/"
+cp -R ${PWD}/acceptance-tests/* "${BOSH_INSTALL_TARGET}/src/github.com/cloudfoundry/postgres-release/src/acceptance-tests/"

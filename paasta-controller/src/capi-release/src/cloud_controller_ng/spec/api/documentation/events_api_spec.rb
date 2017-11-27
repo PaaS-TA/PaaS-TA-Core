@@ -53,6 +53,8 @@ RSpec.resource 'Events', type: [:api, :legacy_api] do
     audit.app.package.upload
     audit.app.package.delete
     audit.app.package.download
+    audit.space.role.add
+    audit.space.role.remove
   ).sort.freeze
 
   EXPERIMENTAL_EVENT_TYPES = %w(
@@ -121,8 +123,9 @@ RSpec.resource 'Events', type: [:api, :legacy_api] do
   get '/v2/events' do
     standard_list_parameters VCAP::CloudController::EventsController
 
-    let(:test_app) { VCAP::CloudController::App.make }
+    let(:test_app) { VCAP::CloudController::ProcessModel.make }
     let(:test_v3app) { VCAP::CloudController::AppModel.make }
+    let(:test_assignee) { VCAP::CloudController::User.make }
     let(:test_user) { VCAP::CloudController::User.make }
     let(:test_user_email) { 'user@example.com' }
     let(:test_space) { VCAP::CloudController::Space.make }
@@ -138,16 +141,11 @@ RSpec.resource 'Events', type: [:api, :legacy_api] do
 
     let(:app_request) do
       {
-        'name'                    => 'new',
-        'instances'               => 1,
-        'memory'                  => 84,
-        'state'                   => 'STOPPED',
-        'environment_json'        => { 'super' => 'secret' },
-        'docker_credentials_json' => {
-          'docker_user'     => 'user',
-          'docker_password' => 'password',
-          'docker_email'    => 'email'
-        }
+        'name'             => 'new',
+        'instances'        => 1,
+        'memory'           => 84,
+        'state'            => 'STOPPED',
+        'environment_json' => { 'super' => 'secret' },
       }
     end
     let(:space_request) do
@@ -172,9 +170,8 @@ RSpec.resource 'Events', type: [:api, :legacy_api] do
       }
     end
     let(:expected_app_request) do
-      expected_request                            = app_request
-      expected_request['environment_json']        = 'PRIVATE DATA HIDDEN'
-      expected_request['docker_credentials_json'] = 'PRIVATE DATA HIDDEN'
+      expected_request                     = app_request
+      expected_request['environment_json'] = 'PRIVATE DATA HIDDEN'
       expected_request
     end
 
@@ -186,16 +183,74 @@ RSpec.resource 'Events', type: [:api, :legacy_api] do
       VCAP::CloudController::Repositories::SpaceEventRepository.new
     end
 
+    let(:user_event_repository) do
+      VCAP::CloudController::Repositories::UserEventRepository.new
+    end
+
     let(:route_event_repository) do
       VCAP::CloudController::Repositories::RouteEventRepository.new
     end
 
     let(:service_event_repository) do
-      VCAP::CloudController::Repositories::ServiceEventRepository.new(user: test_user, user_email: test_user_email)
+      VCAP::CloudController::Repositories::ServiceEventRepository.new(user_audit_info)
+    end
+
+    let(:organization_event_repository) do
+      VCAP::CloudController::Repositories::OrganizationEventRepository.new
+    end
+
+    let(:user_audit_info) { VCAP::CloudController::UserAuditInfo.new(user_guid: test_user.guid, user_email: test_user_email) }
+
+    example 'List Organization Create Events' do
+      organization_event_repository.record_organization_create(test_organization, user_audit_info, {})
+
+      client.get '/v2/events?q=type:audit.organization.create', {}, headers
+      expect(status).to eq(200)
+      standard_entity_response parsed_response['resources'][0], :event, expected_values: {
+        actor_type: 'user',
+        actor:      test_user.guid,
+        actor_name: test_user_email,
+        actee_type: 'organization',
+        actee_name: test_organization.name,
+        space_guid: '',
+        metadata:   { 'request' => {} }
+      }
+    end
+
+    example 'List Organization Update Events' do
+      organization_event_repository.record_organization_update(test_organization, user_audit_info, {})
+
+      client.get '/v2/events?q=type:audit.organization.update', {}, headers
+      expect(status).to eq(200)
+      standard_entity_response parsed_response['resources'][0], :event, expected_values: {
+        actor_type: 'user',
+        actor:      test_user.guid,
+        actor_name: test_user_email,
+        actee_type: 'organization',
+        actee_name: test_organization.name,
+        space_guid: '',
+        metadata:   { 'request' => {} }
+      }
+    end
+
+    example 'List Organization Delete Events' do
+      organization_event_repository.record_organization_delete_request(test_organization, user_audit_info, {})
+
+      client.get '/v2/events?q=type:audit.organization.delete-request', {}, headers
+      expect(status).to eq(200)
+      standard_entity_response parsed_response['resources'][0], :event, expected_values: {
+        actor_type: 'user',
+        actor:      test_user.guid,
+        actor_name: test_user_email,
+        actee_type: 'organization',
+        actee_name: test_organization.name,
+        space_guid: '',
+        metadata:   { 'request' => {} }
+      }
     end
 
     example 'List App Create Events' do
-      app_event_repository.record_app_create(test_app, test_app.space, test_user.guid, test_user_email, app_request)
+      app_event_repository.record_app_create(test_app, test_app.space, user_audit_info, app_request)
 
       client.get '/v2/events?q=type:audit.app.create', {}, headers
       expect(status).to eq(200)
@@ -212,7 +267,7 @@ RSpec.resource 'Events', type: [:api, :legacy_api] do
     end
 
     example 'List App Start Events' do
-      app_event_repository.record_app_start(test_v3app, test_user.guid, test_user_email)
+      app_event_repository.record_app_start(test_v3app, user_audit_info)
 
       client.get '/v2/events?q=type:audit.app.start', {}, headers
       expect(status).to eq(200)
@@ -229,7 +284,7 @@ RSpec.resource 'Events', type: [:api, :legacy_api] do
     end
 
     example 'List App Stop Events' do
-      app_event_repository.record_app_stop(test_v3app, test_user.guid, test_user_email)
+      app_event_repository.record_app_stop(test_v3app, user_audit_info)
 
       client.get '/v2/events?q=type:audit.app.stop', {}, headers
       expect(status).to eq(200)
@@ -263,7 +318,7 @@ RSpec.resource 'Events', type: [:api, :legacy_api] do
     end
 
     example 'List App Update Events' do
-      app_event_repository.record_app_update(test_app, test_app.space, test_user.guid, test_user_email, app_request)
+      app_event_repository.record_app_update(test_app, test_app.space, user_audit_info, app_request)
 
       client.get '/v2/events?q=type:audit.app.update', {}, headers
       expect(status).to eq(200)
@@ -282,7 +337,7 @@ RSpec.resource 'Events', type: [:api, :legacy_api] do
     end
 
     example 'List App Delete Events' do
-      app_event_repository.record_app_delete_request(test_app, test_app.space, test_user.guid, test_user_email, false)
+      app_event_repository.record_app_delete_request(test_app, test_app.space, user_audit_info, false)
 
       client.get '/v2/events?q=type:audit.app.delete-request', {}, headers
       expect(status).to eq(200)
@@ -299,7 +354,7 @@ RSpec.resource 'Events', type: [:api, :legacy_api] do
     end
 
     example 'List App SSH Authorized Events' do
-      app_event_repository.record_app_ssh_authorized(test_app, test_user.guid, test_user_email, 1)
+      app_event_repository.record_app_ssh_authorized(test_app, user_audit_info, 1)
 
       client.get '/v2/events?q=type:audit.app.ssh-authorized', {}, headers
       expect(status).to eq(200)
@@ -316,7 +371,7 @@ RSpec.resource 'Events', type: [:api, :legacy_api] do
     end
 
     example 'List App SSH Unauthorized Events' do
-      app_event_repository.record_app_ssh_unauthorized(test_app, test_user.guid, test_user_email, 1)
+      app_event_repository.record_app_ssh_unauthorized(test_app, user_audit_info, 1)
 
       client.get '/v2/events?q=type:audit.app.ssh-unauthorized', {}, headers
       expect(status).to eq(200)
@@ -333,9 +388,9 @@ RSpec.resource 'Events', type: [:api, :legacy_api] do
     end
 
     example 'List events associated with an App since January 1, 2014' do
-      app_event_repository.record_app_create(test_app, test_app.space, test_user.guid, test_user_email, app_request)
-      app_event_repository.record_app_update(test_app, test_app.space, test_user.guid, test_user_email, app_request)
-      app_event_repository.record_app_delete_request(test_app, test_app.space, test_user.guid, test_user_email, false)
+      app_event_repository.record_app_create(test_app, test_app.space, user_audit_info, app_request)
+      app_event_repository.record_app_update(test_app, test_app.space, user_audit_info, app_request)
+      app_event_repository.record_app_delete_request(test_app, test_app.space, user_audit_info, false)
 
       client.get "/v2/events?q=actee:#{test_app.guid}&q=#{CGI.escape('timestamp>2014-01-01 00:00:00-04:00')}", {}, headers
       expect(status).to eq(200)
@@ -352,7 +407,11 @@ RSpec.resource 'Events', type: [:api, :legacy_api] do
     end
 
     example 'List Space Create Events' do
-      space_event_repository.record_space_create(test_space, test_user, test_user_email, space_request)
+      space_event_repository.record_space_create(
+        test_space,
+        user_audit_info,
+        space_request
+      )
 
       client.get '/v2/events?q=type:audit.space.create', {}, headers
       expect(status).to eq(200)
@@ -369,7 +428,11 @@ RSpec.resource 'Events', type: [:api, :legacy_api] do
     end
 
     example 'List Space Update Events' do
-      space_event_repository.record_space_update(test_space, test_user, test_user_email, space_request)
+      space_event_repository.record_space_update(
+        test_space,
+        user_audit_info,
+        space_request
+      )
 
       client.get '/v2/events?q=type:audit.space.update', {}, headers
       expect(status).to eq(200)
@@ -386,7 +449,11 @@ RSpec.resource 'Events', type: [:api, :legacy_api] do
     end
 
     example 'List Space Delete Events' do
-      space_event_repository.record_space_delete_request(test_space, test_user, test_user_email, true)
+      space_event_repository.record_space_delete_request(
+        test_space,
+        user_audit_info,
+        true
+      )
 
       client.get '/v2/events?q=type:audit.space.delete-request', {}, headers
       expect(status).to eq(200)
@@ -402,8 +469,42 @@ RSpec.resource 'Events', type: [:api, :legacy_api] do
       }
     end
 
+    example 'List Associate Role Space Events' do
+      user_event_repository.record_space_role_add(test_space, test_assignee, 'auditor', user_audit_info)
+
+      client.get '/v2/events?q=type:audit.user.space_auditor_add', {}, headers
+      expect(status).to eq(200)
+      standard_entity_response parsed_response['resources'][0], :event, expected_values: {
+        actor_type: 'user',
+        actor:      test_user.guid,
+        actor_name: test_user_email,
+        actee_type: 'user',
+        actee:      test_assignee.guid,
+        actee_name: '',
+        space_guid: test_space.guid,
+        metadata:   { 'request' => {} }
+      }
+    end
+
+    example 'List Remove Role Space Events' do
+      user_event_repository.record_space_role_remove(test_space, test_assignee, 'auditor', user_audit_info)
+
+      client.get '/v2/events?q=type:audit.user.space_auditor_remove', {}, headers
+      expect(status).to eq(200)
+      standard_entity_response parsed_response['resources'][0], :event, expected_values: {
+        actor_type: 'user',
+        actor:      test_user.guid,
+        actor_name: test_user_email,
+        actee_type: 'user',
+        actee:      test_assignee.guid,
+        actee_name: '',
+        space_guid: test_space.guid,
+        metadata:   { 'request' => {} }
+      }
+    end
+
     example 'List Route Create Events' do
-      route_event_repository.record_route_create(test_route, test_user, test_user_email, route_request)
+      route_event_repository.record_route_create(test_route, user_audit_info, route_request)
 
       client.get '/v2/events?q=type:audit.route.create', {}, headers
       expect(status).to eq(200)
@@ -420,7 +521,7 @@ RSpec.resource 'Events', type: [:api, :legacy_api] do
     end
 
     example 'List Route Update Events' do
-      route_event_repository.record_route_update(test_route, test_user, test_user_email, route_request)
+      route_event_repository.record_route_update(test_route, user_audit_info, route_request)
 
       client.get '/v2/events?q=type:audit.route.update', {}, headers
       expect(status).to eq(200)
@@ -437,7 +538,7 @@ RSpec.resource 'Events', type: [:api, :legacy_api] do
     end
 
     example 'List Route Delete Events' do
-      route_event_repository.record_route_delete_request(test_route, test_user, test_user_email, true)
+      route_event_repository.record_route_delete_request(test_route, user_audit_info, true)
 
       client.get '/v2/events?q=type:audit.route.delete-request', {}, headers
       expect(status).to eq(200)
@@ -512,14 +613,18 @@ RSpec.resource 'Events', type: [:api, :legacy_api] do
 
     example 'List Service Plan Create Events' do
       new_plan = VCAP::CloudController::ServicePlan.new(
-        guid:        'guid',
-        name:        'plan-name',
-        service:     test_service,
-        description: 'A plan',
-        unique_id:   'guid',
-        free:        true,
-        public:      true,
-        active:      true
+        guid:                   'guid',
+        name:                   'plan-name',
+        service:                test_service,
+        description:            'A plan',
+        unique_id:              'guid',
+        free:                   true,
+        public:                 true,
+        active:                 true,
+        bindable:               true,
+        create_instance_schema: '{}',
+        update_instance_schema: '{}',
+        create_binding_schema:  '{}'
       )
       service_event_repository.with_service_plan_event(new_plan) do
         new_plan.save
@@ -536,14 +641,18 @@ RSpec.resource 'Events', type: [:api, :legacy_api] do
         actee_name: new_plan.name,
         space_guid: '',
         metadata:   {
-          'name'         => new_plan.name,
-          'free'         => new_plan.free,
-          'description'  => new_plan.description,
-          'service_guid' => new_plan.service.guid,
-          'extra'        => new_plan.extra,
-          'unique_id'    => new_plan.unique_id,
-          'public'       => new_plan.public,
-          'active'       => new_plan.active
+          'name'                   => new_plan.name,
+          'free'                   => new_plan.free,
+          'description'            => new_plan.description,
+          'service_guid'           => new_plan.service.guid,
+          'extra'                  => new_plan.extra,
+          'unique_id'              => new_plan.unique_id,
+          'public'                 => new_plan.public,
+          'active'                 => new_plan.active,
+          'bindable'               => new_plan.bindable,
+          'create_instance_schema' => new_plan.create_instance_schema,
+          'update_instance_schema' => new_plan.update_instance_schema,
+          'create_binding_schema'  => new_plan.create_binding_schema
         }
       }
     end
@@ -1010,10 +1119,10 @@ RSpec.resource 'Events', type: [:api, :legacy_api] do
     example 'List Service Binding Create Events' do
       space           = VCAP::CloudController::Space.make
       instance        = VCAP::CloudController::ManagedServiceInstance.make(space: space)
-      app             = VCAP::CloudController::AppFactory.make(space: space)
-      service_binding = VCAP::CloudController::ServiceBinding.make(service_instance: instance, app: app.app)
+      process         = VCAP::CloudController::AppFactory.make(space: space)
+      service_binding = VCAP::CloudController::ServiceBinding.make(service_instance: instance, app: process.app)
 
-      service_event_repository.record_service_binding_event(:create, service_binding)
+      VCAP::CloudController::Repositories::ServiceBindingEventRepository.record_create(service_binding, user_audit_info, { foo: 'bar' })
 
       client.get '/v2/events?q=type:audit.service_binding.create', {}, headers
       expect(status).to eq(200)
@@ -1027,8 +1136,7 @@ RSpec.resource 'Events', type: [:api, :legacy_api] do
         space_guid: instance.space_guid,
         metadata:   {
           'request' => {
-            'service_instance_guid' => instance.guid,
-            'app_guid'              => app.guid,
+            'foo' => 'bar',
           }
         }
       }
@@ -1037,10 +1145,10 @@ RSpec.resource 'Events', type: [:api, :legacy_api] do
     example 'List Service Binding Delete Events' do
       space           = VCAP::CloudController::Space.make
       instance        = VCAP::CloudController::ManagedServiceInstance.make(space: space)
-      app             = VCAP::CloudController::AppFactory.make(space: space)
-      service_binding = VCAP::CloudController::ServiceBinding.make(service_instance: instance, app: app.app)
+      process         = VCAP::CloudController::AppFactory.make(space: space)
+      service_binding = VCAP::CloudController::ServiceBinding.make(service_instance: instance, app: process.app)
 
-      service_event_repository.record_service_binding_event(:delete, service_binding)
+      VCAP::CloudController::Repositories::ServiceBindingEventRepository.record_delete(service_binding, user_audit_info)
 
       client.get '/v2/events?q=type:audit.service_binding.delete', {}, headers
       expect(status).to eq(200)
@@ -1053,7 +1161,10 @@ RSpec.resource 'Events', type: [:api, :legacy_api] do
         actee_name: '',
         space_guid: instance.space_guid,
         metadata:   {
-          'request' => {}
+          'request' => {
+            'service_instance_guid' => instance.guid,
+            'app_guid'              => process.guid,
+          }
         }
       }
     end

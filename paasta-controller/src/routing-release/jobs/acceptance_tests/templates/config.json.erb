@@ -10,6 +10,9 @@ config = {
   use_http: p("acceptance_tests.cloud_controller.use_http"),
   skip_ssl_validation: p("acceptance_tests.skip_ssl_validation"),
   include_http_routes: p("acceptance_tests.include_http_routes"),
+  default_timeout: p("acceptance_tests.default_timeout"),
+  cf_push_timeout: 120,
+  tcp_router_group: p("acceptance_tests.tcp_router_group"),
   oauth: {
     token_endpoint: 'https://uaa.' + p("acceptance_tests.system_domain"),
     client_name: "tcp_emitter",
@@ -18,6 +21,10 @@ config = {
     port: 443,
   }
 }
+
+if_p("acceptance_tests.user_password") do |password|
+config[:test_password] = password
+end
 %>
 
 <%= JSON.pretty_generate(config) %>

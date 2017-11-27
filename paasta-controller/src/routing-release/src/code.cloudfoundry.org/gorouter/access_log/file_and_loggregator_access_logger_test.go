@@ -8,10 +8,9 @@ import (
 	. "code.cloudfoundry.org/gorouter/access_log"
 	"code.cloudfoundry.org/gorouter/access_log/schema"
 	"code.cloudfoundry.org/gorouter/config"
+	"code.cloudfoundry.org/gorouter/logger"
 	"code.cloudfoundry.org/gorouter/route"
 	"code.cloudfoundry.org/gorouter/test_util"
-	"code.cloudfoundry.org/lager"
-	"code.cloudfoundry.org/lager/lagertest"
 	"code.cloudfoundry.org/routing-api/models"
 	"github.com/cloudfoundry/dropsonde/log_sender/fake"
 	"github.com/cloudfoundry/dropsonde/logs"
@@ -28,14 +27,14 @@ var _ = Describe("AccessLog", func() {
 
 	Describe("FileLogger", func() {
 		var (
-			logger lager.Logger
+			logger logger.Logger
 		)
 		Context("with a dropsonde source instance", func() {
 
 			BeforeEach(func() {
-				logger = lagertest.NewTestLogger("test")
-
+				logger = test_util.NewTestZapLogger("test")
 			})
+
 			It("logs to dropsonde", func() {
 
 				fakeLogSender := fake.NewFakeLogSender()
@@ -62,7 +61,7 @@ var _ = Describe("AccessLog", func() {
 
 				accessLogger := NewFileAndLoggregatorAccessLogger(logger, "43")
 
-				routeEndpoint := route.NewEndpoint("", "127.0.0.1", 4567, "", "", nil, -1, "", models.ModificationTag{})
+				routeEndpoint := route.NewEndpoint("", "127.0.0.1", 4567, "", "", nil, -1, "", models.ModificationTag{}, "")
 
 				accessLogRecord := CreateAccessLogRecord()
 				accessLogRecord.RouteEndpoint = routeEndpoint
@@ -123,12 +122,12 @@ var _ = Describe("AccessLog", func() {
 
 	Describe("FileLogger", func() {
 		var (
-			logger lager.Logger
+			logger logger.Logger
 			cfg    *config.Config
 		)
 
 		BeforeEach(func() {
-			logger = lagertest.NewTestLogger("test")
+			logger = test_util.NewTestZapLogger("test")
 
 			cfg = config.DefaultConfig()
 		})
@@ -232,7 +231,7 @@ func CreateAccessLogRecord() *schema.AccessLogRecord {
 		StatusCode: http.StatusOK,
 	}
 
-	b := route.NewEndpoint("my_awesome_id", "127.0.0.1", 4567, "", "", nil, -1, "", models.ModificationTag{})
+	b := route.NewEndpoint("my_awesome_id", "127.0.0.1", 4567, "", "", nil, -1, "", models.ModificationTag{}, "")
 
 	r := schema.AccessLogRecord{
 		Request:       req,

@@ -48,7 +48,6 @@ func main() {
 	// read input options provided to us by the test
 	var inputOptions struct {
 		Members           []string
-		FailRPCServer     bool
 		FailStatsEndpoint bool
 	}
 
@@ -62,14 +61,8 @@ func main() {
 	}
 	ow := NewOutputWriter(outputFile, os.Getpid(), os.Args[1:], configDir)
 
-	tcpAddr := ""
-	if !inputOptions.FailRPCServer {
-		tcpAddr = "127.0.0.1:8400"
-	}
-
 	server := &Server{
 		HTTPAddr:          "127.0.0.1:8500",
-		TCPAddr:           tcpAddr,
 		Members:           inputOptions.Members,
 		OutputWriter:      ow,
 		FailStatsEndpoint: inputOptions.FailStatsEndpoint,

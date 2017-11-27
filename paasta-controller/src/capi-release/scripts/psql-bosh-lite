@@ -1,0 +1,47 @@
+#!/bin/bash
+
+set -u
+
+get_database_password(){
+	credhub login -s "$CREDHUB_SERVER" -u "$CREDHUB_USERNAME" -p "$CREDHUB_PASSWORD" --skip-tls-validation
+	cc_database_password=$(credhub get -n '/bosh-lite/cf/cc_database_password' --output-json | jq -r '.value')
+}
+
+ssh_tunnel(){
+  psql_port=$(gshuf -i 10000-65535 -n 1)
+	bosh ssh --opts="-L ${psql_port}:10.244.0.132:5524" -c 'while true; do continue; done' postgres &
+	ssh_pid=$!
+}
+
+connect_to_postgres(){
+	# Make sure the ssh tunnel didn't error and exit
+	if ! ps -p $ssh_pid > /dev/null; then
+		echo "Error: SSH tunnel not running"
+		exit 1
+	fi
+
+	PGPASSWORD="$cc_database_password" psql -p $psql_port -h localhost cloud_controller cloud_controller
+}
+
+kill_tree() {
+	pid=$1
+	for child_pid in $(ps -axo pid,ppid | grep "${pid}$" | cut -d " " -f 1); do
+		kill_tree $child_pid
+	done
+
+	kill $pid
+}
+
+{
+	get_database_password &&
+	ssh_tunnel &&
+	sleep 3 &&
+	connect_to_postgres &&
+	kill_tree $ssh_pid
+} || {
+  # If any of the previous functions failed, kill the ssh process tree
+  echo "Exiting due to error"
+	kill_tree $ssh_pid
+	exit 1
+}
+

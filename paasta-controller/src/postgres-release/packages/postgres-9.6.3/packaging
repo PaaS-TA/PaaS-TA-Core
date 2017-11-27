@@ -1,0 +1,49 @@
+#!/bin/bash -exu
+
+function main() {
+
+  extract_archive
+  compile
+
+}
+
+function extract_archive() {
+
+  echo "Extracting archive..."
+  tar xzf postgres/postgresql-*
+
+}
+
+function compile() {
+
+  pushd postgresql-* > /dev/null
+    if [[ "$(uname -a)" =~ "x86_64" || "$(uname -a)" =~ "ppc64le" ]] ; then
+      ./configure --prefix="${BOSH_INSTALL_TARGET}" --with-openssl
+    else
+      CFLAGS=-m32 LDFLAGS=-m32 CXXFLAGS=-m32 ./configure --prefix="${BOSH_INSTALL_TARGET}"  --with-openssl
+    fi
+
+    pushd src/bin/pg_config > /dev/null
+      make
+      make install
+    popd > /dev/null
+
+    cp -LR src/include "${BOSH_INSTALL_TARGET}"
+    pushd src/interfaces/libpq > /dev/null
+      make
+      make install
+    popd > /dev/null
+
+    pushd src > /dev/null
+      make
+      make install
+    popd > /dev/null
+
+    pushd contrib > /dev/null
+      make
+      make install
+    popd > /dev/null
+  popd > /dev/null
+}
+
+main

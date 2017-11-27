@@ -78,6 +78,11 @@ func (b *DockerRecipeBuilder) BuildTask(task *cc_messages.TaskRequestFromCC) (*m
 		return nil, err
 	}
 
+	placementTags := []string{}
+	if task.IsolationSegment != "" {
+		placementTags = []string{task.IsolationSegment}
+	}
+
 	taskDefinition := &models.TaskDefinition{
 		LogGuid:               task.LogGuid,
 		MemoryMb:              int32(task.MemoryMb),
@@ -93,6 +98,9 @@ func (b *DockerRecipeBuilder) BuildTask(task *cc_messages.TaskRequestFromCC) (*m
 		TrustedSystemCertificatesPath: TrustedSystemCertificatesPath,
 		LogSource:                     task.LogSource,
 		VolumeMounts:                  convertVolumeMounts(task.VolumeMounts),
+		PlacementTags:                 placementTags,
+		ImageUsername:                 task.DockerUser,
+		ImagePassword:                 task.DockerPassword,
 	}
 
 	return taskDefinition, nil
@@ -169,7 +177,9 @@ func (b *DockerRecipeBuilder) Build(desiredApp *cc_messages.DesireAppRequestFrom
 
 	switch desiredApp.HealthCheckType {
 	case cc_messages.PortHealthCheckType, cc_messages.UnspecifiedHealthCheckType:
-		monitor = models.Timeout(getParallelAction(desiredAppPorts, user), 30*time.Second)
+		monitor = models.Timeout(getParallelAction(desiredAppPorts, user, ""), 10*time.Minute)
+	case cc_messages.HTTPHealthCheckType:
+		monitor = models.Timeout(getParallelAction(desiredAppPorts, user, desiredApp.HealthCheckHTTPEndpoint), 10*time.Minute)
 	}
 
 	actions = append(actions, &models.RunAction{
@@ -180,7 +190,7 @@ func (b *DockerRecipeBuilder) Build(desiredApp *cc_messages.DesireAppRequestFrom
 			desiredApp.StartCommand,
 			desiredApp.ExecutionMetadata,
 		),
-		Env:       createLrpEnv(desiredApp.Environment, desiredAppPorts),
+		Env:       createLrpEnv(desiredApp.Environment, desiredAppPorts, false),
 		LogSource: getAppLogSource(desiredApp.LogSource),
 		ResourceLimits: &models.ResourceLimits{
 			Nofile: &numFiles,
@@ -216,7 +226,7 @@ func (b *DockerRecipeBuilder) Build(desiredApp *cc_messages.DesireAppRequestFrom
 				"-inheritDaemonEnv",
 				"-logLevel=fatal",
 			},
-			Env: createLrpEnv(desiredApp.Environment, desiredAppPorts),
+			Env: createLrpEnv(desiredApp.Environment, desiredAppPorts, false),
 			ResourceLimits: &models.ResourceLimits{
 				Nofile: &numFiles,
 			},
@@ -239,6 +249,11 @@ func (b *DockerRecipeBuilder) Build(desiredApp *cc_messages.DesireAppRequestFrom
 	}
 
 	actionAction := models.Codependent(actions...)
+
+	placementTags := []string{}
+	if desiredApp.IsolationSegment != "" {
+		placementTags = []string{desiredApp.IsolationSegment}
+	}
 
 	return &models.DesiredLRP{
 		Privileged: false,
@@ -277,6 +292,10 @@ func (b *DockerRecipeBuilder) Build(desiredApp *cc_messages.DesireAppRequestFrom
 
 		TrustedSystemCertificatesPath: TrustedSystemCertificatesPath,
 		VolumeMounts:                  convertVolumeMounts(desiredApp.VolumeMounts),
+		PlacementTags:                 placementTags,
+
+		ImageUsername: desiredApp.DockerUser,
+		ImagePassword: desiredApp.DockerPassword,
 	}, nil
 }
 

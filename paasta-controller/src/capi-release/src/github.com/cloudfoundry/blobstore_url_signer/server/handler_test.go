@@ -25,27 +25,58 @@ var _ = Describe("handlers", func() {
 		fakeSigner = &fakes.FakeSigner{}
 		serverHandler = server.NewServerHandlers(fakeSigner)
 		resp = httptest.NewRecorder()
-		request, err = http.NewRequest("GET", "http://127.0.0.1:8080/sign?expires=123123&secret=topSecret&path=1c/9a/3234-sdfs", nil)
-		Expect(err).ToNot(HaveOccurred())
 	})
 
 	Describe("SignUrl()", func() {
-		It("calls the signer to sign the url", func() {
-			serverHandler.SignUrl(resp, request)
-			Expect(fakeSigner.SignCallCount()).To(Equal(1))
+		Context("Using /sign endpoint", func() {
+			BeforeEach(func() {
+				request, err = http.NewRequest("GET", "http://127.0.0.1:8080/sign?expires=123123&path=1c/9a/3234-sdfs", nil)
+				Expect(err).ToNot(HaveOccurred())
+			})
+
+			It("calls the signer to sign the url", func() {
+				serverHandler.SignUrl(resp, request)
+				Expect(fakeSigner.SignCallCount()).To(Equal(1))
+			})
+
+			It("sends the signer the correct params", func() {
+				serverHandler.SignUrl(resp, request)
+				expire, path := fakeSigner.SignArgsForCall(0)
+				Expect(expire).To(Equal("123123"))
+				Expect(path).To(Equal("1c/9a/3234-sdfs"))
+			})
+
+			It("writes the signed URL back to requester", func() {
+				fakeSigner.SignReturns("/link/?md5=signedurl")
+				serverHandler.SignUrl(resp, request)
+				Expect(resp.Body.String()).To(ContainSubstring("/link/?md5=signedurl"))
+			})
 		})
 
-		It("sends the signer the correct params", func() {
-			serverHandler.SignUrl(resp, request)
-			expire, path := fakeSigner.SignArgsForCall(0)
-			Expect(expire).To(Equal("123123"))
-			Expect(path).To(Equal("1c/9a/3234-sdfs"))
-		})
+		Context("Using /sign_for_put endpoint", func() {
+			BeforeEach(func() {
+				request, err = http.NewRequest("GET", "http://127.0.0.1:8080/sign_for_put?expires=123123&path=1c/9a/3234-sdfs", nil)
+				Expect(err).ToNot(HaveOccurred())
+			})
 
-		It("writes the signed URL back to requester", func() {
-			fakeSigner.SignReturns("/link/?md5=signedurl")
-			serverHandler.SignUrl(resp, request)
-			Expect(resp.Body.String()).To(ContainSubstring("/link/?md5=signedurl"))
+			It("calls the signer to sign the url", func() {
+				serverHandler.SignUrl(resp, request)
+				Expect(fakeSigner.SignForPutCallCount()).To(Equal(1))
+			})
+
+			It("sends the signer the correct params", func() {
+				serverHandler.SignUrl(resp, request)
+				expire, path := fakeSigner.SignForPutArgsForCall(0)
+				Expect(expire).To(Equal("123123"))
+				Expect(path).To(Equal("1c/9a/3234-sdfs"))
+			})
+
+			It("writes the signed URL back to requester", func() {
+				fakeSigner.SignForPutReturns("/link/?md5=signedurl")
+				serverHandler.SignUrl(resp, request)
+				Expect(resp.Body.String()).To(ContainSubstring("/link/?md5=signedurl"))
+			})
+
 		})
 	})
 })

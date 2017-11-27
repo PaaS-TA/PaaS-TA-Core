@@ -8,8 +8,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cloudfoundry/loggregatorlib/loggertesthelper"
-	"github.com/cloudfoundry/loggregatorlib/server/handlers"
 	"github.com/cloudfoundry/noaa/consumer"
 	"github.com/cloudfoundry/noaa/errors"
 	"github.com/cloudfoundry/noaa/test_helpers"
@@ -28,6 +26,7 @@ var _ = Describe("Consumer (Asynchronous)", func() {
 		testServer           *httptest.Server
 		fakeHandler          *test_helpers.FakeHandler
 		tlsSettings          *tls.Config
+		maxRetryCount        int
 
 		appGuid        string
 		authToken      string
@@ -39,6 +38,7 @@ var _ = Describe("Consumer (Asynchronous)", func() {
 		testServer = nil
 		fakeHandler = nil
 		tlsSettings = nil
+		maxRetryCount = consumer.DefaultMaxRetryCount
 
 		appGuid = ""
 		authToken = ""
@@ -49,6 +49,7 @@ var _ = Describe("Consumer (Asynchronous)", func() {
 		cnsmr = consumer.New(trafficControllerURL, tlsSettings, nil)
 		cnsmr.SetMinRetryDelay(100 * time.Millisecond)
 		cnsmr.SetMaxRetryDelay(500 * time.Millisecond)
+		cnsmr.SetMaxRetryCount(maxRetryCount)
 	})
 
 	AfterEach(func() {
@@ -60,7 +61,7 @@ var _ = Describe("Consumer (Asynchronous)", func() {
 
 	Describe("SetOnConnectCallback", func() {
 		BeforeEach(func() {
-			testServer = httptest.NewServer(handlers.NewWebsocketHandler(messagesToSend, 100*time.Millisecond, loggertesthelper.Logger()))
+			testServer = httptest.NewServer(NewWebsocketHandler(messagesToSend, 100*time.Millisecond))
 			trafficControllerURL = "ws://" + testServer.Listener.Addr().String()
 			close(messagesToSend)
 		})
@@ -122,7 +123,7 @@ var _ = Describe("Consumer (Asynchronous)", func() {
 		fakeHandler = &test_helpers.FakeHandler{
 			InputChan: make(chan []byte, 10),
 			GenerateHandler: func(input chan []byte) http.Handler {
-				return handlers.NewWebsocketHandler(input, 100*time.Millisecond, loggertesthelper.Logger())
+				return NewWebsocketHandler(input, 100*time.Millisecond)
 			},
 		}
 
@@ -303,7 +304,7 @@ var _ = Describe("Consumer (Asynchronous)", func() {
 
 		Context("when SSL settings are passed in", func() {
 			BeforeEach(func() {
-				testServer = httptest.NewTLSServer(handlers.NewWebsocketHandler(messagesToSend, 100*time.Millisecond, loggertesthelper.Logger()))
+				testServer = httptest.NewTLSServer(NewWebsocketHandler(messagesToSend, 100*time.Millisecond))
 				trafficControllerURL = "wss://" + testServer.Listener.Addr().String()
 
 				tlsSettings = &tls.Config{InsecureSkipVerify: true}
@@ -373,6 +374,32 @@ var _ = Describe("Consumer (Asynchronous)", func() {
 			for i := uint(0); i < retries; i++ {
 				Eventually(errors).Should(Receive(BeRetryable()))
 			}
+		})
+
+		Context("when maxRetryCount is set", func() {
+			BeforeEach(func() {
+				maxRetryCount = 3
+			})
+
+			It("resets the count after a successful connection", func() {
+				fakeHandler.InputChan <- marshalMessage(createMessage("message 1", 0))
+				Eventually(logMessages).Should(Receive())
+
+				fakeHandler.Close()
+				for i := 0; i < maxRetryCount-1; i++ {
+					Eventually(errors, time.Second).Should(Receive(HaveOccurred()))
+				}
+				fakeHandler.Reset()
+
+				fakeHandler.InputChan <- marshalMessage(createMessage("message 2", 0))
+
+				Eventually(logMessages).Should(Receive())
+
+				fakeHandler.Close()
+				for i := 0; i < maxRetryCount-1; i++ {
+					Eventually(errors).Should(Receive(BeRetryable()))
+				}
+			})
 		})
 
 		Context("with multiple connections", func() {
@@ -477,6 +504,21 @@ var _ = Describe("Consumer (Asynchronous)", func() {
 						return
 					}
 				}
+			})
+
+			Context("when maxRetryCount is set", func() {
+				BeforeEach(func() {
+					maxRetryCount = 3
+				})
+
+				It("doesn't go beyond maxRetryCount", func() {
+					for i := 0; i < maxRetryCount; i++ {
+						Eventually(errors).Should(Receive(BeRetryable()))
+					}
+					Eventually(errors).Should(Receive(Equal(consumer.ErrMaxRetriesReached)))
+					Eventually(logMessages).Should(BeClosed())
+					Eventually(errors).Should(BeClosed())
+				})
 			})
 
 			It("will not attempt reconnect if consumer is closed", func() {
@@ -595,7 +637,7 @@ var _ = Describe("Consumer (Asynchronous)", func() {
 
 		Context("when SSL settings are passed in", func() {
 			BeforeEach(func() {
-				testServer = httptest.NewTLSServer(handlers.NewWebsocketHandler(messagesToSend, 100*time.Millisecond, loggertesthelper.Logger()))
+				testServer = httptest.NewTLSServer(NewWebsocketHandler(messagesToSend, 100*time.Millisecond))
 				trafficControllerURL = "wss://" + testServer.Listener.Addr().String()
 
 				tlsSettings = &tls.Config{InsecureSkipVerify: true}
@@ -920,7 +962,7 @@ var _ = Describe("Consumer (Asynchronous)", func() {
 
 		Context("when SSL settings are passed in", func() {
 			BeforeEach(func() {
-				testServer = httptest.NewTLSServer(handlers.NewWebsocketHandler(messagesToSend, 100*time.Millisecond, loggertesthelper.Logger()))
+				testServer = httptest.NewTLSServer(NewWebsocketHandler(messagesToSend, 100*time.Millisecond))
 				trafficControllerURL = "wss://" + testServer.Listener.Addr().String()
 
 				tlsSettings = &tls.Config{InsecureSkipVerify: true}
@@ -932,6 +974,24 @@ var _ = Describe("Consumer (Asynchronous)", func() {
 				close(messagesToSend)
 				Eventually(streamErrors).Should(Receive())
 			})
+		})
+	})
+
+	Describe("FilteredFirehose", func() {
+		BeforeEach(func() {
+			startFakeTrafficController()
+		})
+
+		It("appends the correct query string for filtering log messages", func() {
+			cnsmr.FilteredFirehose("subscription-id", authToken, consumer.LogMessages)
+			fakeHandler.Close()
+			Eventually(fakeHandler.GetLastURL).Should(ContainSubstring("/firehose/subscription-id?filter-type=logs"))
+		})
+
+		It("appends the correct query string for filtering metrics", func() {
+			cnsmr.FilteredFirehose("subscription-id", authToken, consumer.Metrics)
+			fakeHandler.Close()
+			Eventually(fakeHandler.GetLastURL).Should(ContainSubstring("/firehose/subscription-id?filter-type=metrics"))
 		})
 	})
 })

@@ -63,8 +63,10 @@ var _ = V3Describe("package features", func() {
 			destinationAppGuid = CreateApp(destinationAppName, spaceGuid, "{}")
 
 			// COPY
-			copyUrl := fmt.Sprintf("/v3/apps/%s/packages?source_package_guid=%s", destinationAppGuid, packageGuid)
-			session := cf.Cf("curl", copyUrl, "-X", "POST")
+			copyRequestBody := fmt.Sprintf("{\"relationships\":{\"app\":{\"data\":{\"guid\":\"%s\"}}}}", destinationAppGuid)
+			copyUrl := fmt.Sprintf("v3/packages/?source_guid=%s", packageGuid)
+
+			session := cf.Cf("curl", copyUrl, "-X", "POST", "-d", copyRequestBody)
 			bytes := session.Wait(Config.DefaultTimeoutDuration()).Out.Contents()
 			var pac struct {
 				Guid string `json:"guid"`
@@ -95,11 +97,11 @@ var _ = V3Describe("package features", func() {
 		})
 
 		It("can still stage the package", func() {
-			dropletGuid := StageBuildpackPackage(packageGuid, Config.GetJavaBuildpackName())
-			dropletPath := fmt.Sprintf("/v3/droplets/%s", dropletGuid)
+			buildGuid := StageBuildpackPackage(packageGuid, Config.GetJavaBuildpackName())
+			buildPath := fmt.Sprintf("/v3/builds/%s", buildGuid)
 
 			Eventually(func() *Session {
-				return cf.Cf("curl", dropletPath).Wait(Config.DefaultTimeoutDuration())
+				return cf.Cf("curl", buildPath).Wait(Config.DefaultTimeoutDuration())
 			}, Config.CfPushTimeoutDuration()).Should(Say("STAGED"))
 		})
 	})

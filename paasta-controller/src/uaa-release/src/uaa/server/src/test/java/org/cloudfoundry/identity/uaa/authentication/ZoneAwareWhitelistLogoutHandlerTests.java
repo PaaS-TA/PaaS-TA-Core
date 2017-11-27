@@ -14,6 +14,7 @@
 
 package org.cloudfoundry.identity.uaa.authentication;
 
+import org.cloudfoundry.identity.uaa.zone.ClientServicesExtension;
 import org.cloudfoundry.identity.uaa.zone.IdentityZone;
 import org.cloudfoundry.identity.uaa.zone.IdentityZoneConfiguration;
 import org.cloudfoundry.identity.uaa.zone.IdentityZoneHolder;
@@ -22,15 +23,12 @@ import org.junit.Before;
 import org.junit.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
-import org.springframework.security.oauth2.provider.ClientDetailsService;
 import org.springframework.security.oauth2.provider.NoSuchClientException;
 import org.springframework.security.oauth2.provider.client.BaseClientDetails;
 
 import java.util.Arrays;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.oauth2.common.util.OAuth2Utils.CLIENT_ID;
@@ -41,7 +39,7 @@ public class ZoneAwareWhitelistLogoutHandlerTests {
     private MockHttpServletRequest request = new MockHttpServletRequest();
     private MockHttpServletResponse response = new MockHttpServletResponse();
     private BaseClientDetails client = new BaseClientDetails(CLIENT_ID, "", "", "", "", "http://*.testing.com,http://testing.com");
-    private ClientDetailsService clientDetailsService =  mock(ClientDetailsService.class);
+    private ClientServicesExtension clientDetailsService =  mock(ClientServicesExtension.class);
     private ZoneAwareWhitelistLogoutHandler handler;
     IdentityZoneConfiguration configuration = new IdentityZoneConfiguration();
     IdentityZoneConfiguration original;
@@ -91,13 +89,14 @@ public class ZoneAwareWhitelistLogoutHandlerTests {
     }
 
     @Test
-    public void test_allow_open_redirect() throws Exception {
+    public void test_open_redirect_no_longer_allowed() throws Exception {
         configuration.getLinks().getLogout().setWhitelist(null);
+        configuration.getLinks().getLogout().setRedirectUrl("/login");
         configuration.getLinks().getLogout().setDisableRedirectParameter(false);
         request.setParameter("redirect", "http://testing.com");
-        assertEquals("http://testing.com", handler.determineTargetUrl(request, response));
+        assertEquals("/login", handler.determineTargetUrl(request, response));
         request.setParameter("redirect", "http://www.testing.com");
-        assertEquals("http://www.testing.com", handler.determineTargetUrl(request, response));
+        assertEquals("/login", handler.determineTargetUrl(request, response));
     }
 
     @Test

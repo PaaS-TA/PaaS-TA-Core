@@ -43,7 +43,7 @@ module VCAP::CloudController
       end
     end
 
-    describe '#create' do
+    describe 'validations' do
       context 'when the name is longer than 50 characters' do
         let(:very_long_name) { 's' * 51 }
         it 'refuses to create this service instance' do
@@ -63,19 +63,12 @@ module VCAP::CloudController
         end
       end
 
-      describe 'when is_gateway_service is false' do
-        it 'returns a UserProvidedServiceInstance' do
-          service_instance_attrs[:is_gateway_service] = false
-          service_instance = described_class.create(service_instance_attrs)
-          expect(described_class.find(guid: service_instance.guid).class).to eq(VCAP::CloudController::UserProvidedServiceInstance)
-        end
-      end
+      context 'when the syslog_drain_url is longer than 10,000 characters' do
+        let(:overly_long_url) { "syslog://example.com/#{'s' * 10000}" }
 
-      describe 'when is_gateway_service is true' do
-        it 'returns a ManagedServiceInstance' do
-          service_instance_attrs[:is_gateway_service] = true
-          service_instance = described_class.create(service_instance_attrs)
-          expect(described_class.find(guid: service_instance.guid).class).to eq(VCAP::CloudController::ManagedServiceInstance)
+        it 'refuses to create this service instance' do
+          service_instance_attrs[:syslog_drain_url] = overly_long_url
+          expect { service_instance }.to raise_error Sequel::ValidationFailed, /syslog_drain_url max_length/
         end
       end
 
@@ -90,7 +83,7 @@ module VCAP::CloudController
 
           it 'raises an exception when renaming the service' do
             expect {
-              service_instance_foo.set_all(name: 'bar')
+              service_instance_foo.set(name: 'bar')
               service_instance_foo.save_changes
             }.to raise_error(Sequel::ValidationFailed, /space_id and name unique/)
           end
@@ -135,6 +128,24 @@ module VCAP::CloudController
       end
     end
 
+    describe '#create' do
+      describe 'when is_gateway_service is false' do
+        it 'returns a UserProvidedServiceInstance' do
+          service_instance_attrs[:is_gateway_service] = false
+          service_instance = described_class.create(service_instance_attrs)
+          expect(described_class.find(guid: service_instance.guid).class).to eq(VCAP::CloudController::UserProvidedServiceInstance)
+        end
+      end
+
+      describe 'when is_gateway_service is true' do
+        it 'returns a ManagedServiceInstance' do
+          service_instance_attrs[:is_gateway_service] = true
+          service_instance = described_class.create(service_instance_attrs)
+          expect(described_class.find(guid: service_instance.guid).class).to eq(VCAP::CloudController::ManagedServiceInstance)
+        end
+      end
+    end
+
     describe '#destroy' do
       let!(:service_instance) { ServiceInstance.create(service_instance_attrs) }
 
@@ -156,7 +167,7 @@ module VCAP::CloudController
 
         it 'creates an UPDATE service usage event' do
           expect {
-            service_instance.set_all(service_plan: service_plan)
+            service_instance.set(service_plan: service_plan)
             service_instance.save_changes
           }.to change { ServiceUsageEvent.count }.by 1
 
@@ -170,7 +181,7 @@ module VCAP::CloudController
         let(:new_name) { 'some-new-name' }
         it 'creates an UPDATE service usage event' do
           expect {
-            service_instance.set_all(name: new_name)
+            service_instance.set(name: new_name)
             service_instance.save_changes
           }.to change { ServiceUsageEvent.count }.by 1
 
@@ -184,10 +195,10 @@ module VCAP::CloudController
         let(:process) { AppFactory.make(space: service_instance.space) }
         let(:process2) { AppFactory.make(space: service_instance.space) }
         let!(:service_binding) {
-          ServiceBinding.make(app_guid: process.guid, service_instance_guid: service_instance.guid)
+          ServiceBinding.make(app_guid: process.app.guid, service_instance_guid: service_instance.guid)
         }
         let!(:service_binding2) {
-          ServiceBinding.make(app_guid: process2.guid, service_instance_guid: service_instance.guid)
+          ServiceBinding.make(app_guid: process2.app.guid, service_instance_guid: service_instance.guid)
         }
 
         context 'and syslog_drain_url changes' do

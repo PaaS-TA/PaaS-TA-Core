@@ -1,15 +1,10 @@
 package turbulence
 
-type Config struct {
-	DirectorUUID string
-	Name         string
-	IPRange      string
-	BOSH         ConfigBOSH
-}
-
-type ConfigBOSH struct {
-	Target         string
-	Username       string
-	Password       string
-	DirectorCACert string
+type ConfigV2 struct {
+	Name             string
+	AZs              []string
+	DirectorHost     string
+	DirectorUsername string
+	DirectorPassword string
+	DirectorCACert   string
 }

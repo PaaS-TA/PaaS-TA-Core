@@ -3,53 +3,72 @@
 SCRIPT_NAME=$(basename ${0})
 RUN_DIR=/var/vcap/sys/run/etcd_testconsumer
 LOG_DIR=/var/vcap/sys/log/etcd_testconsumer
-PKG_DIR=/var/vcap/packages/testconsumer
+PKG_DIR=/var/vcap/packages/acceptance-tests
 PIDFILE=${RUN_DIR}/etcd_testconsumer.pid
 CERT_DIR=/var/vcap/jobs/etcd_testconsumer/config/certs
 
 exec > >(tee -a >(logger -p user.info -t vcap.${SCRIPT_NAME}.stdout) | awk -W interactive '{ system("echo -n [$(date +\"%Y-%m-%d %H:%M:%S%z\")]"); print " " $0 }' >> ${LOG_DIR}/${SCRIPT_NAME}.log)
 exec 2> >(tee -a >(logger -p user.error -t vcap.${SCRIPT_NAME}.stderr) | awk -W interactive '{ system("echo -n [$(date +\"%Y-%m-%d %H:%M:%S%z\")]"); print " " $0 }' >> ${LOG_DIR}/${SCRIPT_NAME}.err.log)
 
+<%
+def require_ssl
+	respond_to?(:if_link) && if_link("etcd") do |link|
+		return link.p("etcd.require_ssl")
+	end.else do
+		return p("etcd_testconsumer.etcd.require_ssl")
+	end
+end
+
+def machines
+	respond_to?(:if_link) && if_link("etcd") do |link|
+		return link.instances.map(&:address)
+	end.else do
+		return p("etcd_testconsumer.etcd.machines")
+	end
+end
+
+def etcd_dns_suffix
+	respond_to?(:if_link) && if_link("etcd") do |link|
+		return link.p("etcd.advertise_urls_dns_suffix")
+	end.else do
+    return p("etcd_testconsumer.etcd.advertise_urls_dns_suffix")
+	end
+end
+%>
+
 function main() {
   case "${1}" in
     "start")
-      local protocol
-      protocol="http://"
-
       local tls_flags
       tls_flags=""
 
-      <% if p("etcd_testconsumer.etcd.require_ssl") %>
-        set +e
-        /var/vcap/packages/etcd-dns-checker/bin/check-a-record <%= p("etcd_testconsumer.etcd.dns_health_check_host") %>
-        if [ "0" != "$?" ]; then
-          echo "DNS is not up"
-          exit 1
-        fi
-        set -e
-      <% end %>
+      local etcd_services
+      etcd_services=""
 
-      <% if p("etcd_testconsumer.etcd.require_ssl") %>
-      echo -n '<%= p("etcd_testconsumer.etcd.ca_cert") %>' > ${CERT_DIR}/ca.crt
-      echo -n '<%= p("etcd_testconsumer.etcd.client_cert") %>' > ${CERT_DIR}/client.crt
-      echo -n '<%= p("etcd_testconsumer.etcd.client_key") %>' > ${CERT_DIR}/client.key
+      <% if require_ssl %>
+      set +e
+      /var/vcap/packages/etcd-dns-checker/bin/check-a-record <%= p("etcd_testconsumer.etcd.dns_health_check_host") %>
+      if [ "0" != "$?" ]; then
+        echo "DNS is not up"
+        exit 1
+      fi
+      set -e
 
-      protocol="https://"
       tls_flags="\
       --ca-cert-file ${CERT_DIR}/ca.crt \
       --client-ssl-cert-file ${CERT_DIR}/client.crt \
       --client-ssl-key-file ${CERT_DIR}/client.key"
-      <% end %>
 
-      local addresses
-      addresses=""
+      etcd_services=" --etcd-service https://<%= etcd_dns_suffix  %>:4001"
 
-      <% p("etcd_testconsumer.etcd.machines").each do |machine| %>
-        addresses="${addresses} --etcd-service ${protocol}<%= machine %>:4001"
-      <% end %>
+      <% else %>
+        <% machines.each do |machine| %>
+          etcd_services="${etcd_services} --etcd-service http://<%= machine %>:4001"
+        <% end %>
+      <% end%>
 
       "${PKG_DIR}/bin/testconsumer" --port 6769 \
-        ${addresses} \
+        ${etcd_services} \
         ${tls_flags} \
         2> >(tee -a ${LOG_DIR}/etcd_testconsumer.stderr.log | logger -p user.error -t vcap.etcd_testconsumer) \
         1> >(tee -a ${LOG_DIR}/etcd_testconsumer.stdout.log | logger -p user.info  -t vcap.etcd_testconsumer) &

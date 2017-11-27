@@ -34,7 +34,7 @@ module Sinatra
         # We don't really have a class to attach a member variable to, so we have to
         # use the env to flag this.
         unless request.env['vcap_exception_body_set']
-          error = ::CloudController::Errors::ApiError.new_from_details('NotFound')
+          error = ::CloudController::Errors::NotFound.new_from_details('NotFound')
           presenter = ErrorPresenter.new(error, in_test_mode?)
 
           body MultiJson.dump(presenter.to_hash, pretty: true)
@@ -97,15 +97,12 @@ module Sinatra
         logger_name = opts[:logger_name] || 'vcap.api'
         env['rack.logger'] = Steno.logger(logger_name)
 
-        ::VCAP::Request.current_id = request.env['cf.request_id']
         ::VCAP::CloudController::Diagnostics.new.request_received(request)
       end
 
       after do
         headers['Content-Type'] = 'application/json;charset=utf-8'
-        headers[::VCAP::Request::HEADER_NAME] = @request_guid
         ::VCAP::CloudController::Diagnostics.new.request_complete
-        ::VCAP::Request.current_id = nil
         nil
       end
     end

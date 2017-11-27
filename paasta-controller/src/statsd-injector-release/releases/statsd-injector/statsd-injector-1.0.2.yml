@@ -1,0 +1,15 @@
+name: statsd-injector
+version: 1.0.2
+commit_hash: ff0abda
+uncommitted_changes: false
+jobs:
+- name: statsd-injector
+  version: e1411b5204beb6cb2a29bbcf43c49e1192e0020a
+  fingerprint: e1411b5204beb6cb2a29bbcf43c49e1192e0020a
+  sha1: 76cdbd085bbe8e604b11bffe1008157f886b6c14
+packages:
+- name: statsd-injector
+  version: 660e4bb7c556e6bad86b0be7a8c83473c5adac81
+  fingerprint: 660e4bb7c556e6bad86b0be7a8c83473c5adac81
+  sha1: f75a58dd2655f98736c37053e4bc55356356ecb6
+  dependencies: []

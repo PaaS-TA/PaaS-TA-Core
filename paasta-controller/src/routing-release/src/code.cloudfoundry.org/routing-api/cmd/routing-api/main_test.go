@@ -19,17 +19,21 @@ import (
 	"github.com/tedsuo/ifrit/ginkgomon"
 )
 
-var session *Session
-
 const (
 	TOKEN_KEY_ENDPOINT     = "/token_key"
+	OPENID_CONFIG_ENDPOINT = "/.well-known/openid-configuration"
 	DefaultRouterGroupName = "default-tcp"
 )
 
 var _ = Describe("Main", func() {
+	var session *Session
+
+	BeforeEach(func() {
+		oauthServer.Reset()
+	})
 	AfterEach(func() {
 		if session != nil {
-			session.Kill()
+			Eventually(session.Kill()).Should(Exit())
 		}
 	})
 
@@ -54,6 +58,10 @@ var _ = Describe("Main", func() {
 	It("exits 1 if the uaa_verification_key is not a valid PEM format", func() {
 		oauthServer.AppendHandlers(
 			ghttp.CombineHandlers(
+				ghttp.VerifyRequest("GET", OPENID_CONFIG_ENDPOINT),
+				ghttp.RespondWith(http.StatusOK, `{"issuer": "https://uaa.domain.com"}`),
+			),
+			ghttp.CombineHandlers(
 				ghttp.VerifyRequest("GET", TOKEN_KEY_ENDPOINT),
 				ghttp.RespondWith(http.StatusOK, `{"alg":"rsa", "value": "Invalid PEM key" }`),
 			),
@@ -65,8 +73,45 @@ var _ = Describe("Main", func() {
 		Eventually(session).Should(Say("Public uaa token must be PEM encoded"))
 	})
 
+	It("exits 1 if the uaa issuer cannot be fetched on startup and non dev mode", func() {
+		oauthServer.AppendHandlers(
+			ghttp.CombineHandlers(
+				ghttp.VerifyRequest("GET", OPENID_CONFIG_ENDPOINT),
+				ghttp.RespondWith(http.StatusInternalServerError, `{}`),
+			),
+		)
+		args := routingAPIArgs
+		args.DevMode = false
+		session = RoutingApi(args.ArgSlice()...)
+		Eventually(session).Should(Exit(1))
+		Eventually(session).Should(Say("Failed to get issuer configuration from UAA"))
+	})
+
+	It("logs the uaa issuer when successfully fetched on startup and non dev mode", func() {
+		oauthServer.AppendHandlers(
+			ghttp.CombineHandlers(
+				ghttp.VerifyRequest("GET", OPENID_CONFIG_ENDPOINT),
+				ghttp.RespondWith(http.StatusOK, `{"issuer": "https://uaa.domain.com"}`),
+			),
+			ghttp.CombineHandlers(
+				ghttp.VerifyRequest("GET", TOKEN_KEY_ENDPOINT),
+				ghttp.RespondWith(http.StatusInternalServerError, `{}`),
+			),
+		)
+		args := routingAPIArgs
+		args.DevMode = false
+		session = RoutingApi(args.ArgSlice()...)
+		Eventually(session).Should(Say("received-issuer"))
+		Eventually(session).Should(Say("https://uaa.domain.com"))
+		Eventually(session).Should(Exit(1))
+	})
+
 	It("exits 1 if the uaa_verification_key cannot be fetched on startup and non dev mode", func() {
 		oauthServer.AppendHandlers(
+			ghttp.CombineHandlers(
+				ghttp.VerifyRequest("GET", OPENID_CONFIG_ENDPOINT),
+				ghttp.RespondWith(http.StatusOK, `{"issuer": "https://uaa.domain.com"}`),
+			),
 			ghttp.CombineHandlers(
 				ghttp.VerifyRequest("GET", TOKEN_KEY_ENDPOINT),
 				ghttp.RespondWith(http.StatusInternalServerError, `{}`),
@@ -88,6 +133,10 @@ var _ = Describe("Main", func() {
 	Context("when initialized correctly and db is running", func() {
 		BeforeEach(func() {
 			oauthServer.AppendHandlers(
+				ghttp.CombineHandlers(
+					ghttp.VerifyRequest("GET", OPENID_CONFIG_ENDPOINT),
+					ghttp.RespondWith(http.StatusOK, `{"issuer": "https://uaa.domain.com"}`),
+				),
 				ghttp.CombineHandlers(
 					ghttp.VerifyRequest("GET", TOKEN_KEY_ENDPOINT),
 					ghttp.RespondWith(http.StatusOK, `{"alg":"rsa", "value": "-----BEGIN PUBLIC KEY-----MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDHFr+KICms+tuT1OXJwhCUmR2dKVy7psa8xzElSyzqx7oJyfJ1JZyOzToj9T5SfTIq396agbHJWVfYphNahvZ/7uMXqHxf+ZH9BL1gk9Y6kCnbM5R60gfwjyW1/dQPjOzn9N394zd2FJoFHwdq9Qs0wBugspULZVNRxq7veq/fzwIDAQAB-----END PUBLIC KEY-----" }`),
@@ -130,7 +179,7 @@ var _ = Describe("Main", func() {
 			events, err := client.SubscribeToEvents()
 			Expect(err).ToNot(HaveOccurred())
 
-			route := models.NewRoute("some-route", 1234, "234.32.43.4", "some-guid", "", 1)
+			route := models.NewRoute("some-route", 1234, "234.32.43.4", "some-guid", "", 120)
 			err = client.UpsertRoutes([]models.Route{route})
 			Expect(err).ToNot(HaveOccurred())
 
@@ -138,11 +187,6 @@ var _ = Describe("Main", func() {
 				event, _ := events.Next()
 				return event.Action
 			}).Should(Equal("Upsert"))
-
-			Eventually(func() string {
-				event, _ := events.Next()
-				return event.Action
-			}, 3, 1).Should(Equal("Delete"))
 
 			ginkgomon.Interrupt(proc)
 
@@ -156,9 +200,11 @@ var _ = Describe("Main", func() {
 
 		Context("when etcd is unavailable", func() {
 			AfterEach(func() {
+				// etcd uses peer port when creating cluster. Defaults to specified etcd port + 3000
 				peerPort := etcdPort + 3000
 				validatePort(uint16(etcdPort))
 				validatePort(uint16(peerPort))
+
 				_, err := etcdAllocator.Create()
 				Expect(err).NotTo(HaveOccurred())
 			})
@@ -174,6 +220,38 @@ var _ = Describe("Main", func() {
 				ginkgomon.Interrupt(proc)
 				Eventually(routingAPIRunner).Should(Exit(1))
 			})
+		})
+	})
+
+	Context("when multiple router groups with the same name are seeded", func() {
+		var gormDB *gorm.DB
+		BeforeEach(func() {
+			routingAPIArgs = testrunner.Args{
+				Port:       routingAPIPort,
+				IP:         routingAPIIP,
+				ConfigPath: createConfigWithRg(),
+				DevMode:    true,
+			}
+			connectionString := fmt.Sprintf("root:password@/%s?parseTime=true", sqlDBName)
+			var err error
+			gormDB, err = gorm.Open("mysql", connectionString)
+			Expect(err).NotTo(HaveOccurred())
+		})
+		AfterEach(func() {
+			gormDB.AutoMigrate(&models.RouterGroupDB{})
+		})
+		It("should fail with an error", func() {
+			routingAPIRunner := testrunner.New(routingAPIBinPath, routingAPIArgs)
+			proc := ifrit.Invoke(routingAPIRunner)
+			type resultCount struct {
+				results string
+			}
+
+			db := gormDB.Raw("SHOW TABLES LIKE 'router_groups';")
+			Expect(db.Error).ToNot(HaveOccurred())
+			Expect(int(db.RowsAffected)).To(Equal(0))
+			Eventually(routingAPIRunner).Should(Exit(1))
+			ginkgomon.Interrupt(proc)
 		})
 	})
 })

@@ -1,0 +1,38 @@
+### List spaces relationship
+
+```
+Example Request
+```
+
+```shell
+curl "https://api.example.org/v3/isolation_segments/[guid]/relationships/spaces" \
+  -X GET \
+  -H "Authorization: bearer [token]"
+```
+
+```
+Example Response
+```
+
+```http
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+<%= yield_content :relationships_spaces %>
+```
+
+This endpoint lists the spaces to which the isolation segment is assigned.  For an Admin, this will list all associated spaces in the system.  For an org manager, this will list only those associated spaces belonging to orgs for which the user is a manager.  For any other user, this will list only those associated spaces to which the user has access.
+
+#### Definition
+`GET /v3/isolation_segments/:guid/relationships/spaces`
+
+#### Permitted Roles
+ |
+--- | ---
+Space Developer |
+Space Manager |
+Space Auditor |
+Org Manager |
+Admin |
+Admin Read-Only |
+Global Auditor |

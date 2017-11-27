@@ -12,12 +12,17 @@ import (
 	"github.com/armon/go-metrics"
 	"github.com/hashicorp/consul/consul"
 	"github.com/hashicorp/consul/consul/structs"
+	"github.com/hashicorp/consul/lib"
 	"github.com/miekg/dns"
 )
 
 const (
-	maxServiceResponses = 3 // For UDP only
-	maxRecurseRecords   = 5
+	// UDP can fit ~25 A records in a 512B response, and ~14 AAAA
+	// records.  Limit further to prevent unintentional configuration
+	// abuse that would have a negative effect on application response
+	// times.
+	maxUDPAnswerLimit = 8
+	maxRecurseRecords = 5
 )
 
 // DNSServer is used to wrap an Agent and expose various
@@ -175,6 +180,7 @@ func (d *DNSServer) handlePtr(resp dns.ResponseWriter, req *dns.Msg) {
 	// Setup the message response
 	m := new(dns.Msg)
 	m.SetReply(req)
+	m.Compress = !d.config.DisableCompression
 	m.Authoritative = true
 	m.RecursionAvailable = (len(d.recursors) > 0)
 
@@ -192,7 +198,7 @@ func (d *DNSServer) handlePtr(resp dns.ResponseWriter, req *dns.Msg) {
 		Datacenter: datacenter,
 		QueryOptions: structs.QueryOptions{
 			Token:      d.agent.config.ACLToken,
-			AllowStale: d.config.AllowStale,
+			AllowStale: *d.config.AllowStale,
 		},
 	}
 	var out structs.IndexedNodes
@@ -244,6 +250,7 @@ func (d *DNSServer) handleQuery(resp dns.ResponseWriter, req *dns.Msg) {
 	// Setup the message response
 	m := new(dns.Msg)
 	m.SetReply(req)
+	m.Compress = !d.config.DisableCompression
 	m.Authoritative = true
 	m.RecursionAvailable = (len(d.recursors) > 0)
 
@@ -363,19 +370,6 @@ INVALID:
 	resp.SetRcode(req, dns.RcodeNameError)
 }
 
-// translateAddr is used to provide the final, translated address for a node,
-// depending on how this agent and the other node are configured.
-func (d *DNSServer) translateAddr(dc string, node *structs.Node) string {
-	addr := node.Address
-	if d.agent.config.TranslateWanAddrs && (d.agent.config.Datacenter != dc) {
-		wanAddr := node.TaggedAddresses["wan"]
-		if wanAddr != "" {
-			addr = wanAddr
-		}
-	}
-	return addr
-}
-
 // nodeLookup is used to handle a node query
 func (d *DNSServer) nodeLookup(network, datacenter, node string, req, resp *dns.Msg) {
 	// Only handle ANY, A and AAAA type requests
@@ -390,7 +384,7 @@ func (d *DNSServer) nodeLookup(network, datacenter, node string, req, resp *dns.
 		Node:       node,
 		QueryOptions: structs.QueryOptions{
 			Token:      d.agent.config.ACLToken,
-			AllowStale: d.config.AllowStale,
+			AllowStale: *d.config.AllowStale,
 		},
 	}
 	var out structs.IndexedNodeServices
@@ -416,7 +410,8 @@ RPC:
 	}
 
 	// Add the node record
-	addr := d.translateAddr(datacenter, out.NodeServices.Node)
+	n := out.NodeServices.Node
+	addr := translateAddress(d.agent.config, datacenter, n.Address, n.TaggedAddresses)
 	records := d.formatNodeRecord(out.NodeServices.Node, addr,
 		req.Question[0].Name, qType, d.config.NodeTTL)
 	if records != nil {
@@ -487,21 +482,94 @@ func (d *DNSServer) formatNodeRecord(node *structs.Node, addr, qName string, qTy
 	return records
 }
 
-// trimAnswers makes sure a UDP response is not longer than allowed by RFC 1035.
-// We first enforce an arbitrary limit, and then make sure the response doesn't
-// exceed 512 bytes.
-func trimAnswers(resp *dns.Msg) (trimmed bool) {
+// indexRRs populates a map which indexes a given list of RRs by name. NOTE that
+// the names are all squashed to lower case so we can perform case-insensitive
+// lookups; the RRs are not modified.
+func indexRRs(rrs []dns.RR, index map[string]dns.RR) {
+	for _, rr := range rrs {
+		name := strings.ToLower(rr.Header().Name)
+		if _, ok := index[name]; !ok {
+			index[name] = rr
+		}
+	}
+}
+
+// syncExtra takes a DNS response message and sets the extra data to the most
+// minimal set needed to cover the answer data. A pre-made index of RRs is given
+// so that can be re-used between calls. This assumes that the extra data is
+// only used to provide info for SRV records. If that's not the case, then this
+// will wipe out any additional data.
+func syncExtra(index map[string]dns.RR, resp *dns.Msg) {
+	extra := make([]dns.RR, 0, len(resp.Answer))
+	resolved := make(map[string]struct{}, len(resp.Answer))
+	for _, ansRR := range resp.Answer {
+		srv, ok := ansRR.(*dns.SRV)
+		if !ok {
+			continue
+		}
+
+		// Note that we always use lower case when using the index so
+		// that compares are not case-sensitive. We don't alter the actual
+		// RRs we add into the extra section, however.
+		target := strings.ToLower(srv.Target)
+
+	RESOLVE:
+		if _, ok := resolved[target]; ok {
+			continue
+		}
+		resolved[target] = struct{}{}
+
+		extraRR, ok := index[target]
+		if ok {
+			extra = append(extra, extraRR)
+			if cname, ok := extraRR.(*dns.CNAME); ok {
+				target = strings.ToLower(cname.Target)
+				goto RESOLVE
+			}
+		}
+	}
+	resp.Extra = extra
+}
+
+// trimUDPResponse makes sure a UDP response is not longer than allowed by RFC
+// 1035. Enforce an arbitrary limit that can be further ratcheted down by
+// config, and then make sure the response doesn't exceed 512 bytes. Any extra
+// records will be trimmed along with answers.
+func trimUDPResponse(config *DNSConfig, resp *dns.Msg) (trimmed bool) {
 	numAnswers := len(resp.Answer)
+	hasExtra := len(resp.Extra) > 0
+
+	// We avoid some function calls and allocations by only handling the
+	// extra data when necessary.
+	var index map[string]dns.RR
+	if hasExtra {
+		index = make(map[string]dns.RR, len(resp.Extra))
+		indexRRs(resp.Extra, index)
+	}
 
 	// This cuts UDP responses to a useful but limited number of responses.
-	if numAnswers > maxServiceResponses {
-		resp.Answer = resp.Answer[:maxServiceResponses]
+	maxAnswers := lib.MinInt(maxUDPAnswerLimit, config.UDPAnswerLimit)
+	if numAnswers > maxAnswers {
+		resp.Answer = resp.Answer[:maxAnswers]
+		if hasExtra {
+			syncExtra(index, resp)
+		}
 	}
 
-	// This enforces the hard limit of 512 bytes per the RFC.
+	// This enforces the hard limit of 512 bytes per the RFC. Note that we
+	// temporarily switch to uncompressed so that we limit to a response
+	// that will not exceed 512 bytes uncompressed, which is more
+	// conservative and will allow our responses to be compliant even if
+	// some downstream server uncompresses them.
+	compress := resp.Compress
+	resp.Compress = false
 	for len(resp.Answer) > 0 && resp.Len() > 512 {
 		resp.Answer = resp.Answer[:len(resp.Answer)-1]
+		if hasExtra {
+			syncExtra(index, resp)
+		}
 	}
+	resp.Compress = compress
 
 	return len(resp.Answer) < numAnswers
 }
@@ -516,7 +584,7 @@ func (d *DNSServer) serviceLookup(network, datacenter, service, tag string, req,
 		TagFilter:   tag != "",
 		QueryOptions: structs.QueryOptions{
 			Token:      d.agent.config.ACLToken,
-			AllowStale: d.config.AllowStale,
+			AllowStale: *d.config.AllowStale,
 		},
 	}
 	var out structs.IndexedCheckServiceNodes
@@ -559,15 +627,15 @@ RPC:
 
 	// Add various responses depending on the request
 	qType := req.Question[0].Qtype
-	d.serviceNodeRecords(datacenter, out.Nodes, req, resp, ttl)
-
 	if qType == dns.TypeSRV {
 		d.serviceSRVRecords(datacenter, out.Nodes, req, resp, ttl)
+	} else {
+		d.serviceNodeRecords(datacenter, out.Nodes, req, resp, ttl)
 	}
 
 	// If the network is not TCP, restrict the number of responses
 	if network != "tcp" {
-		wasTrimmed := trimAnswers(resp)
+		wasTrimmed := trimUDPResponse(d.config, resp)
 
 		// Flag that there are more records to return in the UDP response
 		if wasTrimmed && d.config.EnableTruncate {
@@ -590,7 +658,16 @@ func (d *DNSServer) preparedQueryLookup(network, datacenter, query string, req, 
 		QueryIDOrName: query,
 		QueryOptions: structs.QueryOptions{
 			Token:      d.agent.config.ACLToken,
-			AllowStale: d.config.AllowStale,
+			AllowStale: *d.config.AllowStale,
+		},
+
+		// Always pass the local agent through. In the DNS interface, there
+		// is no provision for passing additional query parameters, so we
+		// send the local agent's data through to allow distance sorting
+		// relative to ourself on the server side.
+		Agent: structs.QuerySource{
+			Datacenter: d.agent.config.Datacenter,
+			Node:       d.agent.config.NodeName,
 		},
 	}
 
@@ -599,7 +676,7 @@ func (d *DNSServer) preparedQueryLookup(network, datacenter, query string, req, 
 	// match the previous behavior. We can optimize by pushing more filtering
 	// into the query execution, but for now I think we need to get the full
 	// response. We could also choose a large arbitrary number that will
-	// likely work in practice, like 10*maxServiceResponses which should help
+	// likely work in practice, like 10*maxUDPAnswerLimit which should help
 	// reduce bandwidth if there are thousands of nodes available.
 
 	endpoint := d.agent.getEndpoint(preparedQueryEndpoint)
@@ -655,14 +732,15 @@ RPC:
 
 	// Add various responses depending on the request.
 	qType := req.Question[0].Qtype
-	d.serviceNodeRecords(datacenter, out.Nodes, req, resp, ttl)
 	if qType == dns.TypeSRV {
-		d.serviceSRVRecords(datacenter, out.Nodes, req, resp, ttl)
+		d.serviceSRVRecords(out.Datacenter, out.Nodes, req, resp, ttl)
+	} else {
+		d.serviceNodeRecords(out.Datacenter, out.Nodes, req, resp, ttl)
 	}
 
 	// If the network is not TCP, restrict the number of responses.
 	if network != "tcp" {
-		wasTrimmed := trimAnswers(resp)
+		wasTrimmed := trimUDPResponse(d.config, resp)
 
 		// Flag that there are more records to return in the UDP response
 		if wasTrimmed && d.config.EnableTruncate {
@@ -682,10 +760,11 @@ func (d *DNSServer) serviceNodeRecords(dc string, nodes structs.CheckServiceNode
 	qName := req.Question[0].Name
 	qType := req.Question[0].Qtype
 	handled := make(map[string]struct{})
+
 	for _, node := range nodes {
 		// Start with the translated address but use the service address,
 		// if specified.
-		addr := d.translateAddr(dc, node.Node)
+		addr := translateAddress(d.agent.config, dc, node.Node.Address, node.Node.TaggedAddresses)
 		if node.Service.Address != "" {
 			addr = node.Service.Address
 		}
@@ -734,7 +813,7 @@ func (d *DNSServer) serviceSRVRecords(dc string, nodes structs.CheckServiceNodes
 
 		// Start with the translated address but use the service address,
 		// if specified.
-		addr := d.translateAddr(dc, node.Node)
+		addr := translateAddress(d.agent.config, dc, node.Node.Address, node.Node.TaggedAddresses)
 		if node.Service.Address != "" {
 			addr = node.Service.Address
 		}
@@ -763,13 +842,18 @@ func (d *DNSServer) handleRecurse(resp dns.ResponseWriter, req *dns.Msg) {
 	}
 
 	// Recursively resolve
-	c := &dns.Client{Net: network}
+	c := &dns.Client{Net: network, Timeout: d.config.RecursorTimeout}
 	var r *dns.Msg
 	var rtt time.Duration
 	var err error
 	for _, recursor := range d.recursors {
 		r, rtt, err = c.Exchange(req, recursor)
 		if err == nil {
+			// Compress the response; we don't know if the incoming
+			// response was compressed or not, so by not compressing
+			// we might generate an invalid packet on the way out.
+			r.Compress = !d.config.DisableCompression
+
 			// Forward the response
 			d.logger.Printf("[DEBUG] dns: recurse RTT for %v (%v)", q, rtt)
 			if err := resp.WriteMsg(r); err != nil {
@@ -785,6 +869,7 @@ func (d *DNSServer) handleRecurse(resp dns.ResponseWriter, req *dns.Msg) {
 		q, resp.RemoteAddr().String(), resp.RemoteAddr().Network())
 	m := &dns.Msg{}
 	m.SetReply(req)
+	m.Compress = !d.config.DisableCompression
 	m.RecursionAvailable = true
 	m.SetRcode(req, dns.RcodeServerFailure)
 	resp.WriteMsg(m)
@@ -802,7 +887,7 @@ func (d *DNSServer) resolveCNAME(name string) []dns.RR {
 	m.SetQuestion(name, dns.TypeA)
 
 	// Make a DNS lookup request
-	c := &dns.Client{Net: "udp"}
+	c := &dns.Client{Net: "udp", Timeout: d.config.RecursorTimeout}
 	var r *dns.Msg
 	var rtt time.Duration
 	var err error

@@ -13,8 +13,13 @@ module VCAP::CloudController
     serialize_attributes :json, :rules
 
     many_to_many :spaces
+    many_to_many :staging_spaces,
+      class: 'VCAP::CloudController::Space',
+      join_table: 'staging_security_groups_spaces',
+      right_key: :staging_space_id,
+      left_key: :staging_security_group_id
 
-    add_association_dependencies spaces: :nullify
+    add_association_dependencies spaces: :nullify, staging_spaces: :nullify
 
     def validate
       validates_presence :name
@@ -25,15 +30,22 @@ module VCAP::CloudController
     end
 
     def self.user_visibility_filter(user)
+      managed_organizations_spaces_dataset = Space.where(id:
+                  user.managed_organizations_dataset.
+                  join(:spaces, spaces__organization_id: :organizations__id).
+                  select(:spaces__id))
+
       Sequel.or([
         [:spaces, user.spaces_dataset],
         [:spaces, user.managed_spaces_dataset],
         [:spaces, user.audited_spaces_dataset],
+        [:spaces, managed_organizations_spaces_dataset],
+        [:staging_spaces, user.spaces_dataset],
+        [:staging_spaces, user.managed_spaces_dataset],
+        [:staging_spaces, user.audited_spaces_dataset],
+        [:staging_spaces, managed_organizations_spaces_dataset],
         [:running_default, true],
-        [:spaces, Space.where(space_id:
-                              user.managed_organizations_dataset.
-                              join(:spaces, spaces__organization_id: :organizations__id).
-                              select(:spaces__id))]
+        [:staging_default, true],
       ])
     end
 

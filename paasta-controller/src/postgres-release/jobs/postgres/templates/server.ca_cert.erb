@@ -1,0 +1,7 @@
+<%=
+  cert = nil
+  if p("databases.tls.ca") != ''
+      cert = p("databases.tls.ca")
+  end
+  cert
+%>

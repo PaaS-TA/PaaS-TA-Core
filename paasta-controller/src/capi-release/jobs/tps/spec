@@ -9,6 +9,11 @@ templates:
   bbs_ca.crt.erb: config/certs/bbs/ca.crt
   bbs_client.crt.erb: config/certs/bbs/client.crt
   bbs_client.key.erb: config/certs/bbs/client.key
+  cc_ca.crt.erb: config/certs/cc/ca.crt
+  cc_client.crt.erb: config/certs/cc/client.crt
+  cc_client.key.erb: config/certs/cc/client.key
+  tps_listener_config.json.erb: config/tps_listener_config.json
+  tps_watcher_config.json.erb: config/tps_watcher_config.json
 
 packages:
   - capi_utils
@@ -53,15 +58,16 @@ properties:
 
   capi.tps.cc.external_port:
     description: "External port to access the Cloud Controller"
-    default: 9022
-  capi.tps.cc.basic_auth_username:
-    description: "Basic auth username for CC internal API"
-    default: "internal_user"
-  capi.tps.cc.basic_auth_password:
-    description: "Basic auth password for CC internal API"
+    default: 9023
   capi.tps.cc.internal_service_hostname:
     description: "Internal CC host name"
     default: cloud-controller-ng.service.cf.internal
+  capi.tps.cc.ca_cert:
+    description: "PEM-encoded CA certificate"
+  capi.tps.cc.client_cert:
+    description: "PEM-encoded client certificate"
+  capi.tps.cc.client_key:
+    description: "PEM-encoded client key"
 
   capi.tps.listener.listen_addr:
     description: "address at which to serve API requests"
@@ -73,3 +79,14 @@ properties:
   capi.tps.watcher.debug_addr:
     description: "address at which to serve debug info"
     default: "127.0.0.1:17015"
+  capi.tps.watcher.locket.api_location:
+    description: "Hostname and port of the Locket server"
+    default: ""
+  capi.tps.watcher.skip_consul_lock:
+    description: "Determines whether to skip obtaining a lock from Consul"
+    default: false
+
+  capi.tps.listener_enabled:
+    description: "Flag to enable TPS listener. Listener functionality has be absorbed into modern CC"
+    default: true
+

@@ -6,7 +6,8 @@ module CloudController
       let(:blobstore_options) do
         {
           blobstore_host: 'api.example.com',
-          blobstore_port: 9292,
+          blobstore_external_port: 9292,
+          blobstore_tls_port: 9293,
           user:           'username',
           password:       'password',
         }
@@ -50,25 +51,6 @@ module CloudController
             allow(internal_url_generator).to receive(:admin_buildpack_download_url)
             url_generator.admin_buildpack_download_url(buildpack)
             expect(internal_url_generator).to have_received(:admin_buildpack_download_url).with(buildpack)
-          end
-        end
-
-        describe 'download unauthorized droplets permalink' do
-          let(:app) { VCAP::CloudController::AppFactory.make }
-
-          it 'gives out a url to the cloud controller' do
-            expect(url_generator.unauthorized_perma_droplet_download_url(app)).to eql("http://api.example.com:9292/internal/v2/droplets/#{app.guid}/#{app.droplet_hash}/download")
-          end
-
-          context 'when no droplet_hash' do
-            before do
-              app.current_droplet.destroy
-              app.reload
-            end
-
-            it 'returns nil if no droplet_hash' do
-              expect(url_generator.unauthorized_perma_droplet_download_url(app)).to be_nil
-            end
           end
         end
 

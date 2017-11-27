@@ -16,11 +16,7 @@ import org.cloudfoundry.identity.uaa.impl.config.IdentityZoneConfigurationBootst
 import org.cloudfoundry.identity.uaa.login.Prompt;
 import org.cloudfoundry.identity.uaa.provider.saml.idp.SamlTestUtils;
 import org.cloudfoundry.identity.uaa.test.JdbcTestBase;
-import org.cloudfoundry.identity.uaa.zone.IdentityZone;
-import org.cloudfoundry.identity.uaa.zone.IdentityZoneConfiguration;
-import org.cloudfoundry.identity.uaa.zone.IdentityZoneProvisioning;
-import org.cloudfoundry.identity.uaa.zone.JdbcIdentityZoneProvisioning;
-import org.cloudfoundry.identity.uaa.zone.TokenPolicy;
+import org.cloudfoundry.identity.uaa.zone.*;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -29,10 +25,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
+import static org.cloudfoundry.identity.uaa.oauth.token.TokenConstants.TokenFormat.JWT;
+import static org.hamcrest.Matchers.containsInAnyOrder;
+import static org.junit.Assert.*;
 
 public class IdentityZoneConfigurationBootstrapTests extends JdbcTestBase {
 
@@ -58,13 +53,41 @@ public class IdentityZoneConfigurationBootstrapTests extends JdbcTestBase {
     public static final String ID = "id";
     private IdentityZoneProvisioning provisioning;
     private IdentityZoneConfigurationBootstrap bootstrap;
-    private Map<String, String> links = new HashMap<>();
-    ;
+    private Map<String, Object> links = new HashMap<>();
+
 
     @Before
     public void configureProvisioning() {
         provisioning = new JdbcIdentityZoneProvisioning(jdbcTemplate);
         bootstrap = new IdentityZoneConfigurationBootstrap(provisioning);
+    }
+
+    @Test
+    public void test_multiple_keys() throws InvalidIdentityZoneDetailsException {
+        bootstrap.setSamlSpPrivateKey(SamlTestUtils.PROVIDER_PRIVATE_KEY);
+        bootstrap.setSamlSpCertificate(SamlTestUtils.PROVIDER_CERTIFICATE);
+        bootstrap.setSamlSpPrivateKeyPassphrase(SamlTestUtils.PROVIDER_PRIVATE_KEY_PASSWORD);
+        Map<String, Map<String, String>> keys = new HashMap<>();
+        Map<String, String> key1 = new HashMap<>();
+        key1.put("key", SamlTestUtils.PROVIDER_PRIVATE_KEY);
+        key1.put("passphrase", SamlTestUtils.PROVIDER_PRIVATE_KEY_PASSWORD);
+        key1.put("certificate", SamlTestUtils.PROVIDER_CERTIFICATE);
+        keys.put("key1", key1);
+        bootstrap.setActiveKeyId("key1");
+        bootstrap.setSamlKeys(keys);
+        bootstrap.afterPropertiesSet();
+        IdentityZone uaa = provisioning.retrieve(IdentityZone.getUaa().getId());
+        SamlConfig config = uaa.getConfig().getSamlConfig();
+        assertEquals(SamlTestUtils.PROVIDER_PRIVATE_KEY, config.getPrivateKey());
+        assertEquals(SamlTestUtils.PROVIDER_PRIVATE_KEY_PASSWORD, config.getPrivateKeyPassword());
+        assertEquals(SamlTestUtils.PROVIDER_CERTIFICATE, config.getCertificate());
+
+        assertEquals("key1", config.getActiveKeyId());
+        assertEquals(2, config.getKeys().size());
+
+        assertEquals(SamlTestUtils.PROVIDER_PRIVATE_KEY, config.getKeys().get("key1").getKey());
+        assertEquals(SamlTestUtils.PROVIDER_PRIVATE_KEY_PASSWORD, config.getKeys().get("key1").getPassphrase());
+        assertEquals(SamlTestUtils.PROVIDER_CERTIFICATE, config.getKeys().get("key1").getCertificate());
     }
 
     @Test
@@ -80,18 +103,32 @@ public class IdentityZoneConfigurationBootstrapTests extends JdbcTestBase {
     }
 
     @Test
+    public void testDefaultGroups() throws Exception {
+        String[] groups = {"group1", "group2", "group3"};
+        bootstrap.setDefaultUserGroups(Arrays.asList(groups));
+        bootstrap.afterPropertiesSet();
+        IdentityZone uaa = provisioning.retrieve(IdentityZone.getUaa().getId());
+        assertThat(uaa.getConfig().getUserConfig().getDefaultGroups(), containsInAnyOrder(groups));
+    }
+
+    @Test
     public void tokenPolicy_configured_fromValuesInYaml() throws Exception {
         TokenPolicy tokenPolicy = new TokenPolicy();
         Map<String, String> keys = new HashMap<>();
         keys.put(ID, PRIVATE_KEY);
         tokenPolicy.setKeys(keys);
         tokenPolicy.setAccessTokenValidity(3600);
+        tokenPolicy.setRefreshTokenFormat("jwt");
+        tokenPolicy.setRefreshTokenUnique(false);
         bootstrap.setTokenPolicy(tokenPolicy);
+
         bootstrap.afterPropertiesSet();
 
         IdentityZone zone = provisioning.retrieve(IdentityZone.getUaa().getId());
         IdentityZoneConfiguration definition = zone.getConfig();
         assertEquals(3600, definition.getTokenPolicy().getAccessTokenValidity());
+        assertEquals(false, definition.getTokenPolicy().isRefreshTokenUnique());
+        assertEquals(JWT.getStringValue(), definition.getTokenPolicy().getRefreshTokenFormat());
         assertEquals(PRIVATE_KEY, definition.getTokenPolicy().getKeys().get(ID));
     }
 
@@ -114,15 +151,6 @@ public class IdentityZoneConfigurationBootstrapTests extends JdbcTestBase {
     }
 
     @Test
-    public void null_home_redirect() throws Exception {
-        bootstrap.setHomeRedirect("null");
-        bootstrap.afterPropertiesSet();
-
-        IdentityZone zone = provisioning.retrieve(IdentityZone.getUaa().getId());
-        assertNull(zone.getConfig().getLinks().getHomeRedirect());
-    }
-
-    @Test
     public void signup_link_configured() throws Exception {
         links.put("signup", "/configured_signup");
         bootstrap.setSelfServiceLinks(links);
@@ -130,7 +158,7 @@ public class IdentityZoneConfigurationBootstrapTests extends JdbcTestBase {
 
         IdentityZone zone = provisioning.retrieve(IdentityZone.getUaa().getId());
         assertEquals("/configured_signup", zone.getConfig().getLinks().getSelfService().getSignup());
-        assertEquals("/forgot_password", zone.getConfig().getLinks().getSelfService().getPasswd());
+        assertNull(zone.getConfig().getLinks().getSelfService().getPasswd());
     }
 
     @Test
@@ -140,7 +168,7 @@ public class IdentityZoneConfigurationBootstrapTests extends JdbcTestBase {
         bootstrap.afterPropertiesSet();
 
         IdentityZone zone = provisioning.retrieve(IdentityZone.getUaa().getId());
-        assertEquals("/create_account", zone.getConfig().getLinks().getSelfService().getSignup());
+        assertNull(zone.getConfig().getLinks().getSelfService().getSignup());
         assertEquals("/configured_passwd", zone.getConfig().getLinks().getSelfService().getPasswd());
     }
 

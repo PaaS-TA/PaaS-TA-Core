@@ -1,3 +1,5 @@
+#!/usr/bin/env bash
+
 set -e -x
 
 cd ${BUILD_DIR}
@@ -9,12 +11,12 @@ export PATH=$PATH:/bin:/usr/bin
 if [ `uname` = "Darwin" ]; then
   mkdir java
   cd java
-  tar zxvf ../openjdk/openjdk-1.8.0_101-x86_64-mountainlion.tar.gz --exclude="._*"
+  tar zxvf ../openjdk/openjdk-1.8.0_141-x86_64-mountainlion.tar.gz --exclude="._*"
   export JAVA_HOME=${BUILD_DIR}/java
 elif [ `uname` = "Linux" ]; then
   mkdir java
   cd java
-  tar zxvf ../openjdk/openjdk-1.8.0_101-x86_64-trusty.tar.gz
+  tar zxvf ../openjdk/openjdk-1.8.0_141-x86_64-trusty.tar.gz
   export JAVA_HOME=${BUILD_DIR}/java
 else
   if [ ! -d $JAVA_HOME ]; then
@@ -26,15 +28,21 @@ fi
 #setup Java path
 export PATH=$JAVA_HOME/bin:$PATH
 
-#build cloud foundry war
+#build cloud foundry STATSD war
+cd ${BUILD_DIR}/uaa_utils/identity-tools/statsd
+GIT_DIR=$(find $RELEASE_DIR -path "*/modules/src/identity-tools") ./gradlew clean assemble
+cp build/libs/cloudfoundry-identity-statsd-*.war ${BUILD_DIR}/uaa/cloudfoundry-identity-statsd.war
+cd ${BUILD_DIR}
+rm -rf ${BUILD_DIR}/uaa_utils/identity-tools
+
+#build cloud foundry UAA war
 cd ${BUILD_DIR}/uaa
-#./gradlew assemble
 GIT_DIR=$(find $RELEASE_DIR -path "*/modules/src/uaa") ./gradlew :assemble
 cp uaa/build/libs/cloudfoundry-identity-uaa-*.war ${BUILD_DIR}/uaa/cloudfoundry-identity-uaa.war
 
-#clean build data
+#clean build UAA data and build tools (java)
 ./gradlew clean
 cd ${BUILD_DIR}
 rm -rf java
-rm -rf openjdk/openjdk-1.8.0_101-x86_64-mountainlion.tar.gz
+rm -rf openjdk/openjdk-1.8.0_141-x86_64-mountainlion.tar.gz
 ${BUILD_DIR}/uaa/.clean-cf-release-build

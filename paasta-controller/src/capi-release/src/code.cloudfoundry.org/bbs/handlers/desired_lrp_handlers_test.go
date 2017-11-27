@@ -113,6 +113,18 @@ var _ = Describe("DesiredLRP Handlers", func() {
 					Expect(filter.Domain).To(Equal("domain-1"))
 				})
 			})
+
+			Context("and filtering by process guids", func() {
+				BeforeEach(func() {
+					requestBody = &models.DesiredLRPsRequest{ProcessGuids: []string{"g1", "g2"}}
+				})
+
+				It("call the DB with the process guid filter to retrieve the desired lrps", func() {
+					Expect(fakeDesiredLRPDB.DesiredLRPsCallCount()).To(Equal(1))
+					_, filter := fakeDesiredLRPDB.DesiredLRPsArgsForCall(0)
+					Expect(filter.ProcessGuids).To(Equal([]string{"g1", "g2"}))
+				})
+			})
 		})
 
 		Context("when the DB returns no desired lrp groups", func() {
@@ -296,6 +308,18 @@ var _ = Describe("DesiredLRP Handlers", func() {
 					Expect(filter.Domain).To(Equal("domain-1"))
 				})
 			})
+
+			Context("and filtering by process guids", func() {
+				BeforeEach(func() {
+					requestBody = &models.DesiredLRPsRequest{ProcessGuids: []string{"guid-1", "guid-2"}}
+				})
+
+				It("call the DB with the process guids filter to retrieve the desired lrps", func() {
+					Expect(fakeDesiredLRPDB.DesiredLRPSchedulingInfosCallCount()).To(Equal(1))
+					_, filter := fakeDesiredLRPDB.DesiredLRPSchedulingInfosArgsForCall(0)
+					Expect(filter.ProcessGuids).To(Equal([]string{"guid-1", "guid-2"}))
+				})
+			})
 		})
 
 		Context("when the DB returns no desired lrp groups", func() {
@@ -443,6 +467,7 @@ var _ = Describe("DesiredLRP Handlers", func() {
 						Resource: rep.Resource{
 							MemoryMB: desiredLRP.MemoryMb,
 							DiskMB:   desiredLRP.DiskMb,
+							MaxPids:  desiredLRP.MaxPids,
 						},
 						PlacementConstraint: rep.PlacementConstraint{
 							RootFs:        desiredLRP.RootFs,
@@ -452,7 +477,7 @@ var _ = Describe("DesiredLRP Handlers", func() {
 					}
 
 					Expect(fakeAuctioneerClient.RequestLRPAuctionsCallCount()).To(Equal(1))
-					startAuctions := fakeAuctioneerClient.RequestLRPAuctionsArgsForCall(0)
+					_, startAuctions := fakeAuctioneerClient.RequestLRPAuctionsArgsForCall(0)
 					Expect(startAuctions).To(HaveLen(1))
 					Expect(startAuctions[0].ProcessGuid).To(Equal(expectedStartRequest.ProcessGuid))
 					Expect(startAuctions[0].Domain).To(Equal(expectedStartRequest.Domain))
@@ -570,7 +595,10 @@ var _ = Describe("DesiredLRP Handlers", func() {
 					}
 
 					fakeDesiredLRPDB.DesiredLRPByProcessGuidReturns(desiredLRP, nil)
-					fakeServiceClient.CellByIdReturns(&models.CellPresence{RepAddress: "some-address"}, nil)
+					fakeServiceClient.CellByIdReturns(&models.CellPresence{
+						RepAddress: "some-address",
+						RepUrl:     "http://some-address",
+					}, nil)
 				})
 
 				Context("when the number of instances decreased", func() {
@@ -594,8 +622,12 @@ var _ = Describe("DesiredLRP Handlers", func() {
 
 						Expect(fakeServiceClient.CellByIdCallCount()).To(Equal(2))
 						Expect(fakeRepClientFactory.CreateClientCallCount()).To(Equal(2))
-						Expect(fakeRepClientFactory.CreateClientArgsForCall(0)).To(Equal("some-address"))
-						Expect(fakeRepClientFactory.CreateClientArgsForCall(1)).To(Equal("some-address"))
+						repAddr, repURL := fakeRepClientFactory.CreateClientArgsForCall(0)
+						Expect(repAddr).To(Equal("some-address"))
+						Expect(repURL).To(Equal("http://some-address"))
+						repAddr, repURL = fakeRepClientFactory.CreateClientArgsForCall(1)
+						Expect(repAddr).To(Equal("some-address"))
+						Expect(repURL).To(Equal("http://some-address"))
 
 						Expect(fakeRepClient.StopLRPInstanceCallCount()).To(Equal(2))
 						key, instanceKey := fakeRepClient.StopLRPInstanceArgsForCall(0)
@@ -604,6 +636,38 @@ var _ = Describe("DesiredLRP Handlers", func() {
 						key, instanceKey = fakeRepClient.StopLRPInstanceArgsForCall(1)
 						Expect(key).To(Equal(actualLRPGroups[1].Instance.ActualLRPKey))
 						Expect(instanceKey).To(Equal(actualLRPGroups[1].Instance.ActualLRPInstanceKey))
+					})
+
+					Context("when the rep announces a url", func() {
+						BeforeEach(func() {
+							cellPresence := models.CellPresence{CellId: "cell-id", RepAddress: "some-address", RepUrl: "http://some-address"}
+							fakeServiceClient.CellByIdReturns(&cellPresence, nil)
+						})
+
+						It("creates a rep client using the rep url", func() {
+							repAddr, repURL := fakeRepClientFactory.CreateClientArgsForCall(0)
+							Expect(repAddr).To(Equal("some-address"))
+							Expect(repURL).To(Equal("http://some-address"))
+						})
+
+						Context("when creating a rep client fails", func() {
+							BeforeEach(func() {
+								err := errors.New("BOOM!!!")
+								fakeRepClientFactory.CreateClientReturns(nil, err)
+							})
+
+							It("should log the error", func() {
+								Expect(logger.Buffer()).To(gbytes.Say("BOOM!!!"))
+							})
+
+							It("should return the error", func() {
+								response := models.DesiredLRPLifecycleResponse{}
+								err := response.Unmarshal(responseRecorder.Body.Bytes())
+								Expect(err).NotTo(HaveOccurred())
+
+								Expect(response.Error).To(BeNil())
+							})
+						})
 					})
 
 					Context("when fetching cell presence fails", func() {
@@ -680,7 +744,7 @@ var _ = Describe("DesiredLRP Handlers", func() {
 						}))
 
 						Expect(fakeAuctioneerClient.RequestLRPAuctionsCallCount()).To(Equal(1))
-						startRequests := fakeAuctioneerClient.RequestLRPAuctionsArgsForCall(0)
+						_, startRequests := fakeAuctioneerClient.RequestLRPAuctionsArgsForCall(0)
 						Expect(startRequests).To(HaveLen(1))
 						startReq := startRequests[0]
 						Expect(startReq.ProcessGuid).To(Equal("some-guid"))

@@ -34,6 +34,7 @@ err := client.DesireTask(
     }),
     MemoryMb:    256,
     DiskMb:      1024,
+    MaxPids:     1024,
     CpuWeight:   42,
     Privileged:  true,
     LogGuid:     "123",
@@ -67,6 +68,7 @@ err := client.DesireTask(
         Mode:          models.BindMountMode_RO,
       },
     }
+    PlacementTags: []string{"tag-1", "tag-2"},
   }
 )
 ```
@@ -119,6 +121,20 @@ To pull the image from a different registry than Docker Hub, specify it as the h
 RootFs: "docker://index.myregistry.gov/docker-org/docker-image#docker-tag"
 ```
 
+##### `ImageUsername` [optional]
+
+The `ImageUsername` field specifies the username to be used when fetching the
+container image defined by the `RootFs` field from the image repository.
+
+Setting `ImageUsername` requires the `ImagePassword` to also be set.
+
+##### `ImagePassword` [optional]
+
+The `ImagePassword` field specifies the password to be used when fetching the
+container image defined by the `RootFs` field from the image repository.
+
+Setting `ImagePassword` requires the `ImageUsername` to also be set.
+
 ##### `EnvironmentVariables` [optional]
 
 See description of [Environment Variables](common-models#environmentvariables-optional)
@@ -134,6 +150,16 @@ An absolute path inside the container's filesystem where trusted system certific
 ##### `VolumeMounts` [optional]
 
 See description of [Volume Mounts](common-models#volumemounts-optional)
+
+##### `PlacementTags` [optional]
+
+A set of tags that will be used to schedule the Task on specific cells.
+An Task will only be placed on a cell if the tags in the Task's `PlacementTags`
+are exactly the same as the tags advertised by the given cell.
+
+For example:
+- An Task with the placement tags ["tag-1"] will match only a cell advertising ["tag-1"]. It will not match a cell advertising ["tag-1", "tag-2"] or [].
+- An Task with no placement tags will only match a cell advertising no tags.
 
 #### Container Limits
 
@@ -152,6 +178,12 @@ A disk quota in mebibytes applied to the container. Data written on top of the c
 - The `DiskMb` value must be an integer greater than or equal to 0.
 - If set to 0, no disk quota is applied to the container.
 
+##### `MaxPids` [optional]
+
+A maximum process limit is applied to the container. If the number of processes running on the container reach the limit, new processes spawned will fail.
+
+- The `MaxPids` value must be an integer greater than or equal to 0.
+- If set to 0, no process limit is applied to the container.
 
 ##### `MemoryMb` [optional]
 

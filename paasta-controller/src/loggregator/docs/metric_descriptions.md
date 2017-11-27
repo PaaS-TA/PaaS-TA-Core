@@ -1,88 +1,13 @@
 ## Metrics emitted by the Loggregator subsystem
 
-| Metric | Description |
-|--------------------------------------------------------------|---------------------------------------------------------------|
-| dea_logging_agent.logSenderTotalMessagesRead |  |
-| dea_logging_agent.memoryStats.lastGCPauseTimeNS |  |
-| dea_logging_agent.memoryStats.numBytesAllocated |  |
-| dea_logging_agent.memoryStats.numBytesAllocatedHeap |  |
-| dea_logging_agent.memoryStats.numBytesAllocatedStack |  |
-| dea_logging_agent.memoryStats.numFrees |  |
-| dea_logging_agent.memoryStats.numMallocs |  |
-| dea_logging_agent.numCPUS |  |
-| dea_logging_agent.numGoRoutines |  |
-| dea_logging_agent.totalApps |  |
-| doppler.TruncatingBuffer.DroppedMessages |  |
-| DopplerServer.dropsondeListener.receivedByteCount |  |
-| DopplerServer.dropsondeListener.receivedMessageCount |  |
-| DopplerServer.dropsondeUnmarshaller.containerMetricReceived |  |
-| DopplerServer.dropsondeUnmarshaller.counterEventReceived |  |
-| DopplerServer.dropsondeUnmarshaller.httpStartStopReceived |  |
-| DopplerServer.dropsondeUnmarshaller.logMessageTotal |  |
-| DopplerServer.dropsondeUnmarshaller.valueMetricReceived |  |
-| DopplerServer.httpServer.receivedMessages |  |
-| DopplerServer.logSenderTotalMessagesRead |  |
-| DopplerServer.memoryStats.lastGCPauseTimeNS |  |
-| DopplerServer.memoryStats.numBytesAllocated |  |
-| DopplerServer.memoryStats.numBytesAllocatedHeap |  |
-| DopplerServer.memoryStats.numBytesAllocatedStack |  |
-| DopplerServer.memoryStats.numFrees |  |
-| DopplerServer.memoryStats.numMallocs |  |
-| DopplerServer.messageRouter.numberOfDumpSinks |  |
-| DopplerServer.messageRouter.numberOfFirehoseSinks |  |
-| DopplerServer.messageRouter.numberOfSyslogSinks |  |
-| DopplerServer.messageRouter.numberOfWebsocketSinks |  |
-| DopplerServer.messageRouter.numberOfContainerMetricSinks | |
-| DopplerServer.numCPUS |  |
-| DopplerServer.numGoRoutines |  |
-| DopplerServer.signatureVerifier.validSignatures |  |
-| DopplerServer.TruncatingBuffer.totalDroppedMessages |  |
-| DopplerServer.Uptime |  |
-| dopplerProxy.recentlogsLatency |  |
-| dopplerProxy.containermetricsLatency |  |
-| LoggregatorTrafficController.logSenderTotalMessagesRead |  |
-| LoggregatorTrafficController.memoryStats.lastGCPauseTimeNS |  |
-| LoggregatorTrafficController.memoryStats.numBytesAllocated |  |
-| LoggregatorTrafficController.memoryStats.numBytesAllocatedHeap |  |
-| LoggregatorTrafficController.memoryStats.numBytesAllocatedStack |  |
-| LoggregatorTrafficController.memoryStats.numFrees |  |
-| LoggregatorTrafficController.memoryStats.numMallocs |  |
-| LoggregatorTrafficController.numCPUS |  |
-| LoggregatorTrafficController.numGoRoutines |  |
-| LoggregatorTrafficController.Uptime |  |
-| MetronAgent.DopplerForwarder.sentMessages |  |
-| MetronAgent.dropsondeAgentListener.receivedByteCount |  |
-| MetronAgent.dropsondeAgentListener.receivedMessageCount |  |
-| MetronAgent.dropsondeMarshaller.containerMetricMarshalled |  |
-| MetronAgent.dropsondeMarshaller.counterEventMarshalled |  |
-| MetronAgent.dropsondeMarshaller.httpStartStopMarshalled |  |
-| MetronAgent.dropsondeMarshaller.logMessageMarshalled |  |
-| MetronAgent.dropsondeMarshaller.valueMetricMarshalled |  |
-| MetronAgent.dropsondeUnmarshaller.containerMetricReceived |  |
-| MetronAgent.dropsondeUnmarshaller.counterEventReceived |  |
-| MetronAgent.dropsondeUnmarshaller.httpStartReceived |  |
-| MetronAgent.dropsondeUnmarshaller.httpStopReceived |  |
-| MetronAgent.dropsondeUnmarshaller.logMessageTotal |  |
-| MetronAgent.dropsondeUnmarshaller.valueMetricReceived |  |
-| MetronAgent.legacyAgentListener.receivedByteCount |  |
-| MetronAgent.legacyAgentListener.receivedMessageCount |  |
-| MetronAgent.MessageAggregator.counterEventReceived |  |
-| MetronAgent.MessageAggregator.httpStartReceived |  |
-| MetronAgent.MessageAggregator.httpStartStopEmitted |  |
-| MetronAgent.MessageAggregator.httpStopReceived |  |
-| MetronAgent.MessageAggregator.httpUnmatchedStartReceived |  |
-| MetronAgent.MessageAggregator.httpUnmatchedStopReceived |  |
-| MetronAgent.MessageAggregator.uncategorizedEvents |  |
-| syslog_drain_binder.logSenderTotalMessagesRead |  |
-| syslog_drain_binder.memoryStats.lastGCPauseTimeNS |  |
-| syslog_drain_binder.memoryStats.numBytesAllocated |  |
-| syslog_drain_binder.memoryStats.numBytesAllocatedHeap |  |
-| syslog_drain_binder.memoryStats.numBytesAllocatedStack |  |
-| syslog_drain_binder.memoryStats.numFrees |  |
-| syslog_drain_binder.memoryStats.numMallocs |  |
-| syslog_drain_binder.numCPUS |  |
-| syslog_drain_binder.numGoRoutines |  |
-| syslog_drain_binder.pollCount |  |
-| syslog_drain_binder.totalDrains |  |
-| totalMessagesReceived |  |
-| totalMetricsSent |  |
+As of Loggregator 82 Metrics are now documented inline with specifics about what the metric represents. Here are some searches that you can use to get a summary of all metrics. 
+
+[`metrics-documentation-v1`](https://github.com/cloudfoundry/loggregator/search?utf8=%E2%9C%93&q=metric-documentation-v1&type=Code) - These are all metrics related to Dropsonde envelopes. 
+
+[`metrics-documentation-v2`](https://github.com/cloudfoundry/loggregator/search?utf8=%E2%9C%93&q=metric-documentation-v2&type=Code) - These are all metrics for the new Loggretor API V2
+
+[`DEPRECATAED`](https://github.com/cloudfoundry/loggregator/search?utf8=%E2%9C%93&q=DEPRECATED) - These are all metrics that will be deprecated in a future release. They are usually adjacent to a new replacement for the metric or no longer provide value.
+
+[`USELESS`](https://github.com/cloudfoundry/loggregator/search?utf8=%E2%9C%93&q=USELESS) - These metrics do not provide a meaningful datapoint and should not be used. 
+
+

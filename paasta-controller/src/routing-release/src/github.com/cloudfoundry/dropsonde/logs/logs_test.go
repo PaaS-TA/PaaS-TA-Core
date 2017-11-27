@@ -3,6 +3,7 @@ package logs_test
 import (
 	"github.com/cloudfoundry/dropsonde/log_sender/fake"
 	"github.com/cloudfoundry/dropsonde/logs"
+	"github.com/cloudfoundry/sonde-go/events"
 
 	"errors"
 
@@ -30,6 +31,21 @@ var _ = Describe("Logs", func() {
 
 		Expect(fakeLogSender.GetLogs()).To(HaveLen(1))
 		Expect(fakeLogSender.GetLogs()[0]).To(Equal(fake.Log{AppId: "app-id", Message: "custom-log-error-message", SourceType: "App", SourceInstance: "0", MessageType: "ERR"}))
+	})
+
+	It("delegates LogMessage", func() {
+		mockChainer := newMockLogChainer()
+		msg := []byte("test-message")
+		msgType := events.LogMessage_OUT
+		fakeLogSender.ReturnChainer = mockChainer
+
+		resultChainer := logs.LogMessage(msg, msgType)
+
+		Expect(fakeLogSender.GetLogMessages()[0]).To(Equal(fake.LogMessage{
+			Message:     msg,
+			MessageType: msgType,
+		}))
+		Expect(resultChainer).To(Equal(mockChainer))
 	})
 
 	Context("when errors occur", func() {
@@ -70,6 +86,5 @@ var _ = Describe("Logs", func() {
 		It("ScanErrorLogStream is a no-op", func() {
 			Expect(func() { logs.ScanErrorLogStream("app-id", "src-type", "src-instance", nil) }).ShouldNot(Panic())
 		})
-
 	})
 })

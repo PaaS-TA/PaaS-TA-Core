@@ -1,5 +1,7 @@
 package models
 
+import "strings"
+
 type CellSet map[string]*CellPresence
 
 func NewCellSet() CellSet {
@@ -67,12 +69,31 @@ func (cap CellCapacity) Validate() error {
 	return nil
 }
 
-func NewCellPresence(cellID, repAddress, zone string, capacity CellCapacity, rootFSProviders, preloadedRootFSes []string) CellPresence {
+func NewCellPresence(
+	cellID, repAddress, repUrl, zone string,
+	capacity CellCapacity,
+	rootFSProviders, preloadedRootFSes, placementTags, optionalPlacementTags []string,
+) CellPresence {
+	var providers []*Provider
+	var pProviders []string
+	for _, preProv := range preloadedRootFSes {
+		pProviders = append(pProviders, preProv)
+	}
+	providers = append(providers, &Provider{"preloaded", pProviders})
+
+	for _, prov := range rootFSProviders {
+		providers = append(providers, &Provider{prov, []string{}})
+	}
+
 	return CellPresence{
-		CellId:     cellID,
-		RepAddress: repAddress,
-		Zone:       zone,
-		Capacity:   &capacity,
+		CellId:                cellID,
+		RepAddress:            repAddress,
+		RepUrl:                repUrl,
+		Zone:                  zone,
+		Capacity:              &capacity,
+		RootfsProviders:       providers,
+		PlacementTags:         placementTags,
+		OptionalPlacementTags: optionalPlacementTags,
 	}
 }
 
@@ -85,6 +106,10 @@ func (c CellPresence) Validate() error {
 
 	if c.RepAddress == "" {
 		validationError = validationError.Append(ErrInvalidField{"rep_address"})
+	}
+
+	if c.RepUrl != "" && !strings.HasPrefix(c.RepUrl, "http://") && !strings.HasPrefix(c.RepUrl, "https://") {
+		validationError = validationError.Append(ErrInvalidField{"rep_url"})
 	}
 
 	if err := c.Capacity.Validate(); err != nil {
@@ -121,4 +146,9 @@ func (CellDisappearedEvent) EventType() string {
 
 func (e CellDisappearedEvent) CellIDs() []string {
 	return e.IDs
+}
+
+func (c *CellPresence) Copy() *CellPresence {
+	newCellPresense := *c
+	return &newCellPresense
 }

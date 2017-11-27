@@ -1,2 +1,2 @@
     set -e -x
-    cp go-buildpack/go_buildpack-cached-*.zip ${BOSH_INSTALL_TARGET}
+    cp go-buildpack/go?buildpack-v*.zip ${BOSH_INSTALL_TARGET}

@@ -1,12 +1,18 @@
+require 'models/helpers/process_types'
+
 module VCAP::CloudController
   class Stack < Sequel::Model
-    class MissingConfigFileError < StandardError; end
-    class MissingDefaultStackError < StandardError; end
+    class MissingConfigFileError < StandardError
+    end
+    class MissingDefaultStackError < StandardError
+    end
 
-    many_to_many :apps, join_table: BuildpackLifecycleDataModel.table_name,
-                        left_primary_key: :name, left_key: :stack,
-                        right_primary_key: :app_guid, right_key: :app_guid,
-                        conditions: { type: 'web' }
+    many_to_many :apps,
+      class:             'VCAP::CloudController::ProcessModel',
+      join_table:        BuildpackLifecycleDataModel.table_name,
+      left_primary_key:  :name, left_key: :stack,
+      right_primary_key: :app_guid, right_key: :app_guid,
+      conditions:        { type: ProcessTypes::WEB }
 
     plugin :serialization
 
@@ -81,13 +87,13 @@ module VCAP::CloudController
         @hash['default']
       end
 
-      Schema = Membrane::SchemaParser.parse {{
+      Schema = Membrane::SchemaParser.parse { {
         'default' => String,
-        'stacks' => [{
-          'name' => String,
+        'stacks'  => [{
+          'name'        => String,
           'description' => String,
         }]
-      }}
+      } }
     end
   end
 end

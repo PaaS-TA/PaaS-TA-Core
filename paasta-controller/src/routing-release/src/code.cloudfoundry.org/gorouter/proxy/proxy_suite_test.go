@@ -5,23 +5,23 @@ import (
 	"crypto/x509"
 	"net"
 	"net/http"
+	"strconv"
 
 	"code.cloudfoundry.org/gorouter/access_log"
 	"code.cloudfoundry.org/gorouter/common/secure"
 	"code.cloudfoundry.org/gorouter/config"
+	"code.cloudfoundry.org/gorouter/logger"
 	"code.cloudfoundry.org/gorouter/proxy"
-	"code.cloudfoundry.org/gorouter/proxy/test_helpers"
 	"code.cloudfoundry.org/gorouter/registry"
+	"code.cloudfoundry.org/gorouter/routeservice"
 	"code.cloudfoundry.org/gorouter/test_util"
-	"code.cloudfoundry.org/lager"
-	"code.cloudfoundry.org/lager/lagertest"
-	"github.com/cloudfoundry/dropsonde"
-	"github.com/cloudfoundry/dropsonde/emitter/fake"
 
 	"testing"
 	"time"
 
-	"code.cloudfoundry.org/gorouter/metrics/reporter/fakes"
+	"code.cloudfoundry.org/gorouter/metrics/fakes"
+	"github.com/cloudfoundry/dropsonde"
+	"github.com/cloudfoundry/dropsonde/emitter/fake"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
@@ -29,16 +29,18 @@ import (
 var (
 	r              *registry.RouteRegistry
 	p              proxy.Proxy
+	fakeReporter   *fakes.FakeCombinedReporter
 	conf           *config.Config
 	proxyServer    net.Listener
 	accessLog      access_log.AccessLogger
 	accessLogFile  *test_util.FakeFile
 	crypto         secure.Crypto
-	logger         lager.Logger
+	testLogger     logger.Logger
 	cryptoPrev     secure.Crypto
 	caCertPool     *x509.CertPool
 	recommendHttps bool
 	heartbeatOK    int32
+	fakeEmitter    *fake.FakeEventEmitter
 )
 
 func TestProxy(t *testing.T) {
@@ -47,7 +49,7 @@ func TestProxy(t *testing.T) {
 }
 
 var _ = BeforeEach(func() {
-	logger = lagertest.NewTestLogger("test")
+	testLogger = test_util.NewTestZapLogger("test")
 	var err error
 
 	crypto, err = secure.NewAesGCM([]byte("ABCDEFGHIJKLMNOP"))
@@ -58,17 +60,18 @@ var _ = BeforeEach(func() {
 	conf = config.DefaultConfig()
 	conf.TraceKey = "my_trace_key"
 	conf.EndpointTimeout = 500 * time.Millisecond
+	fakeReporter = &fakes.FakeCombinedReporter{}
 })
 
 var _ = JustBeforeEach(func() {
 	var err error
-	r = registry.NewRouteRegistry(logger, conf, new(fakes.FakeRouteRegistryReporter))
+	r = registry.NewRouteRegistry(testLogger, conf, new(fakes.FakeRouteRegistryReporter))
 
-	fakeEmitter := fake.NewFakeEventEmitter("fake")
+	fakeEmitter = fake.NewFakeEventEmitter("fake")
 	dropsonde.InitializeWithEmitter(fakeEmitter)
 
 	accessLogFile = new(test_util.FakeFile)
-	accessLog = access_log.NewFileAndLoggregatorAccessLogger(logger, "", accessLogFile)
+	accessLog = access_log.NewFileAndLoggregatorAccessLogger(testLogger, "", accessLogFile)
 	go accessLog.Run()
 
 	conf.EnableSSL = true
@@ -80,30 +83,27 @@ var _ = JustBeforeEach(func() {
 		RootCAs:            caCertPool,
 	}
 	heartbeatOK = 1
-	p = proxy.NewProxy(proxy.ProxyArgs{
-		EndpointTimeout:            conf.EndpointTimeout,
-		Ip:                         conf.Ip,
-		TraceKey:                   conf.TraceKey,
-		Logger:                     logger,
-		Registry:                   r,
-		Reporter:                   test_helpers.NullVarz{},
-		AccessLogger:               accessLog,
-		SecureCookies:              conf.SecureCookies,
-		TLSConfig:                  tlsConfig,
-		RouteServiceEnabled:        conf.RouteServiceEnabled,
-		RouteServiceTimeout:        conf.RouteServiceTimeout,
-		Crypto:                     crypto,
-		CryptoPrev:                 cryptoPrev,
-		RouteServiceRecommendHttps: recommendHttps,
-		HealthCheckUserAgent:       "HTTP-Monitor/1.1",
-		HeartbeatOK:                &heartbeatOK,
-		EnableZipkin:               conf.Tracing.EnableZipkin,
-		ExtraHeadersToLog:          &conf.ExtraHeadersToLog,
-		ForceForwardedProtoHttps:   conf.ForceForwardedProtoHttps,
-	})
+
+	routeServiceConfig := routeservice.NewRouteServiceConfig(
+		testLogger,
+		conf.RouteServiceEnabled,
+		conf.RouteServiceTimeout,
+		crypto,
+		cryptoPrev,
+		recommendHttps,
+	)
 
 	proxyServer, err = net.Listen("tcp", "127.0.0.1:0")
 	Expect(err).NotTo(HaveOccurred())
+
+	serverAddr := proxyServer.Addr().String()
+	_, port, err := net.SplitHostPort(serverAddr)
+	Expect(err).ToNot(HaveOccurred())
+	intPort, err := strconv.Atoi(port)
+	Expect(err).ToNot(HaveOccurred())
+	conf.Port = uint16(intPort)
+
+	p = proxy.NewProxy(testLogger, accessLog, conf, r, fakeReporter, routeServiceConfig, tlsConfig, &heartbeatOK)
 
 	server := http.Server{Handler: p}
 	go server.Serve(proxyServer)

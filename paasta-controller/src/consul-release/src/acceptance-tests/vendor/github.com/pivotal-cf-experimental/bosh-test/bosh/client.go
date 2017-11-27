@@ -19,6 +19,8 @@ var (
 
 type Config struct {
 	URL                 string
+	Host                string
+	DirectorCACert      string
 	Username            string
 	Password            string
 	TaskPollingInterval time.Duration
@@ -53,6 +55,10 @@ func NewClient(config Config) Client {
 	return Client{
 		config: config,
 	}
+}
+
+func (c Client) GetConfig() Config {
+	return c.config
 }
 
 func (c Client) rewriteURL(uri string) (string, error) {
@@ -108,15 +114,13 @@ func (c Client) checkTaskStatus(location string) (int, error) {
 			if err != nil {
 				return task.Id, fmt.Errorf("failed to get full bosh task event log, bosh task failed with an error status %q", task.Result)
 			}
-			errorMessage := taskOutputs[len(taskOutputs)-1].Error.Message
-			return task.Id, fmt.Errorf("bosh task failed with an error status %q", errorMessage)
+			return task.Id, taskOutputs[len(taskOutputs)-1].Error
 		case "errored":
 			taskOutputs, err := c.GetTaskOutput(task.Id)
 			if err != nil {
 				return task.Id, fmt.Errorf("failed to get full bosh task event log, bosh task failed with an errored status %q", task.Result)
 			}
-			errorMessage := taskOutputs[len(taskOutputs)-1].Error.Message
-			return task.Id, fmt.Errorf("bosh task failed with an errored status %q", errorMessage)
+			return task.Id, taskOutputs[len(taskOutputs)-1].Error
 		case "cancelled":
 			return task.Id, errors.New("bosh task was cancelled")
 		default:

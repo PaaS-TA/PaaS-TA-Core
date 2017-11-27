@@ -1,5 +1,6 @@
 require 'services/api'
 require 'controllers/services/lifecycle/service_instance_binding_manager'
+require 'models/helpers/process_types'
 
 module VCAP::CloudController
   class ServiceBindingsController < RestController::ModelController
@@ -15,6 +16,7 @@ module VCAP::CloudController
     query_parameters :app_guid, :service_instance_guid
 
     get path_guid, :read
+
     def read(guid)
       obj = find_guid(guid)
       raise CloudController::Errors::ApiError.new_from_details('ServiceBindingNotFound', guid) unless obj.v2_app.present?
@@ -23,6 +25,7 @@ module VCAP::CloudController
     end
 
     post path, :create
+
     def create
       @request_attrs = self.class::CreateMessage.decode(body).extract(stringify_keys: true)
       logger.debug 'cc.create', model: self.class.model_class_name, attributes: request_attrs
@@ -31,8 +34,12 @@ module VCAP::CloudController
       message = ServiceBindingCreateMessage.new({
         type: 'app',
         relationships: {
-          app: { guid: request_attrs['app_guid'] },
-          service_instance: { guid: request_attrs['service_instance_guid'] }
+          app: {
+            data: { guid: request_attrs['app_guid'] }
+          },
+          service_instance: {
+            data: { guid: request_attrs['service_instance_guid'] }
+          },
         },
         data: {
           parameters: request_attrs['parameters']
@@ -44,14 +51,13 @@ module VCAP::CloudController
       raise CloudController::Errors::ApiError.new_from_details('ServiceInstanceNotFound', @request_attrs['service_instance_guid']) unless service_instance
       raise CloudController::Errors::ApiError.new_from_details('NotAuthorized') unless Permissions.new(SecurityContext.current_user).can_write_to_space?(app.space_guid)
 
-      creator = ServiceBindingCreate.new(SecurityContext.current_user.guid, SecurityContext.current_user_email)
+      creator = ServiceBindingCreate.new(UserAuditInfo.from_context(SecurityContext))
       service_binding = creator.create(app, service_instance, message, volume_services_enabled?)
 
       [HTTP::CREATED,
        { 'Location' => "#{self.class.path}/#{service_binding.guid}" },
        object_renderer.render_json(self.class, service_binding, @opts)
       ]
-
     rescue ServiceBindingCreate::ServiceInstanceNotBindable
       raise CloudController::Errors::ApiError.new_from_details('UnbindableService')
     rescue ServiceBindingCreate::VolumeMountServiceDisabled
@@ -61,12 +67,13 @@ module VCAP::CloudController
     end
 
     delete path_guid, :delete
+
     def delete(guid)
       binding = ServiceBinding.find(guid: guid)
       raise CloudController::Errors::ApiError.new_from_details('ServiceBindingNotFound', guid) unless binding
       raise CloudController::Errors::ApiError.new_from_details('NotAuthorized') unless Permissions.new(SecurityContext.current_user).can_write_to_space?(binding.space.guid)
 
-      deleter = ServiceBindingDelete.new(SecurityContext.current_user.guid, SecurityContext.current_user_email)
+      deleter = ServiceBindingDelete.new(UserAuditInfo.from_context(SecurityContext))
 
       if async?
         job = deleter.single_delete_async(binding)
@@ -86,7 +93,7 @@ module VCAP::CloudController
     private
 
     def filter_dataset(dataset)
-      dataset.select_all(ServiceBinding.table_name).join(App, app_guid: :app_guid, type: 'web')
+      dataset.select_all(ServiceBinding.table_name).join(ProcessModel.table_name, app_guid: :app_guid, type: ProcessTypes::WEB)
     end
 
     def volume_services_enabled?

@@ -12,7 +12,7 @@ import (
 	"code.cloudfoundry.org/bbs/models"
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/runtimeschema/metric"
-	"github.com/cloudfoundry/gunk/workpool"
+	"code.cloudfoundry.org/workpool"
 )
 
 const (
@@ -125,7 +125,6 @@ func (c *convergence) staleUnclaimedActualLRPs(logger lager.Logger, now time.Tim
 // Adds CRASHED Actual LRPs that can be restarted to the list of start requests
 // and transitions them to UNCLAIMED.
 func (c *convergence) crashedActualLRPs(logger lager.Logger, now time.Time) {
-
 	logger = logger.Session("crashed-actual-lrps")
 	restartCalculator := models.NewDefaultRestartCalculator()
 
@@ -134,6 +133,13 @@ func (c *convergence) crashedActualLRPs(logger lager.Logger, now time.Time) {
 		logger.Error("failed-query", err)
 		return
 	}
+
+	type crashedActualLRP struct {
+		lrpKey         models.ActualLRPKey
+		schedulingInfo *models.DesiredLRPSchedulingInfo
+		index          int
+	}
+	lrps := []crashedActualLRP{}
 
 	for rows.Next() {
 		var index int
@@ -144,21 +150,31 @@ func (c *convergence) crashedActualLRPs(logger lager.Logger, now time.Time) {
 			continue
 		}
 
-		actual.ProcessGuid = schedulingInfo.ProcessGuid
-		actual.Domain = schedulingInfo.Domain
+		actual.ActualLRPKey = models.NewActualLRPKey(schedulingInfo.ProcessGuid, int32(index), schedulingInfo.Domain)
 		actual.State = models.ActualLRPStateCrashed
 
 		if actual.ShouldRestartCrash(now, restartCalculator) {
-			c.submit(func() {
-				_, _, err = c.UnclaimActualLRP(logger, &actual.ActualLRPKey)
-				if err != nil {
-					logger.Error("failed-unclaiming-actual-lrp", err)
-					return
-				}
-
-				c.addStartRequestFromSchedulingInfo(logger, schedulingInfo, index)
+			lrps = append(lrps, crashedActualLRP{
+				lrpKey:         actual.ActualLRPKey,
+				schedulingInfo: schedulingInfo,
+				index:          index,
 			})
 		}
+	}
+
+	for _, lrp := range lrps {
+		key := lrp.lrpKey
+		schedulingInfo := lrp.schedulingInfo
+		index := lrp.index
+		c.submit(func() {
+			_, _, err := c.UnclaimActualLRP(logger, &key)
+			if err != nil {
+				logger.Error("failed-unclaiming-actual-lrp", err)
+				return
+			}
+
+			c.addStartRequestFromSchedulingInfo(logger, schedulingInfo, index)
+		})
 	}
 
 	if rows.Err() != nil {
@@ -211,6 +227,8 @@ func (c *convergence) lrpInstanceCounts(logger lager.Logger, domainSet map[strin
 		return
 	}
 
+	keys := []models.ActualLRPKey{}
+
 	missingLRPCount := 0
 	for rows.Next() {
 		var existingIndicesStr sql.NullString
@@ -222,43 +240,62 @@ func (c *convergence) lrpInstanceCounts(logger lager.Logger, domainSet map[strin
 		}
 
 		indices := []int{}
-		existingIndices := strings.Split(existingIndicesStr.String, ",")
+		existingIndices := make(map[int]struct{})
+		if existingIndicesStr.String != "" {
+			for _, indexStr := range strings.Split(existingIndicesStr.String, ",") {
+				index, err := strconv.Atoi(indexStr)
+				if err != nil {
+					logger.Error("cannot-parse-index", err, lager.Data{
+						"index":                indexStr,
+						"existing-indeces-str": existingIndicesStr,
+					})
+					return
+				}
+				existingIndices[index] = struct{}{}
+			}
+		}
 
 		for i := 0; i < int(schedulingInfo.Instances); i++ {
-			found := false
-			for _, indexStr := range existingIndices {
-				if indexStr == strconv.Itoa(i) {
-					found = true
-					break
-				}
+			_, found := existingIndices[i]
+			if found {
+				continue
 			}
-			if !found {
-				missingLRPCount++
-				indices = append(indices, i)
-				index := int32(i)
 
-				c.submit(func() {
-					_, err := c.CreateUnclaimedActualLRP(logger, &models.ActualLRPKey{ProcessGuid: schedulingInfo.ProcessGuid, Domain: schedulingInfo.Domain, Index: index})
-					if err != nil {
-						logger.Error("failed-creating-missing-actual-lrp", err)
-					}
-				})
-			}
+			missingLRPCount++
+			indices = append(indices, i)
+			index := int32(i)
+			keys = append(keys, models.ActualLRPKey{
+				ProcessGuid: schedulingInfo.ProcessGuid,
+				Domain:      schedulingInfo.Domain,
+				Index:       index,
+			})
 		}
 
 		c.addStartRequestFromSchedulingInfo(logger, schedulingInfo, indices...)
 
-		if actualInstances > int(schedulingInfo.Instances) {
-			for i := int(schedulingInfo.Instances); i < actualInstances; i++ {
-				if _, ok := domainSet[schedulingInfo.Domain]; ok {
-					c.addKeyToRetire(logger, &models.ActualLRPKey{
-						ProcessGuid: schedulingInfo.ProcessGuid,
-						Index:       int32(i),
-						Domain:      schedulingInfo.Domain,
-					})
-				}
+		for index := range existingIndices {
+			if index < int(schedulingInfo.Instances) {
+				continue
+			}
+
+			if _, ok := domainSet[schedulingInfo.Domain]; ok {
+				c.addKeyToRetire(logger, &models.ActualLRPKey{
+					ProcessGuid: schedulingInfo.ProcessGuid,
+					Index:       int32(index),
+					Domain:      schedulingInfo.Domain,
+				})
 			}
 		}
+	}
+
+	for _, key := range keys {
+		lrpKey := key
+		c.submit(func() {
+			_, err := c.CreateUnclaimedActualLRP(logger, &lrpKey)
+			if err != nil {
+				logger.Error("failed-creating-missing-actual-lrp", err)
+			}
+		})
 	}
 
 	if rows.Err() != nil {
@@ -271,7 +308,6 @@ func (c *convergence) lrpInstanceCounts(logger lager.Logger, domainSet map[strin
 // Unclaim Actual LRPs that have missing cells (not in the cell set passed to
 // convergence) and add them to the list of start requests.
 func (c *convergence) actualLRPsWithMissingCells(logger lager.Logger, cellSet models.CellSet) {
-	// time.Sleep(1000 * time.Second)
 	logger = logger.Session("actual-lrps-with-missing-cells")
 
 	keysWithMissingCells := make([]*models.ActualLRPKeyWithSchedulingInfo, 0)
@@ -338,8 +374,11 @@ func (c *convergence) submit(work func()) {
 
 func (c *convergence) result(logger lager.Logger) ([]*auctioneer.LRPStartRequest, []*models.ActualLRPKeyWithSchedulingInfo, []*models.ActualLRPKey) {
 	c.poolWg.Wait()
+	c.pool.Stop()
+
 	c.startRequestsMutex.Lock()
 	defer c.startRequestsMutex.Unlock()
+
 	c.keysMutex.Lock()
 	defer c.keysMutex.Unlock()
 

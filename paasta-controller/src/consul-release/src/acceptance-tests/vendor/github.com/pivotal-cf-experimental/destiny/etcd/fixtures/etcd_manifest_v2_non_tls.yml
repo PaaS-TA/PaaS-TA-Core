@@ -1,0 +1,57 @@
+name: some-manifest-name
+
+stemcells:
+- alias: default
+  os: ubuntu-trusty
+  version: latest
+
+releases:
+- name: etcd
+  version: latest
+
+instance_groups:
+- name: etcd
+  instances: 3
+  azs:
+  - z1
+  - z2
+  jobs:
+  - name: etcd
+    release: etcd
+    consumes:
+      etcd: { from: etcd_server }
+    provides:
+      etcd: { as: etcd_server }
+  vm_type: default
+  stemcell: default
+  persistent_disk_type: 1GB
+  networks:
+  - name: private
+  properties:
+    etcd:
+      heartbeat_interval_in_milliseconds: 50
+      peer_require_ssl: false
+      require_ssl: false
+
+- name: testconsumer
+  instances: 1
+  azs:
+  - z1
+  - z2
+  jobs:
+  - name: etcd_testconsumer
+    release: etcd
+    consumes:
+      etcd: { from: etcd_server }
+  vm_type: default
+  stemcell: default
+  persistent_disk_type: 1GB
+  networks:
+  - name: private
+
+update:
+  canaries: 1
+  canary_watch_time: 1000-180000
+  max_in_flight: 1
+  serial: true
+  update_watch_time: 1000-180000

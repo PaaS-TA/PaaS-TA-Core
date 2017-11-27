@@ -4,34 +4,32 @@ import (
 	"log"
 	"runtime"
 	"time"
+	"sort"
 	"fmt"
-	"strings"
 	"strconv"
-
+	"strings"
 	"github.com/cloudfoundry/sonde-go/events"
 	"github.com/gogo/protobuf/proto"
-
-	"github.com/shirou/gopsutil/host"
 	"github.com/shirou/gopsutil/cpu"
+	"github.com/shirou/gopsutil/host"
 	"github.com/shirou/gopsutil/load"
-	"github.com/shirou/gopsutil/mem"
 	"github.com/shirou/gopsutil/disk"
+	"github.com/shirou/gopsutil/mem"
 	"github.com/shirou/gopsutil/net"
 	"github.com/shirou/gopsutil/process"
-
-	"github.com/bradfitz/slice"
 )
+
+type ProcessStatArray []ProcessStat
+type ProcessStat struct {
+	pid           int32
+	ppid          int32
+	startTime      string
+	memUsage       uint64
+	name          string
+}
 
 type EventEmitter interface {
 	Emit(events.Event) error
-}
-
-type processStat struct {
-	pid 		int32
-	ppid 		int32
-	startTime	string
-	memUsage 	uint64
-	name 		string
 }
 
 type RuntimeStats struct {
@@ -50,18 +48,18 @@ func (rs *RuntimeStats) Run(stopChan <-chan struct{}) {
 	ticker := time.NewTicker(rs.interval)
 	defer ticker.Stop()
 	for {
-		//Newly Added CPU Metrics
-		rs.emitCpuMetrics()
-		//Newly Added Disk Metrics
-		rs.emitDiskMetrics()
-		//Newly Added Network Metrics
-		rs.emitNetworkMetrics()
-		//Newly Added Process Metrics
-		rs.emitProcessMetrics()
-
 		rs.emit("numCPUS", float64(runtime.NumCPU()))
 		rs.emit("numGoRoutines", float64(runtime.NumGoroutine()))
 		rs.emitMemMetrics()
+
+		//Add CPU Metrics
+		rs.emitCpuMetrics()
+		//Add Disk Metrics
+		rs.emitDiskMetrics()
+		//Add Network Metrics
+		rs.emitNetworkMetrics()
+		//Add Process Metrics
+		rs.emitProcessMetrics()
 
 		select {
 		case <-ticker.C:
@@ -89,7 +87,6 @@ func (rs *RuntimeStats) emitMemMetrics() {
 	rs.emit("memoryStats.AvailableMemory", float64(m.Available))
 	rs.emit("memoryStats.UsedMemory", float64(m.Used))
 	rs.emit("memoryStats.UsedPercent", float64(m.UsedPercent))
-
 }
 
 func (rs *RuntimeStats) emit(name string, value float64) {
@@ -108,14 +105,13 @@ func (rs *RuntimeStats) emit(name string, value float64) {
  */
 func (rs *RuntimeStats) emitCpuMetrics() {
 	numcpu := runtime.NumCPU()
-	duration := time.Duration(1) * time.Second
+	duration := time.Duration(200) * time.Millisecond
 	c, err := cpu.Percent(duration, true)
 	if err != nil {
 		log.Println("getting cpu metrics error %v", err.Error())
 		//log.Fatalf("getting cpu metrics error %v", err)
 		return
 	}
-
 	for k, percent := range c {
 		// Check for slightly greater then 100% to account for any rounding issues.
 		if percent < 0.0 || percent > 100.0001 * float64(numcpu) {
@@ -126,7 +122,6 @@ func (rs *RuntimeStats) emitCpuMetrics() {
 		}
 		//log.Println("%d cpu %f", k, percent)
 	}
-
 	//============ CPU Load Average : Only support linux & freebsd ==============
 	h, err := host.Info()
 	if h.OS == "linux" || h.OS == "freebsd"{
@@ -139,9 +134,7 @@ func (rs *RuntimeStats) emitCpuMetrics() {
 		rs.emit("loadavg15.", float64(loadAvgStat.Load15))
 	}
 	//===========================================================================
-
 }
-
 /*
  Description: VM - Disk/IO Info metrics
  */
@@ -149,8 +142,6 @@ func (rs *RuntimeStats) emitDiskMetrics() {
 	if runtime.GOOS == "windows" {
 		var pathKey []string
 		diskios, _ := disk.IOCounters()
-
-		//Newly Added - Disk I/O (2017.04)
 		for key, value := range diskios{
 			pathKey = append(pathKey, key)
 			rs.emit(fmt.Sprintf("diskIOStats.%s.readCount", key), float64(value.ReadCount))
@@ -161,7 +152,7 @@ func (rs *RuntimeStats) emitDiskMetrics() {
 			rs.emit(fmt.Sprintf("diskIOStats.%s.writeTime", key), float64(value.WriteTime))
 			rs.emit(fmt.Sprintf("diskIOStats.%s.ioTime", key), float64(value.IoTime))
 		}
-
+		//Newly Added - Disk I/O (2017.04)
 		for _, value := range pathKey {
 			d, err := disk.Usage(value)
 			if err != nil {
@@ -169,13 +160,11 @@ func (rs *RuntimeStats) emitDiskMetrics() {
 				//log.Fatalf("getting disk info error %v", err)
 				return
 			}
-
 			rs.emit(fmt.Sprintf("diskStats.windows.%s.Total", d.Path), float64(d.Total))
 			rs.emit(fmt.Sprintf("diskStats.windows.%s.Used", d.Path), float64(d.Used))
 			rs.emit(fmt.Sprintf("diskStats.windows.%s.Available", d.Path), float64(d.Free))
 			rs.emit(fmt.Sprintf("diskStats.windows.%s.Usage", d.Path), float64(d.UsedPercent))
 		}
-
 	}else{
 		diskparts, err := disk.Partitions(false)
 		if err != nil {
@@ -196,7 +185,6 @@ func (rs *RuntimeStats) emitDiskMetrics() {
 				rs.emit("diskStats.Used", float64(d.Used))
 				rs.emit("diskStats.Available", float64(d.Free))
 				rs.emit("diskStats.Usage", float64(d.UsedPercent))
-
 				//Newly Added - Disk I/O (2017.04)
 				diskios, _ := disk.IOCounters()
 				for key, value := range diskios {
@@ -209,16 +197,12 @@ func (rs *RuntimeStats) emitDiskMetrics() {
 						rs.emit(fmt.Sprintf("diskIOStats.%s.readTime", key), float64(value.ReadTime))
 						rs.emit(fmt.Sprintf("diskIOStats.%s.writeTime", key), float64(value.WriteTime))
 						rs.emit(fmt.Sprintf("diskIOStats.%s.ioTime", key), float64(value.IoTime))
-
 					}
 				}
-
 			}
 		}
 	}
 }
-
-
 /*
 Newly Added - Network I/O (2017.04)
 Description: VM - Network Interface & I/O Info metrics
@@ -230,11 +214,9 @@ func (rs *RuntimeStats) emitNetworkMetrics() {
 		//log.Fatalf("getting network interface info error %v", err)
 		return
 	}
-
 	for _, intf := range nifs {
 		rs.emit(fmt.Sprintf("networkInterface.%s.%s", intf.Name, "MTU"), float64(intf.MTU))
 	}
-
 	ios, err := net.IOCounters(true)
 	for _, value := range ios {
 		rs.emit(fmt.Sprintf("networkIOStats.%s.bytesRecv", value.Name), float64(value.BytesRecv))
@@ -247,7 +229,6 @@ func (rs *RuntimeStats) emitNetworkMetrics() {
 		rs.emit(fmt.Sprintf("networkIOStats.%s.errOut", value.Name), float64(value.Errout))
 	}
 }
-
 /*
 Newly Added - Network I/O (2017.04)
 Description: VM - Process Info metrics
@@ -259,9 +240,8 @@ func (rs *RuntimeStats) emitProcessMetrics() {
 		//log.Fatalf("getting processes error %v", err)
 		return
 	}
-
-	pStatArray := make([]processStat, 0)
-
+	//pStatArray := make([]processStat, 0)
+	pStatArray := make(ProcessStatArray, 0)
 	for _, value :=range procs{
 		p, err := process.NewProcess(value)
 		if err != nil {
@@ -269,10 +249,9 @@ func (rs *RuntimeStats) emitProcessMetrics() {
 			//log.Fatalf("getting single process info error %v", err)
 			return
 		}else{
-			var pStat processStat
+			var pStat ProcessStat
 			ct, _:= p.CreateTime()
 			s_timestamp := strconv.FormatInt(ct, 10)
-
 			//window환경에서는 모든 프로세스를 조회하기 때문에 많은 시간이 소요된다.
 			//이를 방지하기 위해 프로세스시작 시간을 통해 제어한다.
 			if len(s_timestamp) >= 10{
@@ -280,10 +259,8 @@ func (rs *RuntimeStats) emitProcessMetrics() {
 				pStat.pid = p.Pid
 				pp, _ := p.Ppid()
 				pStat.ppid = pp
-
 				pname, _ := p.Name()
 				pStat.name = pname
-
 				m,err := p.MemoryInfo()
 				if err == nil {
 					pStat.memUsage = m.RSS
@@ -292,14 +269,22 @@ func (rs *RuntimeStats) emitProcessMetrics() {
 			}
 		}
 	}
-
 	//Memroy 점유 크기별로 Sorting
-	slice.Sort(pStatArray[:], func(i, j int) bool {
-		return pStatArray[i].memUsage > pStatArray[j].memUsage
-	})
+	sort.Sort(pStatArray)
 
 	var index int
 	for _, ps := range pStatArray {
+		/*//fmt.Println("##### runtime_stats , process info :", ps.name, ps.memUsage, ps.startTime)
+		if index > 20 {
+			break
+		}
+		rs.emit(fmt.Sprintf("processStats.%d.%s.pid",index, ps.name), float64(ps.pid))
+		rs.emit(fmt.Sprintf("processStats.%d.%s.ppid",index, ps.name), float64(ps.ppid))
+		if f, err := strconv.ParseFloat(ps.startTime, 64); err == nil {
+			rs.emit(fmt.Sprintf("processStats.%d.%s.startTime", index, ps.name),  f)
+		}
+		rs.emit(fmt.Sprintf("processStats.%d.%s.memUsage",index, ps.name), float64(ps.memUsage))
+		index++*/
 		if index > 20 {
 			break
 		}
@@ -308,13 +293,25 @@ func (rs *RuntimeStats) emitProcessMetrics() {
 		}else{
 			rs.emit(fmt.Sprintf("processStats.%d.%s.pid.%d.ppid.%d.memUsage.%d.startTime.%d", index, ps.name, ps.pid, ps.ppid, ps.memUsage, 0), float64(index))
 		}
-
-		/*rs.emit(fmt.Sprintf("processStats.%d.%s.pid",index, ps.name), float64(ps.pid))
-		rs.emit(fmt.Sprintf("processStats.%d.%s.ppid",index, ps.name), float64(ps.ppid))
-		if f, err := strconv.ParseFloat(ps.startTime, 64); err == nil {
-			rs.emit(fmt.Sprintf("processStats.%d.%s.startTime", index, ps.name),  f)
-		}
-		rs.emit(fmt.Sprintf("processStats.%d.%s.memUsage",index, ps.name), float64(ps.memUsage))*/
 		index++
 	}
 }
+
+// Sorting processStat --------------------------------------START
+func (arr ProcessStatArray) Len() int {
+	return len(arr)
+}
+
+// j 인덱스를 가진녀석이 i 앞으로 와야하는지 말아야하는지를 판단하는 함수
+func (arr ProcessStatArray) Less(i, j int) bool {
+	if arr[i].memUsage == arr[j].memUsage {
+		return arr[i].startTime > arr[j].startTime
+	} else {
+		return arr[i].memUsage > arr[j].memUsage
+	}
+}
+
+func (arr ProcessStatArray) Swap(i, j int) {
+	arr[i], arr[j] = arr[j], arr[i]
+}
+//RankingSlice----------------------------------------------END

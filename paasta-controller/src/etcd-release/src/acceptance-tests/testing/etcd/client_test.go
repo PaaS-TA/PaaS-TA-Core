@@ -8,8 +8,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 
-	"acceptance-tests/testing/etcd"
-
+	"github.com/cloudfoundry-incubator/etcd-release/src/acceptance-tests/testing/etcd"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )

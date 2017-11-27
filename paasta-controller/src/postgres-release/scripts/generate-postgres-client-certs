@@ -1,0 +1,68 @@
+#!/bin/sh
+set -e
+
+scripts_folder=$(dirname $0)
+ca_name="postgres-ca"
+common_name=''
+
+readlink() {
+  (
+    cd $(dirname $1)
+    echo $PWD/$(basename $1)
+  )
+}
+
+generate_end_entity_certs() {
+  local out_name=$1
+  local cn=$2
+
+  certstrap --depot-path ${depot_path} request-cert --passphrase '' --common-name $cn
+  certstrap --depot-path ${depot_path} sign $cn --CA ${ca_name}
+  mv -f ${depot_path}/$cn.key ${depot_path}/${out_name}.key
+  mv -f ${depot_path}/$cn.csr ${depot_path}/${out_name}.csr
+  mv -f ${depot_path}/$cn.crt ${depot_path}/${out_name}.crt
+}
+
+show_help() {
+  echo "Usage: generate_postgres_cert --ca-cert <PATH-TO-CA-CERT> --ca-key <PATH-TO-CA-KEY> --client-name <USER_NAME> "
+  echo "Output Options:"
+  echo "  -c --ca-cert      Path to the CA certificate"
+  echo "  -k --ca-key       Path to the CA key"
+  echo "  -n --client-name  The user name for the database connection."
+  echo "  -h --help         Show a help message"
+
+  exit 0
+}
+
+while true; do
+  case "$1" in
+    -c | --ca-cert )      ca_cert=$(readlink "${2}"); shift 2;;
+    -k | --ca-key )       ca_key=$(readlink "${2}"); shift 2;;
+    -n | --client-name )  client_name="$2"; shift 2;;
+    -h | --help )
+      show_help ;;
+    * ) break ;;
+  esac
+done
+
+if [ "${client_name}" == "" ]; then
+  show_help
+fi
+if [[ "${ca_cert}" == "" || "${ca_key}" == "" ]]; then
+  show_help
+fi
+
+# Install certstrap
+go get -v github.com/square/certstrap
+
+# Place keys and certificates here
+depot_path=$(readlink "${scripts_folder}/../postgres-certs/$client_name")
+mkdir -p ${depot_path}
+
+ca_name=$(basename "${ca_cert}" ".crt")
+ln -s ${ca_cert} ${depot_path}/
+ln -s ${ca_key} ${depot_path}/
+
+
+# Client certificate for postgres authentication
+generate_end_entity_certs "client-$client_name" $client_name

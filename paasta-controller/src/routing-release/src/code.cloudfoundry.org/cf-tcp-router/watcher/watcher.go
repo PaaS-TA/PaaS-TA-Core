@@ -86,6 +86,10 @@ func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) err
 				event, err = es.Next()
 				if err != nil {
 					watcher.logger.Error("failed-to-get-next-routing-api-event", err)
+					err = es.Close()
+					if err != nil {
+						watcher.logger.Error("failed-closing-routing-api-event-source", err)
+					}
 					break
 				}
 				eventChan <- event

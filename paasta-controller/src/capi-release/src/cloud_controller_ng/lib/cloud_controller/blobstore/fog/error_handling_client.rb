@@ -1,13 +1,15 @@
 module CloudController
   module Blobstore
     class ErrorHandlingClient
+      extend Forwardable
+
       def initialize(wrapped_client)
         @wrapped_client = wrapped_client
       end
 
-      def local?
-        wrapped_client.local?
-      end
+      def_delegators :@wrapped_client,
+        :local?,
+        :root_dir
 
       def delete_all(*args)
         error_handling { wrapped_client.delete_all(*args) }
@@ -23,6 +25,10 @@ module CloudController
 
       def blob(*args)
         error_handling { wrapped_client.blob(*args) }
+      end
+
+      def files_for(*args)
+        error_handling { wrapped_client.files_for(*args) }
       end
 
       def delete_blob(*args)

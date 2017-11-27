@@ -125,11 +125,11 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 			w.Write(jsonBytes)
 		})
 
-	consulRunner = consulrunner.NewClusterRunner(
-		9001+config.GinkgoConfig.ParallelNode*consulrunner.PortOffsetLength,
-		1,
-		"http",
-	)
+	consulRunner = consulrunner.NewClusterRunner(consulrunner.ClusterRunnerConfig{
+		StartingPort: 9001 + config.GinkgoConfig.ParallelNode*consulrunner.PortOffsetLength,
+		NumNodes:     1,
+		Scheme:       "http",
+	})
 
 	logger.Info("started-oauth-server", lager.Data{"address": oauthServer.URL()})
 
@@ -173,12 +173,18 @@ var _ = BeforeEach(func() {
 var _ = AfterEach(func() {
 	bbsServer.Close()
 	consulRunner.Stop()
-	Expect(dbAllocator.Reset()).NotTo(HaveOccurred())
+	if dbAllocator != nil {
+		Expect(dbAllocator.Reset()).NotTo(HaveOccurred())
+	}
 })
 
 var _ = SynchronizedAfterSuite(func() {
-	Expect(dbAllocator.Delete()).NotTo(HaveOccurred())
-	oauthServer.Close()
+	if dbAllocator != nil {
+		Expect(dbAllocator.Delete()).NotTo(HaveOccurred())
+	}
+	if oauthServer != nil {
+		oauthServer.Close()
+	}
 }, func() {
 	gexec.CleanupBuildArtifacts()
 })
@@ -190,7 +196,7 @@ func getServerPort(url string) string {
 }
 
 func createEmitterConfig(uaaPorts ...string) string {
-	randomConfigFileName := fmt.Sprintf("router_configurer_%d.yml", GinkgoParallelNode())
+	randomConfigFileName := fmt.Sprintf("tcp_router_%d.yml", GinkgoParallelNode())
 	configFile := path.Join(os.TempDir(), randomConfigFileName)
 	uaaPort := oauthServerPort
 	if len(uaaPorts) > 0 {
@@ -220,7 +226,7 @@ routing_api:
 }
 
 func createEmitterConfigAuthDisabled() string {
-	randomConfigFileName := fmt.Sprintf("router_configurer_%d.yml", GinkgoParallelNode())
+	randomConfigFileName := fmt.Sprintf("tcp_router_%d.yml", GinkgoParallelNode())
 	configFile := path.Join(os.TempDir(), randomConfigFileName)
 
 	cfgString := `---

@@ -1,85 +1,104 @@
-$Error.Clear()
-
-Configuration ConsulWindows {
-  Node "localhost" {
-
-    Script SetupDNS {
-      SetScript = {
-        [array]$routeable_interfaces = Get-WmiObject Win32_NetworkAdapterConfiguration | Where { $_.IpAddress -AND ($_.IpAddress | Where { $addr = [Net.IPAddress] $_; $addr.AddressFamily -eq "InterNetwork" -AND ($addr.address -BAND ([Net.IPAddress] "255.255.0.0").address) -ne ([Net.IPAddress] "169.254.0.0").address }) }
-        $ifindex = $routeable_interfaces[0].Index
-        $interface = (Get-WmiObject Win32_NetworkAdapter | Where { $_.DeviceID -eq $ifindex }).netconnectionid
-
-        $currentDNS = ((Get-DnsClientServerAddress -InterfaceAlias $interface) | where { $_.AddressFamily -eq [System.Net.Sockets.AddressFamily]::InterNetwork }).ServerAddresses
-        $newDNS = @("127.0.0.1") + $currentDNS
-        Set-DnsClientServerAddress -InterfaceAlias $interface -ServerAddresses ($newDNS -join ",")
-      }
-      GetScript = {
-        return $false
-      }
-      TestScript = {
-        [array]$routeable_interfaces = Get-WmiObject Win32_NetworkAdapterConfiguration | Where { $_.IpAddress -AND ($_.IpAddress | Where { $addr = [Net.IPAddress] $_; $addr.AddressFamily -eq "InterNetwork" -AND ($addr.address -BAND ([Net.IPAddress] "255.255.0.0").address) -ne ([Net.IPAddress] "169.254.0.0").address }) }
-        $ifindex = $routeable_interfaces[0].Index
-        $interface = (Get-WmiObject Win32_NetworkAdapter | Where { $_.DeviceID -eq $ifindex }).netconnectionid
-
-        if((Get-DnsClientServerAddress -InterfaceAlias $interface -AddressFamily ipv4 -ErrorAction Stop).ServerAddresses[0] -eq "127.0.0.1")
-        {
-          Write-Verbose -Message "DNS Servers are set correctly."
-          return $true
-        }
-        else
-        {
-          Write-Verbose -Message "DNS Servers not yet correct."
-          return $false
-        }
-      }
-    }
-
-    Script ClearDNSCache
-    {
-        SetScript = {
-            Clear-DnsClientCache
-        }
-        GetScript = {
-            Get-DnsClientCache
-        }
-        TestScript = {
-            @(Get-DnsClientCache).Count -eq 0
-        }
-    }
-
-    Registry DisableDNSNegativeCache
-    {
-        Ensure = "Present"
-        Key = "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\Dnscache\Parameters"
-        ValueName = "MaxNegativeCacheTtl"
-        ValueType = "DWord"
-        ValueData = "0"
-    }
-  }
-}
-
-if (![bool](Test-WSMan -ErrorAction SilentlyContinue)) {
-  Enable-PSRemoting -Force
+﻿$ErrorActionPreference = "Stop";
+trap {
+  ReleaseDNSLock
+  $host.SetShouldExit(1)
 }
 
 $LOG_DIR="/var/vcap/sys/log/consul_agent_windows"
 $DATA_DIR="/var/vcap/data/consul_agent_windows"
 $CONF_DIR="/var/vcap/jobs/consul_agent_windows/config"
+$RUN_DIR="/var/vcap/sys/run"
 $CERT_DIR="$CONF_DIR/certs"
-
 New-Item -ItemType Directory -Force -Path "${LOG_DIR}"
 New-Item -ItemType Directory -Force -Path "${DATA_DIR}"
 New-Item -ItemType Directory -Force -Path "${CONF_DIR}"
 New-Item -ItemType Directory -Force -Path "${CERT_DIR}"
+New-Item -ItemType Directory -Force -Path "${RUN_DIR}"
+function DnsServers($interface) {
+  return (Get-DnsClientServerAddress -InterfaceAlias $interface -AddressFamily ipv4 -ErrorAction Stop).ServerAddresses
+}
 
-Install-WindowsFeature DSC-Service
-ConsulWindows
-Start-DscConfiguration -Wait -Path .\ConsulWindows -Force -Verbose
-
-if ($Error) {
-    Write-Host "Error summary:"
-    foreach($ErrorMessage in $Error)
-    {
-      Write-Host $ErrorMessage
+function WaitForDNSLock() {
+    while ($true) {
+      try {
+        New-Item C:\var\vcap\sys\run\consul-dns.lock -type file
+        return
+      } catch {
+        Write-Host "DNS lock exists..."
+      }
+      Start-Sleep 1
     }
 }
+
+function ReleaseDNSLock() {
+  Remove-Item C:\var\vcap\sys\run\consul-dns.lock -ErrorAction Ignore
+}
+
+function ClearConsulAgentPidfile() {
+  Remove-Item C:\var\vcap\sys\log\consul_agent_windows\consul_agent.pid -ErrorAction Ignore
+}
+
+ClearConsulAgentPidfile
+
+WaitForDNSLock
+
+[array]$routeable_interfaces = Get-WmiObject Win32_NetworkAdapterConfiguration | Where { $_.IpAddress -AND ($_.IpAddress | Where { $addr = [Net.IPAddress] $_; $addr.AddressFamily -eq "InterNetwork" -AND ($addr.address -BAND ([Net.IPAddress] "255.255.0.0").address) -ne ([Net.IPAddress] "169.254.0.0").address }) }
+$ifindex = $routeable_interfaces[0].Index
+$interface = (Get-WmiObject Win32_NetworkAdapter | Where { $_.DeviceID -eq $ifindex }).netconnectionid
+$servers = DnsServers($interface)
+
+<% rewrite_resolv = p("consul.agent.rewrite_resolv") %>
+
+<% if rewrite_resolv == true %>
+if($servers[0] -eq "127.0.0.1")
+{
+    Write-Host "DNS Servers are set correctly."
+}
+else
+{
+    Write-Host "Setting DNS Servers"
+    $newDNS = "127.0.0.1", $servers
+    Write-Host $newDNS
+    Set-DnsClientServerAddress -InterfaceAlias $interface -ServerAddresses $newDNS
+    $servers = DnsServers($interface)
+    if($servers[0] -ne "127.0.0.1") {
+        Write-Error "Failed to set the DNS Servers"
+    }
+}
+<% elsif rewrite_resolv != false %>
+Write-Error "Error: rewrite_resolv property must be a boolean"
+Exit 1
+<% end %>
+
+ReleaseDNSLock
+
+if (@(Get-DnsClientCache).Count -ne 0) {
+    Clear-DnsClientCache
+}
+
+$RegistryPath = "HKLM:\SYSTEM\CurrentControlSet\Services\Dnscache\Parameters"
+$ExpectedValue = 0
+$Value = Get-ItemProperty -Path $RegistryPath
+if ($Value.MaxNegativeCacheTtl -ne $ExpectedValue) {
+    Set-ItemProperty -Path $RegistryPath -Name MaxNegativeCacheTtl -Value $ExpectedValue -Type DWord
+    $Value = Get-ItemProperty -Path $RegistryPath
+    if ($Value.MaxNegativeCacheTtl -ne $ExpectedValue) {
+        Write-Error "Error: Expected MaxNegativeCacheTtl to be '${ExpectedValue}', got '${Value.MaxNegativeCacheTtl}'"
+    }
+}
+
+if (-Not (Get-NetFirewallRule | Where-Object { $_.DisplayName -eq "ConsulAgentTCPPort" })) {
+  New-NetFirewallRule -DisplayName "ConsulAgentTCPPort" -Action Allow -Direction Inbound -Enabled True -LocalPort 8301 -Protocol TCP
+  if (-Not (Get-NetFirewallRule | Where-Object { $_.DisplayName -eq "ConsulAgentTCPPort" })) {
+    Write-Error "Unable to add ConsulAgentTCPPort firewall rule"
+  }
+}
+
+if (-Not (Get-NetFirewallRule | Where-Object { $_.DisplayName -eq "ConsulAgentUDPPort" })) {
+  New-NetFirewallRule -DisplayName "ConsulAgentUDPPort" -Action Allow -Direction Inbound -Enabled True -LocalPort 8301 -Protocol UDP
+  if (-Not (Get-NetFirewallRule | Where-Object { $_.DisplayName -eq "ConsulAgentUDPPort" })) {
+    Write-Error "Unable to add ConsulAgentUDPPort firewall rule"
+  }
+}
+
+Exit 0

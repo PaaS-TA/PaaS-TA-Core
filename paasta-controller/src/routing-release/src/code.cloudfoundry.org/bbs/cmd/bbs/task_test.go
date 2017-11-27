@@ -15,7 +15,7 @@ var _ = Describe("Task API", func() {
 	var expectedTasks []*models.Task
 
 	BeforeEach(func() {
-		bbsRunner = testrunner.New(bbsBinPath, bbsArgs)
+		bbsRunner = testrunner.New(bbsBinPath, bbsConfig)
 		bbsProcess = ginkgomon.Invoke(bbsRunner)
 		expectedTasks = []*models.Task{model_helpers.NewValidTask("a-guid"), model_helpers.NewValidTask("b-guid")}
 		expectedTasks[1].Domain = "b-domain"
@@ -60,6 +60,29 @@ var _ = Describe("Task API", func() {
 			task, err := client.TaskByGuid(logger, expectedTasks[0].TaskGuid)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(task).To(MatchTask(expectedTasks[0]))
+		})
+	})
+
+	Describe("TaskWithFilter", func() {
+		It("returns the task with filters on domain", func() {
+			tasks, err := client.TasksWithFilter(logger, models.TaskFilter{Domain: "b-domain"})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(tasks)).To(Equal(1))
+			Expect(tasks[0]).To(MatchTask(expectedTasks[1]))
+		})
+
+		It("returns the task with filters on cell-id", func() {
+			tasks, err := client.TasksWithFilter(logger, models.TaskFilter{CellID: "b-cell"})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(tasks)).To(Equal(1))
+			Expect(tasks[0]).To(MatchTask(expectedTasks[1]))
+		})
+
+		It("returns the task with filters on domain and cell-id", func() {
+			tasks, err := client.TasksWithFilter(logger, models.TaskFilter{Domain: "b-domain", CellID: "b-cell"})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(tasks)).To(Equal(1))
+			Expect(tasks[0]).To(MatchTask(expectedTasks[1]))
 		})
 	})
 

@@ -48,8 +48,6 @@ func NewRegistrar(
 func (r *registrar) Run(signals <-chan os.Signal, ready chan<- struct{}) error {
 	var err error
 
-	r.logger.Info("creating nats connection", lager.Data{"config": r.config})
-
 	err = r.messageBus.Connect(r.config.MessageBusServers)
 	if err != nil {
 		return err

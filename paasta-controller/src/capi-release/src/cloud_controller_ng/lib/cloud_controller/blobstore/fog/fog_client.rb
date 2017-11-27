@@ -1,7 +1,7 @@
 require 'fileutils'
 require 'find'
-require 'fog'
 require 'mime-types'
+require 'cloud_controller/blobstore/fog/providers'
 require 'cloud_controller/blobstore/base_client'
 require 'cloud_controller/blobstore/fog/directory'
 require 'cloud_controller/blobstore/fog/fog_blob'
@@ -12,6 +12,8 @@ require 'cloud_controller/blobstore/errors'
 module CloudController
   module Blobstore
     class FogClient < BaseClient
+      attr_reader :root_dir
+
       DEFAULT_BATCH_SIZE = 1000
 
       def initialize(connection_config:,
@@ -119,7 +121,20 @@ module CloudController
         FogBlob.new(f, @cdn) if f
       end
 
+      def files_for(prefix, _ignored_directory_prefixes=[])
+        if connection.is_a? Fog::Storage::Local::Real
+          directory = connection.directories.get(File.join(dir.key, prefix || ''))
+          directory ? directory.files : []
+        else
+          connection.directories.get(dir.key, prefix: prefix).files
+        end
+      end
+
       private
+
+      def files
+        dir.files
+      end
 
       def formatted_storage_options
         return {} unless @storage_options && @storage_options[:encryption]
@@ -128,19 +143,6 @@ module CloudController
         encrypt_opt = opts.delete(:encryption)
         opts['x-amz-server-side-encryption'] = encrypt_opt
         opts
-      end
-
-      def files
-        dir.files
-      end
-
-      def files_for(prefix)
-        if connection.is_a? Fog::Storage::Local::Real
-          directory = connection.directories.get(File.join(dir.key, prefix || ''))
-          directory ? directory.files : []
-        else
-          connection.directories.get(dir.key, prefix: prefix).files
-        end
       end
 
       def delete_file(file)

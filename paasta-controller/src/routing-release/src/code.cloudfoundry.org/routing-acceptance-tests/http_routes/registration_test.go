@@ -2,6 +2,7 @@ package http_routes
 
 import (
 	"io/ioutil"
+	"os/exec"
 	"time"
 
 	"code.cloudfoundry.org/routing-acceptance-tests/helpers"
@@ -13,8 +14,9 @@ import (
 
 var _ = Describe("Registration", func() {
 	var (
-		route     string
-		routeJSON string
+		expectedrtrVersion = "2.9"
+		route              string
+		routeJSON          string
 	)
 
 	Describe("HTTP Route", func() {
@@ -24,6 +26,9 @@ var _ = Describe("Registration", func() {
 		BeforeEach(func() {
 			route = helpers.RandomName()
 			routeJSON = `[{"route":"` + route + `","port":65340,"ip":"1.2.3.4","ttl":60}]`
+			session, err := Start(exec.Command("rtr", "--version"), GinkgoWriter, GinkgoWriter)
+			Expect(err).NotTo(HaveOccurred())
+			Eventually(session.Out, DEFAULT_TIMEOUT, DEFAULT_POLLING_INTERVAL).Should(Say(expectedrtrVersion))
 		})
 
 		AfterEach(func() {

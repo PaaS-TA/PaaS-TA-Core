@@ -1,0 +1,43 @@
+---
+name: eats
+
+releases:
+- name: etcd
+  version: ((etcd_release_version))
+
+stemcells:
+- alias: default
+  os: ubuntu-trusty
+  version: ((stemcell_version))
+
+instance_groups:
+- name: acceptance-tests
+  lifecycle: errand
+  azs: [z1]
+  instances: 1
+  vm_type: default
+  stemcell: default
+  networks: [{name: private}]
+  jobs:
+  - name: acceptance-tests
+    release: etcd
+
+properties:
+  etcd:
+    acceptance_tests:
+      bosh:
+        target: ((bosh_environment))
+        username: ((bosh_client))
+        password: ((bosh_client_secret))
+        director_ca_cert: ((bosh_director_ca_cert))
+      parallel_nodes: ((parallel_nodes))
+      etcd_release_version: ((etcd_release_version))
+      latest_etcd_release_version: ((latest_etcd_release_version))
+      enable_turbulence_tests: ((enable_turbulence_tests))
+
+update:
+  serial: true
+  canaries: 1
+  max_in_flight: 1
+  canary_watch_time: 1000-180000
+  update_watch_time: 1000-180000

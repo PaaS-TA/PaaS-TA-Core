@@ -23,7 +23,7 @@ var (
 
 var _ = BeforeSuite(func() {
 	var err error
-	pathToIPTablesAgent, err = gexec.Build("acceptance-tests/testing/iptables_agent")
+	pathToIPTablesAgent, err = gexec.Build("github.com/cloudfoundry-incubator/etcd-release/src/acceptance-tests/testing/iptables_agent")
 	Expect(err).NotTo(HaveOccurred())
 })
 

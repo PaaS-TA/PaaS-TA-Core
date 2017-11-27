@@ -17,6 +17,10 @@ const (
 	DebugFlag = "debugAddr"
 )
 
+type DebugServerConfig struct {
+	DebugAddress string `json:"debug_address"`
+}
+
 func AddFlags(flags *flag.FlagSet) {
 	flags.String(
 		DebugFlag,
@@ -51,6 +55,7 @@ func Run(address string, sink *lager.ReconfigurableSink) (ifrit.Process, error) 
 func Handler(sink *lager.ReconfigurableSink) http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle("/debug/pprof/", http.HandlerFunc(pprof.Index))
+	mux.Handle("/debug/pprof/trace", http.HandlerFunc(pprof.Trace))
 	mux.Handle("/debug/pprof/cmdline", http.HandlerFunc(pprof.Cmdline))
 	mux.Handle("/debug/pprof/profile", http.HandlerFunc(pprof.Profile))
 	mux.Handle("/debug/pprof/symbol", http.HandlerFunc(pprof.Symbol))

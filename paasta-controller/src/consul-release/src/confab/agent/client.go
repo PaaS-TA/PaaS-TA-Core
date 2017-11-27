@@ -24,22 +24,21 @@ type consulAPIAgent interface {
 	Members(wan bool) ([]*api.AgentMember, error)
 	Join(member string, wan bool) error
 	Self() (map[string]map[string]interface{}, error)
-}
-
-type ConsulRPCClient interface {
-	Stats() (map[string]map[string]string, error)
-	ListKeys() ([]string, error)
-	InstallKey(key string) error
-	UseKey(key string) error
-	RemoveKey(key string) error
 	Leave() error
 }
 
+type consulAPIOperator interface {
+	KeyringList(*api.QueryOptions) ([]*api.KeyringResponse, error)
+	KeyringInstall(string, *api.WriteOptions) error
+	KeyringUse(string, *api.WriteOptions) error
+	KeyringRemove(string, *api.WriteOptions) error
+}
+
 type Client struct {
-	ExpectedMembers []string
-	ConsulAPIAgent  consulAPIAgent
-	ConsulRPCClient ConsulRPCClient
-	Logger          logger
+	ExpectedMembers   []string
+	ConsulAPIAgent    consulAPIAgent
+	ConsulAPIOperator consulAPIOperator
+	Logger            logger
 }
 
 func (c Client) VerifyJoined() error {
@@ -84,14 +83,14 @@ func (c Client) VerifyJoined() error {
 func (c Client) VerifySynced() error {
 	c.Logger.Info("agent-client.verify-synced.stats.request")
 
-	stats, err := c.ConsulRPCClient.Stats()
+	raftStats, err := c.RaftStats()
 	if err != nil {
 		c.Logger.Error("agent-client.verify-synced.stats.request.failed", err)
 		return err
 	}
 
-	commitIndex := stats["raft"]["commit_index"]
-	lastLogIndex := stats["raft"]["last_log_index"]
+	commitIndex := raftStats["commit_index"].(string)
+	lastLogIndex := raftStats["last_log_index"].(string)
 
 	c.Logger.Info("agent-client.verify-synced.stats.response", lager.Data{
 		"commit_index":   commitIndex,
@@ -174,7 +173,7 @@ func (c Client) SetKeys(keys []string) error {
 		encryptedKeys = append(encryptedKeys, encryptedKey)
 	}
 
-	existingKeys, err := c.ConsulRPCClient.ListKeys()
+	existingKeys, err := c.ListKeys()
 	if err != nil {
 		c.Logger.Error("agent-client.set-keys.list-keys.request.failed", err)
 		return err
@@ -189,7 +188,7 @@ func (c Client) SetKeys(keys []string) error {
 			c.Logger.Info("agent-client.set-keys.remove-key.request", lager.Data{
 				"key": key,
 			})
-			err := c.ConsulRPCClient.RemoveKey(key)
+			err := c.RemoveKey(key)
 			if err != nil {
 				c.Logger.Error("agent-client.set-keys.remove-key.request.failed", err, lager.Data{
 					"key": key,
@@ -207,7 +206,7 @@ func (c Client) SetKeys(keys []string) error {
 			"key": key,
 		})
 
-		err := c.ConsulRPCClient.InstallKey(key)
+		err := c.InstallKey(key)
 		if err != nil {
 			c.Logger.Error("agent-client.set-keys.install-key.request.failed", err, lager.Data{
 				"key": key,
@@ -224,7 +223,7 @@ func (c Client) SetKeys(keys []string) error {
 		"key": encryptedKeys[0],
 	})
 
-	err = c.ConsulRPCClient.UseKey(encryptedKeys[0])
+	err = c.UseKey(encryptedKeys[0])
 	if err != nil {
 		c.Logger.Error("agent-client.set-keys.use-key.request.failed", err, lager.Data{
 			"key": encryptedKeys[0],
@@ -240,16 +239,55 @@ func (c Client) SetKeys(keys []string) error {
 	return nil
 }
 
-func (c Client) Leave() error {
-	if c.ConsulRPCClient == nil {
-		err := errors.New("consul rpc client is nil")
-		c.Logger.Error("agent-client.leave.nil-rpc-client", err)
+func (c Client) ListKeys() ([]string, error) {
+	response, err := c.ConsulAPIOperator.KeyringList(&api.QueryOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	keys := []string{}
+	for _, keyringResponse := range response {
+		if !keyringResponse.WAN {
+			for keyName, _ := range keyringResponse.Keys {
+				keys = append(keys, keyName)
+			}
+		}
+	}
+	return keys, nil
+
+}
+
+func (c Client) InstallKey(key string) error {
+	err := c.ConsulAPIOperator.KeyringInstall(key, &api.WriteOptions{})
+	if err != nil {
 		return err
 	}
 
+	return nil
+}
+
+func (c Client) UseKey(key string) error {
+	err := c.ConsulAPIOperator.KeyringUse(key, &api.WriteOptions{})
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (c Client) RemoveKey(key string) error {
+	err := c.ConsulAPIOperator.KeyringRemove(key, &api.WriteOptions{})
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (c Client) Leave() error {
 	c.Logger.Info("agent-client.leave.leave.request")
 
-	if err := c.ConsulRPCClient.Leave(); err != nil {
+	if err := c.ConsulAPIAgent.Leave(); err != nil {
 		c.Logger.Error("agent-client.leave.leave.request.failed", err)
 		return err
 	}
@@ -258,16 +296,21 @@ func (c Client) Leave() error {
 	return nil
 }
 
-func (c *Client) SetConsulRPCClient(rpcClient ConsulRPCClient) {
-	c.ConsulRPCClient = rpcClient
-}
-
 func (c Client) Self() error {
 	_, err := c.ConsulAPIAgent.Self()
 	if err != nil {
 		return err
 	}
 	return nil
+}
+
+func (c Client) RaftStats() (map[string]interface{}, error) {
+	data, err := c.ConsulAPIAgent.Self()
+	if err != nil {
+		return nil, err
+	}
+
+	return data["Stats"]["raft"].(map[string]interface{}), nil
 }
 
 func containsString(elems []string, elem string) bool {

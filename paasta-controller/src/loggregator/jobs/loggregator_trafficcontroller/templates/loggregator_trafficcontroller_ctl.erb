@@ -17,38 +17,43 @@ mkdir -p $LOG_DIR
 touch $LOG_DIR/loggregator_trafficcontroller_security_events.log
 <% end %>
 
-source /var/vcap/packages/loggregator_common/pid_utils.sh
-source /var/vcap/packages/loggregator_common/syslog_utils.sh
-
-tee_output_to_sys_log "$LOG_DIR"
-
 case $1 in
 
   start)
-    pid_guard $PIDFILE "LoggregatorTrafficController"
+    set +e
+      killall -15 trafficcontroller
+      killall -9 trafficcontroller
+      killall -2 trafficcontroller
+      killall -3 trafficcontroller
+    set -e
 
     <% if p("traffic_controller.locked_memory_limit") != "kernel" %>
     ulimit -l <%= p("traffic_controller.locked_memory_limit") %>
     <% end %>
     ulimit -n 65536
 
-    <% p("traffic_controller.debug") == true ? debug_string = "--debug " : debug_string = "" %>
     <% p("traffic_controller.disable_access_control") == true ? disable_access_control_string = "--disableAccessControl" : disable_access_control_string = "" %>
-
-    exec >>$LOG_DIR/loggregator_trafficcontroller.stdout.log \
-        2>>$LOG_DIR/loggregator_trafficcontroller.stderr.log
 
     chown -R vcap:vcap $LOG_DIR
 
-    chpst -u vcap:vcap /var/vcap/packages/loggregator_trafficcontroller/trafficcontroller <%= debug_string %> <%= disable_access_control_string %> \
-        --config /var/vcap/jobs/loggregator_trafficcontroller/config/loggregator_trafficcontroller.json &
+    chpst -u vcap:vcap /var/vcap/packages/loggregator_trafficcontroller/trafficcontroller <%= disable_access_control_string %> \
+         --config /var/vcap/jobs/loggregator_trafficcontroller/config/loggregator_trafficcontroller.json 2>&1 | \
+         tee -a "$LOG_DIR/trafficcontroller.log" | \
+         logger -t "vcap.trafficcontroller" -p user.error &
 
-    echo $! > $PIDFILE
+    jobs -p > $PIDFILE
 
     ;;
 
   stop)
-    kill_and_wait $PIDFILE 40
+    set +e
+      killall -15 trafficcontroller
+      killall -9 trafficcontroller
+      killall -2 trafficcontroller
+      killall -3 trafficcontroller
+    set -e
+
+    rm -f $PIDFILE
 
     ;;
 

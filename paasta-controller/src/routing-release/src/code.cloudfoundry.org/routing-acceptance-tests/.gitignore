@@ -1,0 +1,5 @@
+*_config.json
+*.config
+results
+*.test
+*config.json

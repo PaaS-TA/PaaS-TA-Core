@@ -3,26 +3,26 @@ require 'spec_helper'
 module VCAP::CloudController
   RSpec.describe SpaceSummariesController do
     let(:space) { Space.make }
-    let(:app_obj) { AppFactory.make(space: space) }
+    let(:process) { AppFactory.make(space: space) }
     let!(:first_route) { Route.make(space: space) }
     let!(:second_route) { Route.make(space: space) }
     let(:first_service) { ManagedServiceInstance.make(space: space) }
     let(:second_service) { ManagedServiceInstance.make(space: space) }
 
     let(:instances_reporters) { double(:instances_reporters) }
-    let(:running_instances) { { app_obj.guid => 5 } }
+    let(:running_instances) { { process.guid => 5 } }
 
     before do
-      ServiceBinding.make(app: app_obj.app, service_instance: first_service)
-      ServiceBinding.make(app: app_obj.app, service_instance: second_service)
+      ServiceBinding.make(app: process.app, service_instance: first_service)
+      ServiceBinding.make(app: process.app, service_instance: second_service)
 
-      RouteMappingModel.make(app: app_obj.app, route: first_route, process_type: app_obj.type)
-      RouteMappingModel.make(app: app_obj.app, route: second_route, process_type: app_obj.type)
+      RouteMappingModel.make(app: process.app, route: first_route, process_type: process.type)
+      RouteMappingModel.make(app: process.app, route: second_route, process_type: process.type)
 
       allow(CloudController::DependencyLocator.instance).to receive(:instances_reporters).and_return(instances_reporters)
       allow(instances_reporters).to receive(:number_of_starting_and_running_instances_for_processes).and_return(running_instances)
       allow_any_instance_of(SpaceSummariesController).to receive(:instances_reporters).and_return(instances_reporters)
-      app_obj.reload
+      process.reload
       set_current_user_as_admin
     end
 
@@ -36,19 +36,19 @@ module VCAP::CloudController
 
       it 'returns the space apps' do
         get "/v2/spaces/#{space.guid}/summary"
-        expected_app_hash = [{
-          guid: app_obj.guid,
+        expected_app_hash = {
+          guid: process.guid,
           urls: [first_route.uri, second_route.uri],
           routes: [
             first_route.as_summary_json,
             second_route.as_summary_json
           ],
           service_count: 2,
-          service_names: [first_service.name, second_service.name],
           running_instances: 5
-        }.merge(app_obj.to_hash)]
+        }.merge(process.to_hash)
 
-        expect(decoded_response['apps']).to eq(MultiJson.load(MultiJson.dump(expected_app_hash)))
+        expect(decoded_response['apps'][0]).to include(MultiJson.load(MultiJson.dump(expected_app_hash)))
+        expect(decoded_response['apps'][0]['service_names']).to match_array([first_service.name, second_service.name])
       end
 
       it 'returns the space services' do
@@ -86,20 +86,18 @@ module VCAP::CloudController
         expect(parsed_response['services'].map { |service_json| service_json['guid'] }).to_not include service_instance2.guid
       end
 
-      context 'when the instances reporter fails' do
+      context 'when an app is deleted concurrently' do
+        let(:deleted_process) { AppFactory.make(space: space) }
         before do
-          allow(instances_reporters).to receive(:number_of_starting_and_running_instances_for_processes).and_raise(
-            CloudController::Errors::InstancesUnavailable.new(RuntimeError.new('something went wrong.')))
+          deleted_process.app = nil
+          allow_any_instance_of(Space).to receive(:apps).and_return([process, deleted_process])
         end
 
-        it "returns '220001 InstancesError'" do
+        it 'ignores the process with the deleted app' do
           get "/v2/spaces/#{space.guid}/summary"
-
-          expect(last_response.status).to eq(503)
-
-          parsed_response = MultiJson.load(last_response.body)
-          expect(parsed_response['code']).to eq(220002)
-          expect(parsed_response['description']).to eq('Instances information unavailable: something went wrong.')
+          expect(last_response.status).to eq(200)
+          expect(space.apps).to match([process, deleted_process])
+          expect(last_response.body).not_to include(deleted_process.guid)
         end
       end
     end

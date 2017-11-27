@@ -1,8 +1,9 @@
 package helpers
 
 import (
-	"acceptance-tests/testing/testconsumer/etcd"
 	"fmt"
+
+	"github.com/cloudfoundry-incubator/etcd-release/src/acceptance-tests/testing/testconsumer/etcd"
 
 	goetcd "github.com/coreos/go-etcd/etcd"
 )

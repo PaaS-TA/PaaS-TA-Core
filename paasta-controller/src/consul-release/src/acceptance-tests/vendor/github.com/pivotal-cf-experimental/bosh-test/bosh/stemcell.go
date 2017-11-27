@@ -11,45 +11,58 @@ import (
 
 type Stemcell struct {
 	Name     string
+	OS       string
 	Versions []string
+}
+
+type stemcell struct {
+	Name             string
+	Operating_system string
+	Version          string
 }
 
 func NewStemcell() Stemcell {
 	return Stemcell{}
 }
 
-func (c Client) Stemcell(name string) (Stemcell, error) {
+func (c Client) getStemcells(name string) ([]stemcell, error) {
 	request, err := http.NewRequest("GET", fmt.Sprintf("%s/stemcells", c.config.URL), nil)
 	if err != nil {
-		return Stemcell{}, err
+		return []stemcell{}, err
 	}
 
 	request.SetBasicAuth(c.config.Username, c.config.Password)
 	response, err := client.Do(request)
 	if err != nil {
-		return Stemcell{}, err
+		return []stemcell{}, err
 	}
 
 	if response.StatusCode == http.StatusNotFound {
-		return Stemcell{}, fmt.Errorf("stemcell %s could not be found", name)
+		return []stemcell{}, fmt.Errorf("stemcell %s could not be found", name)
 	}
 
 	if response.StatusCode != http.StatusOK {
 		body, err := bodyReader(response.Body)
 		if err != nil {
-			return Stemcell{}, err
+			return []stemcell{}, err
 		}
 		defer response.Body.Close()
 
-		return Stemcell{}, fmt.Errorf("unexpected response %d %s:\n%s", response.StatusCode, http.StatusText(response.StatusCode), body)
+		return []stemcell{}, fmt.Errorf("unexpected response %d %s:\n%s", response.StatusCode, http.StatusText(response.StatusCode), body)
 	}
 
-	stemcells := []struct {
-		Name    string
-		Version string
-	}{}
+	var stemcells []stemcell
 
 	err = json.NewDecoder(response.Body).Decode(&stemcells)
+	if err != nil {
+		return []stemcell{}, err
+	}
+
+	return stemcells, nil
+}
+
+func (c Client) StemcellByName(name string) (Stemcell, error) {
+	stemcells, err := c.getStemcells(name)
 	if err != nil {
 		return Stemcell{}, err
 	}
@@ -59,6 +72,24 @@ func (c Client) Stemcell(name string) (Stemcell, error) {
 
 	for _, s := range stemcells {
 		if s.Name == name {
+			stemcell.Versions = append(stemcell.Versions, s.Version)
+		}
+	}
+
+	return stemcell, nil
+}
+
+func (c Client) StemcellByOS(os string) (Stemcell, error) {
+	stemcells, err := c.getStemcells(os)
+	if err != nil {
+		return Stemcell{}, err
+	}
+
+	stemcell := NewStemcell()
+	stemcell.OS = os
+
+	for _, s := range stemcells {
+		if s.Operating_system == os {
 			stemcell.Versions = append(stemcell.Versions, s.Version)
 		}
 	}

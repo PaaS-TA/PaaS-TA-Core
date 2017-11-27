@@ -3,7 +3,7 @@ require 'spec_helper'
 RSpec.describe 'Service Broker' do
   include VCAP::CloudController::BrokerApiHelper
 
-  let(:catalog_with_no_plans) {{
+  let(:catalog_with_no_plans) { {
     services:
     [{
       id:          'service-guid-here',
@@ -14,7 +14,7 @@ RSpec.describe 'Service Broker' do
     }]
   }}
 
-  let(:catalog_with_small_plan) {{
+  let(:catalog_with_small_plan) { {
     services:
     [{
       id:          'service-guid-here',
@@ -29,7 +29,7 @@ RSpec.describe 'Service Broker' do
     }]
   }}
 
-  let(:catalog_with_large_plan) {{
+  let(:catalog_with_large_plan) { {
     services:
     [{
       id:          'service-guid-here',
@@ -44,7 +44,7 @@ RSpec.describe 'Service Broker' do
     }]
   }}
 
-  let(:catalog_with_two_plans) {{
+  let(:catalog_with_two_plans) { {
     services:
     [{
       id:          'service-guid-here',
@@ -82,7 +82,7 @@ RSpec.describe 'Service Broker' do
     }.merge(attrs)
   end
 
-  describe 'adding a service broker' do
+  describe 'on registration' do
     context 'when a service has no plans' do
       before do
         stub_catalog_fetch(200, {
@@ -102,7 +102,7 @@ RSpec.describe 'Service Broker' do
           broker_url: 'http://broker-url',
           auth_username: 'username',
           auth_password: 'password'
-        }.to_json, json_headers(admin_headers))
+        }.to_json, admin_headers)
 
         expect(last_response.status).to eql(502)
         expect(decoded_response['code']).to eql(270012)
@@ -123,7 +123,14 @@ RSpec.describe 'Service Broker' do
                 {
                   id: 'plan-1',
                   name: 'small',
-                  description: 'A small shared database with 100mb storage quota and 10 connections'
+                  description: 'A small shared database with 100mb storage quota and 10 connections',
+                  schemas: {
+                    service_instance: {
+                      create: {
+                        parameters: { type: 'object', properties: true }
+                      }
+                    }
+                  }
                 }, {
                   id: 'plan-2',
                   name: 'large',
@@ -186,7 +193,7 @@ RSpec.describe 'Service Broker' do
           broker_url: 'http://broker-url',
           auth_username: 'username',
           auth_password: 'password'
-        }.to_json, json_headers(admin_headers))
+        }.to_json, admin_headers)
 
         expect(last_response.status).to eql(502)
         expect(decoded_response['code']).to eql(270012)
@@ -196,6 +203,11 @@ RSpec.describe 'Service Broker' do
           "Service dashboard_client id must be unique\n" \
           "Service service-1\n" \
           "  Service id must be a string, but has value 12345\n" \
+          "  Plan small\n" \
+          "    Schemas\n" \
+          '      Schema service_instance.create.parameters is not valid. Must conform to JSON Schema Draft 04: '\
+          "The property '#/properties' of type boolean did not match the following type: object in schema "\
+          "http://json-schema.org/draft-04/schema#\n" \
           "Service service-2\n" \
           "  Plan ids must be unique within a service. Service service-2 already has a plan with id 'plan-b'\n" \
           "  Plan large\n" \
@@ -239,11 +251,11 @@ RSpec.describe 'Service Broker' do
           broker_url: 'http://broker-url',
           auth_username: 'username',
           auth_password: 'password'
-        }.to_json, json_headers(admin_headers))
+        }.to_json, admin_headers)
       end
 
       it 'sets the cc plan free field' do
-        get('/v2/service_plans', {}.to_json, json_headers(admin_headers))
+        get('/v2/service_plans', {}.to_json, admin_headers)
 
         resources     = JSON.parse(last_response.body)['resources']
         not_free_plan = resources.find { |plan| plan['entity']['name'] == 'not-free-plan' }
@@ -271,7 +283,7 @@ RSpec.describe 'Service Broker' do
           broker_url: 'http://broker-url',
           auth_username: 'username',
           auth_password: 'password'
-        }.to_json, json_headers(admin_headers))
+        }.to_json, admin_headers)
 
         warning = CGI.unescape(last_response.headers['X-Cf-Warnings'])
         expect(warning).to eq(VCAP::Services::SSO::DashboardClientManager::REQUESTED_FEATURE_DISABLED_WARNING)
@@ -283,9 +295,224 @@ RSpec.describe 'Service Broker' do
           broker_url: 'http://broker-url',
           auth_username: 'username',
           auth_password: 'password'
-        }.to_json, json_headers(admin_headers))
+        }.to_json, admin_headers)
 
         expect(VCAP::CloudController::ServiceDashboardClient.count).to eq(0)
+      end
+    end
+
+    context 'when a schema' do
+      [
+        { type: 'service_instance', actions: ['create', 'update'] },
+        { type: 'service_binding', actions: ['create'] },
+      ].each do |test|
+        test[:actions].each do |schema_action|
+          context "of type #{test[:type]} and action #{schema_action} is not present" do
+            {
+              "#{schema_action} is nil": { test[:type] => { schema_action => nil } },
+              "#{schema_action} is nil": { test[:type] => { schema_action => { 'parameters' => nil } } },
+              "#{schema_action} is empty object": { test[:type] => { schema_action => {} } },
+            }.each do |desc, schema|
+              context "#{desc} #{schema}" do
+                before do
+                  stub_catalog_fetch(200, default_catalog(plan_schemas: schema))
+                end
+                it 'succeeds' do
+                  post('/v2/service_brokers', {
+                    name: 'some-guid',
+                    broker_url: 'http://broker-url',
+                    auth_username: 'username',
+                    auth_password: 'password'
+                  }.to_json, admin_headers)
+
+                  expect(last_response.status).to eql(201)
+                end
+              end
+            end
+          end
+
+          context "of type #{test[:type]} and action #{schema_action} has an invalid type" do
+            {
+              "#{test[:type]}.#{schema_action}": { (test[:type]).to_s => { schema_action => true } },
+              "#{test[:type]}.#{schema_action}.parameters": { (test[:type]).to_s => { schema_action => { 'parameters' => true } } },
+            }.each do |path, schema|
+
+              context "operator receives an error about #{path} #{schema}" do
+                before do
+                  stub_catalog_fetch(200, default_catalog(plan_schemas: schema))
+                end
+                it 'rejects the request' do
+                  post('/v2/service_brokers', {
+                    name: 'some-guid',
+                    broker_url: 'http://broker-url',
+                    auth_username: 'username',
+                    auth_password: 'password'
+                  }.to_json, admin_headers)
+
+                  expect(last_response.status).to eql(502)
+                  expect(decoded_response['code']).to eql(270012)
+                  expect(decoded_response['description']).to eql(
+                    "Service broker catalog is invalid: \n" \
+                    "Service MySQL\n" \
+                    "  Plan small\n" \
+                    "    Schemas\n" \
+                    "      Schemas #{path} must be a hash, but has value true\n")
+                end
+              end
+            end
+          end
+
+          context "of type #{test[:type]} and action #{schema_action} does not conform to JSON Schema Draft 04" do
+            let(:path) { "#{test[:type]}.#{schema_action}.parameters" }
+            let(:schema) { { (test[:type]).to_s => { schema_action => { 'parameters' => { 'type': 'object', 'properties': true } } } } }
+
+            before do
+              stub_catalog_fetch(200, default_catalog(plan_schemas: schema))
+            end
+
+            it 'rejects the request' do
+              post('/v2/service_brokers', {
+                name: 'some-guid',
+                broker_url: 'http://broker-url',
+                auth_username: 'username',
+                auth_password: 'password'
+              }.to_json, admin_headers)
+
+              expect(last_response.status).to eql(502)
+              expect(decoded_response['code']).to eql(270012)
+              expect(decoded_response['description']).to eql(
+                "Service broker catalog is invalid: \n" \
+                "Service MySQL\n" \
+                "  Plan small\n" \
+                "    Schemas\n" \
+                "      Schema #{path} is not valid. Must conform to JSON Schema Draft 04: The property '#/properties' " \
+                "of type boolean did not match the following type: object in schema http://json-schema.org/draft-04/schema#\n")
+            end
+          end
+
+          context "of type #{test[:type]} and action #{schema_action} does not conform to JSON Schema Draft 04 with multiple problems" do
+            let(:path) { "#{test[:type]}.#{schema_action}.parameters" }
+            let(:schema) { { (test[:type]).to_s => { schema_action => { 'parameters' => { 'type': 'object', 'properties': true, 'anyOf': true } } } } }
+
+            before do
+              stub_catalog_fetch(200, default_catalog(plan_schemas: schema))
+            end
+            it 'responds with invalid' do
+              post('/v2/service_brokers', {
+                name: 'some-guid',
+                broker_url: 'http://broker-url',
+                auth_username: 'username',
+                auth_password: 'password'
+              }.to_json, admin_headers)
+
+              expect(last_response.status).to eql(502)
+              expect(decoded_response['code']).to eql(270012)
+              expect(decoded_response['description']).to eql(
+                "Service broker catalog is invalid: \n" \
+                "Service MySQL\n" \
+                "  Plan small\n" \
+                "    Schemas\n" \
+                "      Schema #{path} is not valid. Must conform to JSON Schema Draft 04: The property '#/properties' " \
+                "of type boolean did not match the following type: object in schema http://json-schema.org/draft-04/schema#\n"\
+                "      Schema #{path} is not valid. Must conform to JSON Schema Draft 04: The property '#/anyOf' " \
+                "of type boolean did not match the following type: array in schema http://json-schema.org/draft-04/schema#\n")
+            end
+          end
+
+          context "of type #{test[:type]} and action #{schema_action} has an external schema" do
+            let(:path) { "#{test[:type]}.#{schema_action}.parameters" }
+            let(:schema) { { (test[:type]).to_s => { schema_action => { 'parameters' => { '$schema': 'http://example.com/schema', 'type': 'object' } } } } }
+
+            before do
+              stub_catalog_fetch(200, default_catalog(plan_schemas: schema))
+            end
+
+            it 'responds with invalid' do
+              post('/v2/service_brokers', {
+                name: 'some-guid',
+                broker_url: 'http://broker-url',
+                auth_username: 'username',
+                auth_password: 'password'
+              }.to_json, admin_headers)
+
+              expect(last_response.status).to eql(502)
+              expect(decoded_response['code']).to eql(270012)
+              expect(decoded_response['description']).to eql(
+                "Service broker catalog is invalid: \n" \
+                "Service MySQL\n" \
+                "  Plan small\n" \
+                "    Schemas\n" \
+                "      Schema #{path} is not valid. Custom meta schemas are not supported.\n"
+              )
+            end
+          end
+
+          context "of type #{test[:type]} and action #{schema_action} has an external uri reference" do
+            let(:path) { "#{test[:type]}.#{schema_action}.parameters" }
+            let(:schema) { { (test[:type]).to_s => { schema_action => { 'parameters' => { 'type': 'object', '$ref': 'http://example.com/ref' } } } } }
+
+            before do
+              stub_catalog_fetch(200, default_catalog(plan_schemas: schema))
+            end
+            it 'responds with invalid' do
+              post('/v2/service_brokers', {
+                name: 'some-guid',
+                broker_url: 'http://broker-url',
+                auth_username: 'username',
+                auth_password: 'password'
+              }.to_json, admin_headers)
+
+              expect(last_response.status).to eql(502)
+              expect(decoded_response['code']).to eql(270012)
+              expect(decoded_response['description']).to eql(
+                "Service broker catalog is invalid: \n" \
+                "Service MySQL\n" \
+                "  Plan small\n" \
+                "    Schemas\n" \
+                "      Schema #{path} is not valid. No external references are allowed: Read of URI at http://example.com/ref refused\n"
+              )
+            end
+          end
+        end
+      end
+    end
+
+    context 'when multiple schemas have validation issues' do
+      let(:schema) {
+        {
+          'service_instance' => {
+            'create' => { 'parameters' => { 'type': 'object', '$ref': 'http://example.com/create' } },
+            'update' => { 'parameters' => { 'type': 'object', '$ref': 'http://example.com/update' } }
+          },
+          'service_binding' => {
+            'create' => { 'parameters' => { 'type': 'object', '$ref': 'http://example.com/binding' } },
+          }
+        }
+      }
+
+      before do
+        stub_catalog_fetch(200, default_catalog(plan_schemas: schema))
+      end
+
+      it 'reports all issues' do
+        post('/v2/service_brokers', {
+          name: 'some-guid',
+          broker_url: 'http://broker-url',
+          auth_username: 'username',
+          auth_password: 'password'
+        }.to_json, admin_headers)
+
+        expect(last_response.status).to eql(502)
+        expect(decoded_response['code']).to eql(270012)
+        expect(decoded_response['description']).to eql(
+          "Service broker catalog is invalid: \n" \
+          "Service MySQL\n" \
+          "  Plan small\n" \
+          "    Schemas\n" \
+          "      Schema service_instance.create.parameters is not valid. No external references are allowed: Read of URI at http://example.com/create refused\n" \
+          "      Schema service_instance.update.parameters is not valid. No external references are allowed: Read of URI at http://example.com/update refused\n" \
+          "      Schema service_binding.create.parameters is not valid. No external references are allowed: Read of URI at http://example.com/binding refused\n"
+        )
       end
     end
   end
@@ -303,7 +530,7 @@ RSpec.describe 'Service Broker' do
         # set up a fake broker catalog that includes dashboard_client for services
         stub_catalog_fetch(200, services: [service_1, service_2, service_3, service_4, service_5, service_6])
         UAARequests.stub_all
-        stub_request(:get, %r{http://localhost:8080/uaa/oauth/clients/.*}).to_return(status: 404)
+        stub_request(:get, %r{https://uaa.service.cf.internal/oauth/clients/.*}).to_return(status: 404)
 
         # add that broker to the CC
         post('/v2/service_brokers',
@@ -313,7 +540,7 @@ RSpec.describe 'Service Broker' do
           auth_username: stubbed_broker_username,
           auth_password: stubbed_broker_password
         }.to_json,
-        json_headers(admin_headers)
+        admin_headers
             )
         expect(last_response).to have_status_code(201)
         @service_broker_guid = decoded_response.fetch('metadata').fetch('guid')
@@ -321,24 +548,24 @@ RSpec.describe 'Service Broker' do
         WebMock.reset!
 
         UAARequests.stub_all
-        stub_request(:get, %r{http://localhost:8080/uaa/oauth/clients/.*}).to_return(status: 404)
-        stub_request(:get, %r{http://localhost:8080/uaa/oauth/clients/client-1}).to_return(
+        stub_request(:get, %r{https://uaa.service.cf.internal/oauth/clients/.*}).to_return(status: 404)
+        stub_request(:get, %r{https://uaa.service.cf.internal/oauth/clients/client-1}).to_return(
           body:    { client_id: 'client-1' }.to_json,
           status:  200,
           headers: { 'content-type' => 'application/json' })
-        stub_request(:get, %r{http://localhost:8080/uaa/oauth/clients/client-2}).to_return(
+        stub_request(:get, %r{https://uaa.service.cf.internal/oauth/clients/client-2}).to_return(
           body:    { client_id: 'client-2' }.to_json,
           status:  200,
           headers: { 'content-type' => 'application/json' })
-        stub_request(:get, %r{http://localhost:8080/uaa/oauth/clients/client-3}).to_return(
+        stub_request(:get, %r{https://uaa.service.cf.internal/oauth/clients/client-3}).to_return(
           body:    { client_id: 'client-3' }.to_json,
           status:  200,
           headers: { 'content-type' => 'application/json' })
-        stub_request(:get, %r{http://localhost:8080/uaa/oauth/clients/client-5}).to_return(
+        stub_request(:get, %r{https://uaa.service.cf.internal/oauth/clients/client-5}).to_return(
           body:    { client_id: 'client-5' }.to_json,
           status:  200,
           headers: { 'content-type' => 'application/json' })
-        stub_request(:get, %r{http://localhost:8080/uaa/oauth/clients/client-6}).to_return(
+        stub_request(:get, %r{https://uaa.service.cf.internal/oauth/clients/client-6}).to_return(
           body:    { client_id: 'client-6' }.to_json,
           status:  200,
           headers: { 'content-type' => 'application/json' })
@@ -356,7 +583,7 @@ RSpec.describe 'Service Broker' do
 
         stub_catalog_fetch(200, services: [service_1, service_2, service_3, service_4, service_5, service_6])
 
-        stub_request(:post, %r{http://localhost:8080/uaa/oauth/clients/tx/modify}).
+        stub_request(:post, %r{https://uaa.service.cf.internal/oauth/clients/tx/modify}).
           to_return(
             status: 200,
             headers: { 'content-type' => 'application/json' },
@@ -365,7 +592,7 @@ RSpec.describe 'Service Broker' do
       end
 
       it 'sends the correct batch request to create/update/delete clients' do
-        put("/v2/service_brokers/#{@service_broker_guid}", '{}', json_headers(admin_headers))
+        put("/v2/service_brokers/#{@service_broker_guid}", '{}', admin_headers)
 
         expect(last_response).to have_status_code(200)
 
@@ -375,6 +602,7 @@ RSpec.describe 'Service Broker' do
             'client_secret'          => nil,
             'redirect_uri'           => nil,
             'scope'                  => ['openid', 'cloud_controller_service_permissions.read'],
+            'authorities'            => ['uaa.resource'],
             'authorized_grant_types' => ['authorization_code'],
             'action'                 => 'delete'
           },
@@ -383,6 +611,7 @@ RSpec.describe 'Service Broker' do
             'client_secret'          => nil,
             'redirect_uri'           => nil,
             'scope'                  => ['openid', 'cloud_controller_service_permissions.read'],
+            'authorities'            => ['uaa.resource'],
             'authorized_grant_types' => ['authorization_code'],
             'action'                 => 'delete'
           },
@@ -391,6 +620,7 @@ RSpec.describe 'Service Broker' do
             'client_secret'          => service_2[:dashboard_client][:secret],
             'redirect_uri'           => service_2[:dashboard_client][:redirect_uri],
             'scope'                  => ['openid', 'cloud_controller_service_permissions.read'],
+            'authorities'            => ['uaa.resource'],
             'authorized_grant_types' => ['authorization_code'],
             'action'                 => 'add'
           },
@@ -399,6 +629,7 @@ RSpec.describe 'Service Broker' do
             'client_secret'          => 'SUPERsecret',
             'redirect_uri'           => service_3[:dashboard_client][:redirect_uri],
             'scope'                  => ['openid', 'cloud_controller_service_permissions.read'],
+            'authorities'            => ['uaa.resource'],
             'authorized_grant_types' => ['authorization_code'],
             'action'                 => 'update,secret'
           },
@@ -407,6 +638,7 @@ RSpec.describe 'Service Broker' do
             'client_secret'          => service_4[:dashboard_client][:secret],
             'redirect_uri'           => service_4[:dashboard_client][:redirect_uri],
             'scope'                  => ['openid', 'cloud_controller_service_permissions.read'],
+            'authorities'            => ['uaa.resource'],
             'authorized_grant_types' => ['authorization_code'],
             'action'                 => 'add'
           },
@@ -415,6 +647,7 @@ RSpec.describe 'Service Broker' do
             'client_secret'          => service_5[:dashboard_client][:secret],
             'redirect_uri'           => 'http://nowhere.net',
             'scope'                  => ['openid', 'cloud_controller_service_permissions.read'],
+            'authorities'            => ['uaa.resource'],
             'authorized_grant_types' => ['authorization_code'],
             'action'                 => 'update,secret'
           },
@@ -423,12 +656,13 @@ RSpec.describe 'Service Broker' do
             'client_secret'          => service_6[:dashboard_client][:secret],
             'redirect_uri'           => service_6[:dashboard_client][:redirect_uri],
             'scope'                  => ['openid', 'cloud_controller_service_permissions.read'],
+            'authorities'            => ['uaa.resource'],
             'authorized_grant_types' => ['authorization_code'],
             'action'                 => 'update,secret'
           }
         ]
 
-        expect(a_request(:post, 'http://localhost:8080/uaa/oauth/clients/tx/modify').with do |req|
+        expect(a_request(:post, 'https://uaa.service.cf.internal/oauth/clients/tx/modify').with do |req|
           client_modifications = JSON.parse(req.body)
           expect(client_modifications).to match_array(expected_client_modifications)
         end).to have_been_made
@@ -436,7 +670,7 @@ RSpec.describe 'Service Broker' do
 
       it 'can update the service broker name' do
         put("/v2/service_brokers/#{@service_broker_guid}", '{"name":"new_broker_name"}',
-            json_headers(admin_headers))
+            admin_headers)
 
         expect(last_response).to have_status_code(200)
 
@@ -472,7 +706,7 @@ RSpec.describe 'Service Broker' do
           broker_url: 'http://broker-url',
           auth_username: 'username',
           auth_password: 'password'
-        }.to_json, json_headers(admin_headers))
+        }.to_json, admin_headers)
 
         guid = VCAP::CloudController::ServiceBroker.first.guid
 
@@ -501,11 +735,11 @@ RSpec.describe 'Service Broker' do
           broker_url: 'http://broker-url',
           auth_username: 'username',
           auth_password: 'password'
-        }.to_json, json_headers(admin_headers))
+        }.to_json, admin_headers)
       end
 
       it 'sets the cc plan free field' do
-        get('/v2/service_plans', {}.to_json, json_headers(admin_headers))
+        get('/v2/service_plans', {}.to_json, admin_headers)
 
         resources               = JSON.parse(last_response.body)['resources']
         no_longer_not_free_plan = resources.find { |plan| plan['entity']['name'] == 'not-free-plan' }
@@ -539,11 +773,11 @@ RSpec.describe 'Service Broker' do
 
           warning = CGI.unescape(last_response.headers['X-Cf-Warnings'])
 
-          expect(warning).to eq(<<HEREDOC)
-Warning: Service plans are missing from the broker's catalog (http://#{stubbed_broker_host}/v2/catalog) but can not be removed from Cloud Foundry while instances exist. The plans have been deactivated to prevent users from attempting to provision new instances of these plans. The broker should continue to support bind, unbind, and delete for existing instances; if these operations fail contact your broker provider.
-#{service_name}
-  small
-HEREDOC
+          expect(warning).to eq(<<~HEREDOC)
+            Warning: Service plans are missing from the broker's catalog (http://#{stubbed_broker_host}/v2/catalog) but can not be removed from Cloud Foundry while instances exist. The plans have been deactivated to prevent users from attempting to provision new instances of these plans. The broker should continue to support bind, unbind, and delete for existing instances; if these operations fail contact your broker provider.
+            #{service_name}
+              small
+          HEREDOC
         end
       end
 
@@ -552,7 +786,7 @@ HEREDOC
           update_broker(catalog_with_large_plan)
           expect(last_response).to have_status_code(200)
 
-          get('/v2/services?inline-relations-depth=1', '{}', json_headers(admin_headers))
+          get('/v2/services?inline-relations-depth=1', '{}', admin_headers)
           expect(last_response).to have_status_code(200)
 
           parsed_body = JSON.parse(last_response.body)
@@ -565,7 +799,7 @@ HEREDOC
           update_broker(catalog_with_no_plans)
           expect(last_response).to have_status_code(502)
 
-          get('/v2/services?inline-relations-depth=1', '{}', json_headers(admin_headers))
+          get('/v2/services?inline-relations-depth=1', '{}', admin_headers)
           expect(last_response).to have_status_code(200)
 
           parsed_body = JSON.parse(last_response.body)
@@ -585,7 +819,7 @@ HEREDOC
         # set up a fake broker catalog that includes dashboard_client for services
         stub_catalog_fetch(200, services: [service_1, service_2, service_3])
         UAARequests.stub_all
-        stub_request(:get, %r{http://localhost:8080/uaa/oauth/clients/.*}).to_return(status: 404)
+        stub_request(:get, %r{https://uaa.service.cf.internal/oauth/clients/.*}).to_return(status: 404)
 
         # add that broker to the CC
         post('/v2/service_brokers',
@@ -595,21 +829,21 @@ HEREDOC
           auth_username: stubbed_broker_username,
           auth_password: stubbed_broker_password
         }.to_json,
-        json_headers(admin_headers)
+        admin_headers
             )
         expect(last_response).to have_status_code(201)
         @service_broker_guid = decoded_response.fetch('metadata').fetch('guid')
 
-        stub_request(:get, %r{http://localhost:8080/uaa/oauth/clients/client-1}).to_return(
+        stub_request(:get, %r{https://uaa.service.cf.internal/oauth/clients/client-1}).to_return(
           body:    { client_id: 'client-1' }.to_json,
           status:  200,
           headers: { 'content-type' => 'application/json' })
-        stub_request(:get, %r{http://localhost:8080/uaa/oauth/clients/client-2}).to_return(
+        stub_request(:get, %r{https://uaa.service.cf.internal/oauth/clients/client-2}).to_return(
           body:    { client_id: 'client-2' }.to_json,
           status:  200,
           headers: { 'content-type' => 'application/json' })
 
-        stub_request(:post, %r{http://localhost:8080/uaa/oauth/clients/tx/modify}).
+        stub_request(:post, %r{https://uaa.service.cf.internal/oauth/clients/tx/modify}).
           to_return(
             status: 200,
             headers: { 'content-type' => 'application/json' },
@@ -618,7 +852,7 @@ HEREDOC
       end
 
       it 'deletes the dashboard clients from UAA' do
-        delete("/v2/service_brokers/#{@service_broker_guid}", '', json_headers(admin_headers))
+        delete("/v2/service_brokers/#{@service_broker_guid}", '', admin_headers)
         expect(last_response).to have_status_code(204)
 
         expected_json_body = [
@@ -627,6 +861,7 @@ HEREDOC
             client_secret:          nil,
             redirect_uri:           nil,
             scope:                  ['openid', 'cloud_controller_service_permissions.read'],
+            authorities:            ['uaa.resource'],
             authorized_grant_types: ['authorization_code'],
             action:                 'delete'
           },
@@ -635,13 +870,14 @@ HEREDOC
             client_secret:          nil,
             redirect_uri:           nil,
             scope:                  ['openid', 'cloud_controller_service_permissions.read'],
+            authorities:            ['uaa.resource'],
             authorized_grant_types: ['authorization_code'],
             action:                 'delete'
           }
         ].to_json
 
         expect(
-          a_request(:post, 'http://localhost:8080/uaa/oauth/clients/tx/modify').
+          a_request(:post, 'https://uaa.service.cf.internal/oauth/clients/tx/modify').
           with(
             body: expected_json_body
         )).to have_been_made
@@ -664,7 +900,7 @@ HEREDOC
         delete_broker
         expect(last_response).to have_status_code(400)
 
-        get('/v2/services?inline-relations-depth=1', '{}', json_headers(admin_headers))
+        get('/v2/services?inline-relations-depth=1', '{}', admin_headers)
         expect(last_response).to have_status_code(200)
 
         parsed_body = JSON.parse(last_response.body)

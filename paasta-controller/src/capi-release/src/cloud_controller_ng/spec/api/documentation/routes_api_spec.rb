@@ -66,8 +66,8 @@ RSpec.resource 'Routes', type: [:api, :legacy_api] do
     post '/v2/routes/' do
       include_context 'updatable_fields', required: true
 
-      param_description = <<EOF
-Set to `true` to generate a random port. Defaults to `false`. Supported for domains for TCP router groups only. Takes precedence over manually specified port.
+      param_description = <<~EOF
+        Set to `true` to generate a random port. Defaults to `false`. Supported for domains for TCP router groups only. Takes precedence over manually specified port.
 EOF
       parameter :generate_port, param_description, valid_values: [true, false]
 
@@ -114,18 +114,18 @@ EOF
     include_context 'guid_field', required: true
 
     describe 'Apps' do
-      let!(:associated_app) { VCAP::CloudController::AppFactory.make(space: space) }
-      let(:associated_app_guid) { associated_app.guid }
-      let(:app_obj) { VCAP::CloudController::AppFactory.make(space: space) }
-      let(:app_guid) { app_obj.guid }
+      let!(:associated_process) { VCAP::CloudController::AppFactory.make(space: space) }
+      let(:associated_app_guid) { associated_process.guid }
+      let(:process) { VCAP::CloudController::AppFactory.make(space: space) }
+      let(:app_guid) { process.guid }
 
       before do
-        VCAP::CloudController::RouteMappingModel.make(app: app_obj.app, process_type: app_obj.type, route: route)
+        VCAP::CloudController::RouteMappingModel.make(app: process.app, process_type: process.type, route: route)
       end
 
       parameter :app_guid, 'The guid of the app'
 
-      standard_model_list :app, VCAP::CloudController::AppsController, outer_model: :route
+      standard_model_list 'ProcessModel', VCAP::CloudController::AppsController, path: 'app', outer_model: :route
       nested_model_associate :app, :route
       nested_model_remove :app, :route
     end

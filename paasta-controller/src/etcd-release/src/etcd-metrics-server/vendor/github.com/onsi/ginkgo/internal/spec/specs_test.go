@@ -231,6 +231,36 @@ var _ = Describe("Specs", func() {
 		})
 	})
 
+	Describe("With a focused spec within a pending context and a pending spec within a focused context", func() {
+		BeforeEach(func() {
+			pendingInFocused := New(
+				leafnodes.NewItNode("PendingInFocused", func() {}, pendingFlag, codelocation.New(0), 0, nil, 0),
+				[]*containernode.ContainerNode{
+					containernode.New("", focusedFlag, codelocation.New(0)),
+				}, false)
+
+			focusedInPending := New(
+				leafnodes.NewItNode("FocusedInPending", func() {}, focusedFlag, codelocation.New(0), 0, nil, 0),
+				[]*containernode.ContainerNode{
+					containernode.New("", pendingFlag, codelocation.New(0)),
+				}, false)
+
+			specs = NewSpecs([]*Spec{
+				newSpec("A", noneFlag),
+				newSpec("B", noneFlag),
+				pendingInFocused,
+				focusedInPending,
+			})
+			specs.ApplyFocus("", "", "")
+		})
+
+		It("should not have a programmatic focus and should run all tests", func() {
+			Ω(willRunTexts(specs)).Should(Equal([]string{"A", "B"}))
+			Ω(skippedTexts(specs)).Should(BeEmpty())
+			Ω(pendingTexts(specs)).Should(ConsistOf(ContainSubstring("PendingInFocused"), ContainSubstring("FocusedInPending")))
+		})
+	})
+
 	Describe("skipping measurements", func() {
 		BeforeEach(func() {
 			specs = NewSpecs([]*Spec{
@@ -252,54 +282,6 @@ var _ = Describe("Specs", func() {
 			Ω(willRunTexts(specs)).Should(Equal([]string{"A", "B"}))
 			Ω(skippedTexts(specs)).Should(Equal([]string{"measurementA", "measurementB"}))
 			Ω(pendingTexts(specs)).Should(Equal([]string{"C"}))
-		})
-	})
-
-	Describe("when running tests in parallel", func() {
-		It("should select out a subset of the tests", func() {
-			specsNode1 := newSpecs("A", noneFlag, "B", noneFlag, "C", noneFlag, "D", noneFlag, "E", noneFlag)
-			specsNode2 := newSpecs("A", noneFlag, "B", noneFlag, "C", noneFlag, "D", noneFlag, "E", noneFlag)
-			specsNode3 := newSpecs("A", noneFlag, "B", noneFlag, "C", noneFlag, "D", noneFlag, "E", noneFlag)
-
-			specsNode1.TrimForParallelization(3, 1)
-			specsNode2.TrimForParallelization(3, 2)
-			specsNode3.TrimForParallelization(3, 3)
-
-			Ω(willRunTexts(specsNode1)).Should(Equal([]string{"A", "B"}))
-			Ω(willRunTexts(specsNode2)).Should(Equal([]string{"C", "D"}))
-			Ω(willRunTexts(specsNode3)).Should(Equal([]string{"E"}))
-
-			Ω(specsNode1.Specs()).Should(HaveLen(2))
-			Ω(specsNode2.Specs()).Should(HaveLen(2))
-			Ω(specsNode3.Specs()).Should(HaveLen(1))
-
-			Ω(specsNode1.NumberOfOriginalSpecs()).Should(Equal(5))
-			Ω(specsNode2.NumberOfOriginalSpecs()).Should(Equal(5))
-			Ω(specsNode3.NumberOfOriginalSpecs()).Should(Equal(5))
-		})
-
-		Context("when way too many nodes are used", func() {
-			It("should return 0 specs", func() {
-				specsNode1 := newSpecs("A", noneFlag, "B", noneFlag)
-				specsNode2 := newSpecs("A", noneFlag, "B", noneFlag)
-				specsNode3 := newSpecs("A", noneFlag, "B", noneFlag)
-
-				specsNode1.TrimForParallelization(3, 1)
-				specsNode2.TrimForParallelization(3, 2)
-				specsNode3.TrimForParallelization(3, 3)
-
-				Ω(willRunTexts(specsNode1)).Should(Equal([]string{"A"}))
-				Ω(willRunTexts(specsNode2)).Should(Equal([]string{"B"}))
-				Ω(willRunTexts(specsNode3)).Should(BeEmpty())
-
-				Ω(specsNode1.Specs()).Should(HaveLen(1))
-				Ω(specsNode2.Specs()).Should(HaveLen(1))
-				Ω(specsNode3.Specs()).Should(HaveLen(0))
-
-				Ω(specsNode1.NumberOfOriginalSpecs()).Should(Equal(2))
-				Ω(specsNode2.NumberOfOriginalSpecs()).Should(Equal(2))
-				Ω(specsNode3.NumberOfOriginalSpecs()).Should(Equal(2))
-			})
 		})
 	})
 })

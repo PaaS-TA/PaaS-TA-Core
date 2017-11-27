@@ -1,0 +1,21 @@
+---
+platform: linux
+
+
+image_resource:
+  type: docker-image
+  source:
+    repository: cfinfrastructure/deployment
+
+inputs:
+- name: postgres-release
+
+run:
+  path: postgres-release/ci/scripts/upload-stemcell/task.sh
+
+params:
+  BOSH_DIRECTOR:
+  BOSH_CLIENT:
+  BOSH_CLIENT_SECRET:
+  BOSH_CA_CERT:
+  STEMCELL_VERSION:

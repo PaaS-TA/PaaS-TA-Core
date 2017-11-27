@@ -1,0 +1,73 @@
+---
+name: tcp_router
+
+templates:
+  tcp_router_ctl.erb: bin/tcp_router_ctl
+  haproxy_reloader: bin/haproxy_reloader
+  pre-start: bin/pre-start
+  tcp_router.yml.erb: config/tcp_router.yml
+  uaa_ca.crt.erb: config/certs/uaa/ca.crt
+  haproxy.conf.erb: config/haproxy.conf
+  haproxy.conf.template.erb: config/haproxy.conf.template
+
+packages:
+  - routing_utils
+  - tcp_router
+  - haproxy
+
+properties:
+  tcp_router.debug_address:
+    description: "Address at which to serve debug info"
+    default: "127.0.0.1:17002"
+  tcp_router.isolation_segments:
+    description: "Routes with these isolation segments will be registered. Used in combination with routing_table_sharding_mode."
+    default: []
+  tcp_router.log_level:
+    description: "Log level"
+    default: "info"
+  tcp_router.tcp_stats_collection_interval:
+    description: "String representing interval for collecting statistic metrics from tcp proxy. Units: ms, s, m h"
+    default: "1m"
+  tcp_router.oauth_secret:
+    description: "OAuth client secret used to obtain token for Routing API from UAA."
+
+  routing_api.uri:
+    description: "URL where the routing API can be reached internally"
+    default: http://routing-api.service.cf.internal
+  routing_api.port:
+    description: "Port of routing api"
+    default: "3000"
+  routing_api.auth_disabled:
+    description: "Disables UAA authentication"
+    default: false
+
+  tcp_router.request_timeout_in_seconds:
+    description: "Server and client timeouts in seconds"
+    default: 300
+  tcp_router.health_check_port:
+    description: "Load balancer in front of TCP Routers should be configured to check the health of TCP Router instances by establishing a TCP connection on this port"
+    default: 80
+
+  uaa.token_endpoint:
+    description: "UAA token endpoint host name. Do not include a scheme in this value; TCP Router will always use TLS to connect to UAA."
+    default: uaa.service.cf.internal
+
+  uaa.tls_port:
+    description: "Port on which UAA is listening for TLS connections. This is required for obtaining an OAuth token for Routing API."
+
+  skip_ssl_validation:
+    description: Skip TLS verification when talking to UAA
+    default: false
+
+  dns_health_check_host:
+    description: "Host to ping for confirmation of DNS resolution"
+    default: consul.service.cf.internal
+
+  metron.port:
+    description: "The port used to emit dropsonde messages to the Metron agent."
+    default: 3457
+
+  uaa.ca_cert:
+    description : "Certificate authority for communication between clients and uaa."
+    default: ""
+

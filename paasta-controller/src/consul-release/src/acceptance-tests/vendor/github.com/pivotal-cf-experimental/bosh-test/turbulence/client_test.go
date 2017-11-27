@@ -11,17 +11,15 @@ import (
 	"github.com/pivotal-cf-experimental/bosh-test/turbulence"
 )
 
-const expectedPOSTRequest = `{
+const expectedKillPOSTRequest = `{
 	"Tasks": [{
-		"Type": "kill"
+		"Type": "Kill"
 	}],
-	"Deployments": [{
-		"Name": "deployment-name",
-		"Jobs": [{
-			"Name": "job-name",
-			"Indices": [0]
-		}]
-	}]
+	"Selector": {
+		"ID": {
+			"Values": ["some-id"]
+		}
+	}
 }`
 
 const expectedDelayPOSTRequest = `{
@@ -30,13 +28,11 @@ const expectedDelayPOSTRequest = `{
 		"Timeout": "2000ms",
 		"Delay": "1000ms"
 	}],
-	"Deployments": [{
-		"Name": "deployment-name",
-		"Jobs": [{
-			"Name": "job-name",
-			"Indices": [0]
-		}]
-	}]
+	"Selector": {
+		"ID": {
+			"Values": ["some-id"]
+		}
+	}
 }`
 
 const successfulPOSTResponse = `{
@@ -131,7 +127,7 @@ func NewFakeTurbulenceServer() *fakeTurbulenceServer {
 }
 
 var _ = Describe("Client", func() {
-	Describe("KillIndices", func() {
+	Describe("KillIDs", func() {
 		var fakeServer *fakeTurbulenceServer
 		var client turbulence.Client
 
@@ -141,48 +137,48 @@ var _ = Describe("Client", func() {
 		})
 
 		It("makes a POST request to create an incident and then polls to wait for completion", func() {
-			errorKillingIndices := client.KillIndices("deployment-name", "job-name", []int{0})
+			errorKillingIDs := client.KillIDs([]string{"some-id"})
 
 			Expect(fakeServer.errorReadingBody).NotTo(HaveOccurred())
-			Expect(errorKillingIndices).NotTo(HaveOccurred())
-			Expect(string(fakeServer.receivedPOSTBody)).To(MatchJSON(expectedPOSTRequest))
+			Expect(errorKillingIDs).NotTo(HaveOccurred())
+			Expect(string(fakeServer.receivedPOSTBody)).To(MatchJSON(expectedKillPOSTRequest))
 		})
 
 		It("returns a timeout error when execution does not complete", func() {
 			fakeServer.GETResponses = []string{successfulIncompleteGETResponse}
-			errorKillingIndices := client.KillIndices("deployment-name", "job-name", []int{0})
-			Expect(errorKillingIndices).NotTo(BeNil())
-			Expect(errorKillingIndices.Error()).To(ContainSubstring("Did not finish deleting VM in time"))
+			errorKillingIDs := client.KillIDs([]string{"some-id"})
+			Expect(errorKillingIDs).NotTo(BeNil())
+			Expect(errorKillingIDs.Error()).To(ContainSubstring("Did not finish deleting VM in time"))
 		})
 
 		It("returns an error when the turbulence response does not contain any events", func() {
 			fakeServer.GETResponses = []string{invalidGETResponseWithNoEvents}
-			errorKillingIndices := client.KillIndices("deployment-name", "job-name", []int{0})
-			Expect(errorKillingIndices).To(MatchError("There should at least be one Event in response from turbulence."))
+			errorKillingIDs := client.KillIDs([]string{"some-id"})
+			Expect(errorKillingIDs).To(MatchError("There should at least be one Event in response from turbulence."))
 		})
 
 		It("returns an error when a response event is not an empty string", func() {
 			fakeServer.GETResponses = []string{failedGETResponse}
-			errorKillingIndices := client.KillIndices("deployment-name", "job-name", []int{0})
-			Expect(errorKillingIndices).To(MatchError("some-error"))
+			errorKillingIDs := client.KillIDs([]string{"some-id"})
+			Expect(errorKillingIDs).To(MatchError("There was a turbulence event error. Check out the turbulence events (response id: someID) for more information."))
 		})
 
 		It("returns an error when the base URL is malformed", func() {
 			clientWithMalformedBaseURL := turbulence.NewClient("%%%%%", 100*time.Millisecond, 40*time.Millisecond)
-			errorKillingIndices := clientWithMalformedBaseURL.KillIndices("deployment-name", "job-name", []int{0})
-			Expect(errorKillingIndices.Error()).To(ContainSubstring("invalid URL escape"))
+			errorKillingIDs := clientWithMalformedBaseURL.KillIDs([]string{"some-id"})
+			Expect(errorKillingIDs.Error()).To(ContainSubstring("invalid URL escape"))
 		})
 
 		It("returns an error when the base url has an unsupported protocol", func() {
 			clientWithEmptyBaseURL := turbulence.NewClient("", 100*time.Millisecond, 40*time.Millisecond)
-			errorKillingIndices := clientWithEmptyBaseURL.KillIndices("deployment-name", "job-name", []int{0})
-			Expect(errorKillingIndices.Error()).To(ContainSubstring("unsupported protocol scheme"))
+			errorKillingIDs := clientWithEmptyBaseURL.KillIDs([]string{"some-id"})
+			Expect(errorKillingIDs.Error()).To(ContainSubstring("unsupported protocol scheme"))
 		})
 
 		It("returns an error when turbulence responds with malformed JSON", func() {
 			fakeServer.POSTResponse = "some-invalid-json"
-			errorKillingIndices := client.KillIndices("deployment-name", "job-name", []int{0})
-			Expect(errorKillingIndices.Error()).To(ContainSubstring("Unable to decode turbulence response."))
+			errorKillingIDs := client.KillIDs([]string{"some-id"})
+			Expect(errorKillingIDs.Error()).To(ContainSubstring("Unable to decode turbulence response."))
 		})
 	})
 
@@ -196,7 +192,7 @@ var _ = Describe("Client", func() {
 		})
 
 		It("makes a POST request to create a control-network delay incident and polls for initial execution", func() {
-			resp, err := client.Delay("deployment-name", "job-name", []int{0}, time.Second, 2*time.Second)
+			resp, err := client.Delay([]string{"some-id"}, time.Second, 2*time.Second)
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(fakeServer.postIncidentCallCount).To(Equal(1))
@@ -219,13 +215,13 @@ var _ = Describe("Client", func() {
 
 		It("returns an error when the POST request fails", func() {
 			clientWithMalformedBaseURL := turbulence.NewClient("%%%%%", 100*time.Millisecond, 40*time.Millisecond)
-			_, errorDelaying := clientWithMalformedBaseURL.Delay("deployment-name", "job-name", []int{0}, time.Second, 2*time.Second)
+			_, errorDelaying := clientWithMalformedBaseURL.Delay([]string{"some-id"}, time.Second, 2*time.Second)
 			Expect(errorDelaying.Error()).To(ContainSubstring("invalid URL escape"))
 		})
 
 		It("returns a timeout error when the control net event does not start in time", func() {
 			fakeServer.GETResponses = []string{successfulInitialIncompleteGETResponse}
-			_, errorDelaying := client.Delay("deployment-name", "job-name", []int{0}, time.Second, 2*time.Second)
+			_, errorDelaying := client.Delay([]string{"some-id"}, time.Second, 2*time.Second)
 			Expect(errorDelaying.Error()).To(ContainSubstring("Did not start control-net event in time"))
 		})
 	})

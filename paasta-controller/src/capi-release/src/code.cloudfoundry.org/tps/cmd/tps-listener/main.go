@@ -10,12 +10,13 @@ import (
 	"os"
 
 	"code.cloudfoundry.org/bbs"
-	"code.cloudfoundry.org/cflager"
 	"code.cloudfoundry.org/clock"
 	"code.cloudfoundry.org/consuladapter"
 	"code.cloudfoundry.org/debugserver"
 	"code.cloudfoundry.org/lager"
+	"code.cloudfoundry.org/lager/lagerflags"
 	"code.cloudfoundry.org/locket"
+	"code.cloudfoundry.org/tps/config"
 	"code.cloudfoundry.org/tps/handler"
 	"github.com/cloudfoundry/dropsonde"
 	"github.com/cloudfoundry/noaa/consumer"
@@ -26,82 +27,10 @@ import (
 	"github.com/tedsuo/ifrit/sigmon"
 )
 
-var listenAddr = flag.String(
-	"listenAddr",
-	"0.0.0.0:1518", // p and s's offset in the alphabet, do not change
-	"listening address of api server",
-)
-
-var bbsAddress = flag.String(
-	"bbsAddress",
+var configPath = flag.String(
+	"configPath",
 	"",
-	"Address to the BBS Server",
-)
-
-var dropsondePort = flag.Int(
-	"dropsondePort",
-	3457,
-	"port the local metron agent is listening on",
-)
-
-var trafficControllerURL = flag.String(
-	"trafficControllerURL",
-	"",
-	"URL of TrafficController",
-)
-
-var skipSSLVerification = flag.Bool(
-	"skipSSLVerification",
-	true,
-	"Skip SSL verification",
-)
-
-var maxInFlightRequests = flag.Int(
-	"maxInFlightRequests",
-	200,
-	"number of requests to handle at a time; any more will receive 503",
-)
-
-var bbsCACert = flag.String(
-	"bbsCACert",
-	"",
-	"path to certificate authority cert used for mutually authenticated TLS BBS communication",
-)
-
-var bbsClientCert = flag.String(
-	"bbsClientCert",
-	"",
-	"path to client cert used for mutually authenticated TLS BBS communication",
-)
-
-var bbsClientKey = flag.String(
-	"bbsClientKey",
-	"",
-	"path to client key used for mutually authenticated TLS BBS communication",
-)
-
-var bbsClientSessionCacheSize = flag.Int(
-	"bbsClientSessionCacheSize",
-	0,
-	"Capacity of the ClientSessionCache option on the TLS configuration. If zero, golang's default will be used",
-)
-
-var bbsMaxIdleConnsPerHost = flag.Int(
-	"bbsMaxIdleConnsPerHost",
-	0,
-	"Controls the maximum number of idle (keep-alive) connctions per host. If zero, golang's default will be used",
-)
-
-var bulkLRPStatusWorkers = flag.Int(
-	"bulkLRPStatusWorkers",
-	15,
-	"Max concurrency for fetching bulk lrps",
-)
-
-var consulCluster = flag.String(
-	"consulCluster",
-	"",
-	"Consul Agent URL",
+	"path to config",
 )
 
 const (
@@ -109,29 +38,33 @@ const (
 )
 
 func main() {
-	debugserver.AddFlags(flag.CommandLine)
-	cflager.AddFlags(flag.CommandLine)
 	flag.Parse()
 
-	logger, reconfigurableSink := cflager.New("tps-listener")
-	initializeDropsonde(logger)
-	noaaClient := consumer.New(*trafficControllerURL, &tls.Config{InsecureSkipVerify: *skipSSLVerification}, nil)
-	defer noaaClient.Close()
-	apiHandler := initializeHandler(logger, noaaClient, *maxInFlightRequests, initializeBBSClient(logger))
+	listenerConfig, err := config.NewListenerConfig(*configPath)
+	if err != nil {
+		panic(err.Error())
+	}
 
-	consulClient, err := consuladapter.NewClientFromUrl(*consulCluster)
+	logger, reconfigurableSink := lagerflags.NewFromConfig("tps-listener", listenerConfig.LagerConfig)
+
+	initializeDropsonde(logger, listenerConfig)
+	noaaClient := consumer.New(listenerConfig.TrafficControllerURL, &tls.Config{InsecureSkipVerify: listenerConfig.SkipCertVerify}, nil)
+	defer noaaClient.Close()
+	apiHandler := initializeHandler(logger, noaaClient, listenerConfig.MaxInFlightRequests, initializeBBSClient(logger, listenerConfig), listenerConfig)
+
+	consulClient, err := consuladapter.NewClientFromUrl(listenerConfig.ConsulCluster)
 	if err != nil {
 		logger.Fatal("new-client-failed", err)
 	}
 
-	registrationRunner := initializeRegistrationRunner(logger, consulClient, *listenAddr, clock.NewClock())
+	registrationRunner := initializeRegistrationRunner(logger, consulClient, listenerConfig.ListenAddress, clock.NewClock())
 
 	members := grouper.Members{
-		{"api", http_server.New(*listenAddr, apiHandler)},
+		{"api", http_server.New(listenerConfig.ListenAddress, apiHandler)},
 		{"registration-runner", registrationRunner},
 	}
 
-	if dbgAddr := debugserver.DebugAddress(flag.CommandLine); dbgAddr != "" {
+	if dbgAddr := listenerConfig.DebugServerConfig.DebugAddress; dbgAddr != "" {
 		members = append(grouper.Members{
 			{"debug-server", debugserver.Runner(dbgAddr, reconfigurableSink)},
 		}, members...)
@@ -152,16 +85,16 @@ func main() {
 	logger.Info("exited")
 }
 
-func initializeDropsonde(logger lager.Logger) {
-	dropsondeDestination := fmt.Sprint("localhost:", *dropsondePort)
+func initializeDropsonde(logger lager.Logger, listenerConfig config.ListenerConfig) {
+	dropsondeDestination := fmt.Sprint("localhost:", listenerConfig.DropsondePort)
 	err := dropsonde.Initialize(dropsondeDestination, dropsondeOrigin)
 	if err != nil {
 		logger.Error("failed to initialize dropsonde: %v", err)
 	}
 }
 
-func initializeHandler(logger lager.Logger, noaaClient *consumer.Consumer, maxInFlight int, apiClient bbs.Client) http.Handler {
-	apiHandler, err := handler.New(apiClient, noaaClient, maxInFlight, *bulkLRPStatusWorkers, logger)
+func initializeHandler(logger lager.Logger, noaaClient *consumer.Consumer, maxInFlight int, apiClient bbs.Client, listenerConfig config.ListenerConfig) http.Handler {
+	apiHandler, err := handler.New(apiClient, noaaClient, maxInFlight, listenerConfig.BulkLRPStatusWorkers, logger)
 	if err != nil {
 		logger.Fatal("initialize-handler.failed", err)
 	}
@@ -169,17 +102,24 @@ func initializeHandler(logger lager.Logger, noaaClient *consumer.Consumer, maxIn
 	return apiHandler
 }
 
-func initializeBBSClient(logger lager.Logger) bbs.Client {
-	bbsURL, err := url.Parse(*bbsAddress)
+func initializeBBSClient(logger lager.Logger, listenerConfig config.ListenerConfig) bbs.Client {
+	bbsURL, err := url.Parse(listenerConfig.BBSAddress)
 	if err != nil {
 		logger.Fatal("Invalid BBS URL", err)
 	}
 
 	if bbsURL.Scheme != "https" {
-		return bbs.NewClient(*bbsAddress)
+		return bbs.NewClient(listenerConfig.BBSAddress)
 	}
 
-	bbsClient, err := bbs.NewSecureClient(*bbsAddress, *bbsCACert, *bbsClientCert, *bbsClientKey, *bbsClientSessionCacheSize, *bbsMaxIdleConnsPerHost)
+	bbsClient, err := bbs.NewSecureClient(
+		listenerConfig.BBSAddress,
+		listenerConfig.BBSCACert,
+		listenerConfig.BBSClientCert,
+		listenerConfig.BBSClientKey,
+		0,
+		listenerConfig.BBSMaxIdleConnsPerHost,
+	)
 	if err != nil {
 		logger.Fatal("Failed to configure secure BBS client", err)
 	}
@@ -200,7 +140,7 @@ func initializeRegistrationRunner(logger lager.Logger, consulClient consuladapte
 		Name: "tps",
 		Port: portNum,
 		Check: &api.AgentServiceCheck{
-			TTL: "3s",
+			TTL: "20s",
 		},
 	}
 

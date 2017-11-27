@@ -10,12 +10,44 @@ templates:
   etcd_consistency_checker_ctl.sh.erb: bin/etcd_consistency_checker_ctl
   etcd_network_diagnostics_run_ctl.sh.erb: bin/etcd_network_diagnostics_run_ctl.sh
   etcd_network_diagnostics_run.sh.erb: bin/etcd_network_diagnostics_run.sh
+  etcdfab.json.erb: config/etcdfab.json
 
 packages:
   - etcd-common
   - etcd
+  - etcdfab
   - etcd-dns-checker
   - etcd-consistency-checker
+
+provides:
+- name: etcd
+  type: etcd_service
+  properties:
+  - etcd.enable_network_diagnostics
+  - etcd.network_diagnostics_duration_in_seconds
+  - etcd.heartbeat_interval_in_milliseconds
+  - etcd.election_timeout_in_milliseconds
+  - etcd.machines
+  - etcd.cluster
+  - etcd.require_ssl
+  - etcd.ca_cert
+  - etcd.server_cert
+  - etcd.server_key
+  - etcd.client_cert
+  - etcd.client_key
+  - etcd.client_ip
+  - etcd.peer_require_ssl
+  - etcd.peer_ca_cert
+  - etcd.peer_cert
+  - etcd.peer_key
+  - etcd.peer_ip
+  - etcd.dns_health_check_host
+  - etcd.advertise_urls_dns_suffix
+
+consumes:
+- name: etcd
+  type: etcd_service
+  optional: true
 
 properties:
   etcd.enable_network_diagnostics:
@@ -35,7 +67,7 @@ properties:
     default: 1000
 
   etcd.machines:
-    description: "Addresses of etcd machines"
+    description: "(if not using links) Addresses of etcd machines"
 
   etcd.cluster:
     description: "Information about etcd cluster"

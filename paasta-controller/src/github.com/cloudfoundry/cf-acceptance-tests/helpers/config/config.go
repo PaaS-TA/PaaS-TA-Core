@@ -11,6 +11,8 @@ type CatsConfig interface {
 	GetIncludeDetect() bool
 	GetIncludeDocker() bool
 	GetIncludeInternetDependent() bool
+	GetIncludePrivateDockerRegistry() bool
+	GetIncludePersistentApp() bool
 	GetIncludePrivilegedContainerSupport() bool
 	GetIncludeRouteServices() bool
 	GetIncludeRouting() bool
@@ -21,6 +23,8 @@ type CatsConfig interface {
 	GetIncludeSsh() bool
 	GetIncludeTasks() bool
 	GetIncludeV3() bool
+	GetIncludeIsolationSegments() bool
+	GetIncludeRoutingIsolationSegments() bool
 	GetShouldKeepUser() bool
 	GetSkipSSLValidation() bool
 	GetUseExistingUser() bool
@@ -33,12 +37,21 @@ type CatsConfig interface {
 	GetBackend() string
 	GetBinaryBuildpackName() string
 	GetConfigurableTestPassword() string
+	GetExistingOrganization() string
+	GetUseExistingOrganization() bool
+	GetExistingSpace() string
+	GetUseExistingSpace() bool
 	GetExistingUser() string
 	GetExistingUserPassword() string
 	GetGoBuildpackName() string
+	GetIsolationSegmentName() string
+	GetIsolationSegmentDomain() string
 	GetJavaBuildpackName() string
 	GetNamePrefix() string
 	GetNodejsBuildpackName() string
+	GetPrivateDockerRegistryImage() string
+	GetPrivateDockerRegistryUsername() string
+	GetPrivateDockerRegistryPassword() string
 	GetPersistentAppHost() string
 	GetPersistentAppOrg() string
 	GetPersistentAppQuotaName() string

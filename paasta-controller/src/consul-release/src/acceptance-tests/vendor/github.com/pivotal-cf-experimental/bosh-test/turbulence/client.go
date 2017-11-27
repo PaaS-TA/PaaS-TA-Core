@@ -38,16 +38,6 @@ type ResponseEvent struct {
 	ExecutionCompletedAt string `json:"ExecutionCompletedAt"`
 }
 
-type deployment struct {
-	Name string
-	Jobs []job
-}
-
-type job struct {
-	Name    string
-	Indices []int
-}
-
 type killTask struct {
 	Type string
 }
@@ -58,9 +48,17 @@ type controlNetTask struct {
 	Delay   string
 }
 
+type id struct {
+	Values []string `json:"Values"`
+}
+
+type selector struct {
+	ID id `json:"ID"`
+}
+
 type command struct {
-	Tasks       []interface{}
-	Deployments []deployment
+	Tasks    []interface{}
+	Selector selector `json:"Selector"`
 }
 
 func NewClient(baseURL string, operationTimeout time.Duration, pollingInterval time.Duration) Client {
@@ -71,16 +69,17 @@ func NewClient(baseURL string, operationTimeout time.Duration, pollingInterval t
 	}
 }
 
-func (c Client) Delay(deploymentName string, jobName string, indices []int, delay time.Duration, timeout time.Duration) (Response, error) {
+func (c Client) Delay(ids []string, delay time.Duration, timeout time.Duration) (Response, error) {
 	command := command{
 		Tasks: []interface{}{
 			controlNetTask{Type: "control-net",
 				Timeout: fmt.Sprintf("%dms", timeout.Nanoseconds()/million),
 				Delay:   fmt.Sprintf("%dms", delay.Nanoseconds()/million)}},
-		Deployments: []deployment{{
-			Name: deploymentName,
-			Jobs: []job{{Name: jobName, Indices: indices}},
-		}},
+		Selector: selector{
+			ID: id{
+				Values: ids,
+			},
+		},
 	}
 
 	jsonCommand, err := json.Marshal(command)
@@ -121,15 +120,16 @@ func (c Client) pollControlNetStarted(id string) (Response, error) {
 	}
 }
 
-func (c Client) KillIndices(deploymentName, jobName string, indices []int) error {
+func (c Client) KillIDs(ids []string) error {
 	command := command{
 		Tasks: []interface{}{
-			killTask{Type: "kill"},
+			killTask{Type: "Kill"},
 		},
-		Deployments: []deployment{{
-			Name: deploymentName,
-			Jobs: []job{{Name: jobName, Indices: indices}},
-		}},
+		Selector: selector{
+			ID: id{
+				Values: ids,
+			},
+		},
 	}
 
 	jsonCommand, err := json.Marshal(command)
@@ -160,7 +160,7 @@ func (c Client) pollRequestCompletedDeletingVM(id string) error {
 
 			for _, event := range turbulenceResponse.Events {
 				if event.Error != "" {
-					return errors.New(event.Error)
+					return fmt.Errorf("There was a turbulence event error. Check out the turbulence events (response id: %s) for more information.", id)
 				}
 			}
 

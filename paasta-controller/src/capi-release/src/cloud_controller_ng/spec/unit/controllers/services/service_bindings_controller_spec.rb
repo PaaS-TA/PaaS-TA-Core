@@ -25,13 +25,6 @@ module VCAP::CloudController
       end
     end
 
-    def fake_app_staging(app)
-      app.package_hash = 'abc'
-      app.droplet_hash = 'def'
-      app.save
-      expect(app.needs_staging?).to eq(false)
-    end
-
     let(:guid_pattern) { '[[:alnum:]-]+' }
     let(:bind_status) { 200 }
     let(:bind_body) { { credentials: credentials } }
@@ -68,17 +61,17 @@ module VCAP::CloudController
       include_context 'permissions'
 
       before do
-        @app_a = AppFactory.make(space: @space_a)
+        @process_a = AppFactory.make(space: @space_a)
         @service_instance_a = ManagedServiceInstance.make(space: @space_a)
         @obj_a = ServiceBinding.make(
-          app: @app_a.app,
+          app: @process_a.app,
           service_instance: @service_instance_a
         )
 
-        @app_b = AppFactory.make(space: @space_b)
+        @process_b = AppFactory.make(space: @space_b)
         @service_instance_b = ManagedServiceInstance.make(space: @space_b)
         @obj_b = ServiceBinding.make(
-          app: @app_b.app,
+          app: @process_b.app,
           service_instance: @service_instance_b
         )
       end
@@ -161,7 +154,7 @@ module VCAP::CloudController
     describe 'create' do
       let(:space) { Space.make }
       let(:developer) { make_developer_for_space(space) }
-      let(:app_obj) { AppFactory.make(space: space) }
+      let(:process) { AppFactory.make(space: space) }
 
       before { set_current_user(developer) }
 
@@ -169,7 +162,7 @@ module VCAP::CloudController
         let(:service_instance) { UserProvidedServiceInstance.make(space: space) }
         let(:params) do
           {
-            'app_guid' => app_obj.guid,
+            'app_guid' => process.guid,
             'service_instance_guid' => service_instance.guid
           }
         end
@@ -188,7 +181,7 @@ module VCAP::CloudController
         let(:instance) { ManagedServiceInstance.make(space: space) }
         let(:req) do
           {
-            app_guid: app_obj.guid,
+            app_guid: process.guid,
             service_instance_guid: instance.guid
           }
         end
@@ -213,8 +206,8 @@ module VCAP::CloudController
           expected_body    = {
             service_id: instance.service.broker_provided_id,
             plan_id: instance.service_plan.broker_provided_id,
-            app_guid: app_obj.guid,
-            bind_resource: { app_guid: app_obj.guid }
+            app_guid: process.guid,
+            bind_resource: { app_guid: process.guid }
           }
 
           expect(a_request(:put, binding_endpoint).with(body: expected_body)).to have_been_made
@@ -242,8 +235,12 @@ module VCAP::CloudController
             'request' => {
               'type'          => 'app',
               'relationships' => {
-                'app'              => { 'guid' => req[:app_guid] },
-                'service_instance' => { 'guid' => req[:service_instance_guid] }
+                'app' => {
+                  'data' => { 'guid' => req[:app_guid] }
+                },
+                'service_instance' => {
+                  'data' => { 'guid' => req[:service_instance_guid] }
+                },
               },
               'data' => 'PRIVATE DATA HIDDEN'
             }
@@ -254,7 +251,7 @@ module VCAP::CloudController
           let(:parameters) { { 'key' => 'value' } }
           let(:req) do
             {
-              app_guid: app_obj.guid,
+              app_guid: process.guid,
               service_instance_guid: instance.guid,
               parameters: parameters
             }
@@ -268,28 +265,38 @@ module VCAP::CloudController
           end
         end
 
-        context 'when attempting to bind to an unbindable service' do
-          before do
-            instance.service.bindable = false
-            instance.service.save
-
-            req = {
-              app_guid: app_obj.guid,
-              service_instance_guid: instance.guid
-            }.to_json
-
-            post '/v2/service_bindings', req
-          end
-
+        shared_examples 'UnbindableServiceInstance' do
           it 'raises UnbindableService error' do
+            post '/v2/service_bindings', req.to_json
+
             hash_body = JSON.parse(last_response.body)
             expect(hash_body['error_code']).to eq('CF-UnbindableService')
             expect(last_response).to have_status_code(400)
           end
 
           it 'does not send a bind request to broker' do
+            post '/v2/service_bindings', req.to_json
+
             expect(a_request(:put, bind_url_regex(service_instance: instance))).to_not have_been_made
           end
+        end
+
+        context 'when it is an instance of an unbindable service' do
+          before do
+            instance.service.bindable = false
+            instance.service.save
+          end
+
+          it_behaves_like 'UnbindableServiceInstance'
+        end
+
+        context 'when it is an instance of an unbindable service plan' do
+          before do
+            instance.service_plan.bindable = false
+            instance.service_plan.save
+          end
+
+          it_behaves_like 'UnbindableServiceInstance'
         end
 
         context 'when the app does not exist' do
@@ -302,10 +309,10 @@ module VCAP::CloudController
           end
 
           context 'because it maps to non-web process' do
-            let(:app_obj) { AppFactory.make(space: space, type: 'non-web') }
+            let(:process) { AppFactory.make(space: space, type: 'non-web') }
 
             it 'returns CF-AppNotFound' do
-              post '/v2/service_bindings', { app_guid: app_obj.guid, service_instance_guid: instance.guid }.to_json
+              post '/v2/service_bindings', { app_guid: process.guid, service_instance_guid: instance.guid }.to_json
 
               hash_body = JSON.parse(last_response.body)
               expect(hash_body['error_code']).to eq('CF-AppNotFound')
@@ -317,7 +324,7 @@ module VCAP::CloudController
         context 'when the service instance does not exist' do
           let(:req) do
             {
-              app_guid:              app_obj.guid,
+              app_guid:              process.guid,
               service_instance_guid: 'THISISWRONG'
             }.to_json
           end
@@ -334,7 +341,7 @@ module VCAP::CloudController
         context 'when the user is not a SpaceDeveloper' do
           let(:req) do
             {
-              app_guid:              app_obj.guid,
+              app_guid:              process.guid,
               service_instance_guid: instance.guid
             }.to_json
           end
@@ -352,7 +359,7 @@ module VCAP::CloudController
         context 'when the instance operation is in progress' do
           let(:request_body) do
             {
-              app_guid: app_obj.guid,
+              app_guid: process.guid,
               service_instance_guid: instance.guid
             }.to_json
           end
@@ -409,7 +416,7 @@ module VCAP::CloudController
 
             it 'reverts the last_operation of the instance to its previous operation' do
               req = {
-                app_guid: app_obj.guid,
+                app_guid: process.guid,
                 service_instance_guid: instance.guid
               }.to_json
 
@@ -427,7 +434,7 @@ module VCAP::CloudController
 
             it 'does not save a last_operation' do
               req = {
-                app_guid: app_obj.guid,
+                app_guid: process.guid,
                 service_instance_guid: instance.guid
               }.to_json
 
@@ -440,7 +447,7 @@ module VCAP::CloudController
         describe 'binding errors' do
           subject(:make_request) do
             req = {
-              app_guid: app_obj.guid,
+              app_guid: process.guid,
               service_instance_guid: instance.guid
             }.to_json
             post '/v2/service_bindings', req
@@ -449,13 +456,13 @@ module VCAP::CloudController
           context 'when attempting to bind and the service binding already exists' do
             let(:req) do
               {
-                app_guid:              app_obj.guid,
+                app_guid:              process.guid,
                 service_instance_guid: instance.guid
               }.to_json
             end
 
             before do
-              ServiceBinding.make(app: app_obj.app, service_instance: instance)
+              ServiceBinding.make(app: process.app, service_instance: instance)
             end
 
             it 'returns a ServiceBindingAppServiceTaken error' do
@@ -696,13 +703,13 @@ module VCAP::CloudController
       let(:space) { Space.make }
       let(:managed_service_instance) { ManagedServiceInstance.make(space: space) }
       let(:user_provided_service_instance) { UserProvidedServiceInstance.make(space: space) }
-      let(:app_obj) { AppFactory.make(space: space) }
+      let(:process) { AppFactory.make(space: space) }
       let(:developer) { make_developer_for_space(space) }
 
       it 'returns both user provided and managed service instances' do
         set_current_user(developer)
-        ServiceBinding.make(service_instance: managed_service_instance, app: app_obj.app)
-        ServiceBinding.make(service_instance: user_provided_service_instance, app: app_obj.app)
+        ServiceBinding.make(service_instance: managed_service_instance, app: process.app)
+        ServiceBinding.make(service_instance: user_provided_service_instance, app: process.app)
 
         get '/v2/service_bindings?inline-relations-depth=1'
         expect(last_response.status).to eql(200)

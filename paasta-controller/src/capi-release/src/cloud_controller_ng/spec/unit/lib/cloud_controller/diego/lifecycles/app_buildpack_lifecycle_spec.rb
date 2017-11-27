@@ -26,16 +26,31 @@ module VCAP::CloudController
 
           it 'sets buildpack to nil' do
             lifecycle_data_model = lifecycle.create_lifecycle_data_model(app)
-            expect(lifecycle_data_model.buildpack).to be_nil
+            expect(lifecycle_data_model.buildpacks).to eq []
           end
         end
 
         context 'when the user requested a buildpack' do
-          let(:lifecycle_request_data) { { buildpack: 'custom-bp' } }
+          let(:lifecycle_request_data) { { buildpacks: ['custom-bp'] } }
+          before do
+            Buildpack.make(name: 'custom-bp')
+          end
 
           it 'uses the requested buildpack' do
             lifecycle_data_model = lifecycle.create_lifecycle_data_model(app)
-            expect(lifecycle_data_model.buildpack).to eq('custom-bp')
+            expect(lifecycle_data_model.buildpacks).to eq(['custom-bp'])
+          end
+        end
+
+        context 'when the user requests multiple buildpacks' do
+          let(:lifecycle_request_data) { { buildpacks: ['custom-bp', 'http://buildpack.com', 'http://other.com'] } }
+          before do
+            Buildpack.make(name: 'custom-bp')
+          end
+
+          it 'uses all of the buildpacks' do
+            lifecycle_data_model = lifecycle.create_lifecycle_data_model(app)
+            expect(lifecycle_data_model.buildpacks).to eq(['custom-bp', 'http://buildpack.com', 'http://other.com'])
           end
         end
 
@@ -70,24 +85,35 @@ module VCAP::CloudController
 
     describe '#update_lifecycle_data_model' do
       let(:app) { AppModel.make(:buildpack) }
-      let(:lifecycle_request_data) { { buildpack: 'http://oj.com', stack: 'sweetness' } }
+      let!(:ruby_buildpack) { Buildpack.make(name: 'ruby_buildpack') }
+      let(:lifecycle_request_data) { { buildpacks: ['http://oj.com', 'ruby_buildpack'], stack: 'sweetness' } }
 
       it 'updates the BuildpackLifecycleDataModel' do
         lifecycle.update_lifecycle_data_model(app)
 
         data_model = app.lifecycle_data
 
-        expect(data_model.buildpack).to eq('http://oj.com')
+        expect(data_model.buildpacks).to eq(['http://oj.com', 'ruby_buildpack'])
         expect(data_model.stack).to eq('sweetness')
       end
     end
 
     describe 'validation' do
       let(:validator) { instance_double(BuildpackLifecycleDataValidator) }
+      let(:stubbed_fetcher_data) { { stack: 'foo', buildpack_infos: 'bar' } }
+
       before do
         allow(validator).to receive(:valid?)
         allow(validator).to receive(:errors)
+
+        allow(BuildpackLifecycleFetcher).to receive(:fetch).and_return(stubbed_fetcher_data)
         allow(BuildpackLifecycleDataValidator).to receive(:new).and_return(validator)
+      end
+
+      it 'constructs the validator correctly' do
+        lifecycle.valid?
+
+        expect(BuildpackLifecycleDataValidator).to have_received(:new).with(buildpack_infos: 'bar', stack: 'foo')
       end
 
       it 'delegates #valid? to a BuildpackLifecycleDataValidator' do

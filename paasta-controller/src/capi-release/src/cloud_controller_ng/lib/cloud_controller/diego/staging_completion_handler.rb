@@ -1,13 +1,16 @@
+require 'actions/staging_cancel'
+
 module VCAP::CloudController
   module Diego
     class StagingCompletionHandler
       DEFAULT_STAGING_ERROR = 'StagingError'.freeze
 
-      attr_reader :droplet
+      attr_reader :droplet, :build
 
-      def initialize(droplet, runners=CloudController::DependencyLocator.instance.runners)
-        @droplet       = droplet
-        @runners       = runners
+      def initialize(build, runners=CloudController::DependencyLocator.instance.runners)
+        @build   = build
+        @droplet = build.droplet
+        @runners = runners
       end
 
       def logger_prefix
@@ -24,7 +27,8 @@ module VCAP::CloudController
         if payload[:error]
           handle_failure(payload, with_start)
         else
-          handle_success(payload, with_start)
+          handle_missing_droplet!(payload) if droplet.nil?
+          handle_success(payload, with_start) if droplet.present?
         end
       end
 
@@ -38,7 +42,7 @@ module VCAP::CloudController
         begin
           error_parser.validate(payload)
         rescue Membrane::SchemaValidationError => e
-          logger.error(logger_prefix + 'failure.invalid-message', staging_guid: droplet.guid, payload: payload, error: e.to_s)
+          logger.error(logger_prefix + 'failure.invalid-message', staging_guid: build.guid, payload: payload, error: e.to_s)
 
           payload[:error] = { message: 'Malformed message from Diego stager', id: DEFAULT_STAGING_ERROR }
           handle_failure(payload, with_start)
@@ -47,19 +51,19 @@ module VCAP::CloudController
         end
 
         begin
-          droplet.class.db.transaction do
-            droplet.lock!
-            droplet.fail_to_stage!(payload[:error][:id], payload[:error][:message])
+          build.class.db.transaction do
+            build.lock!
+            build.fail_to_stage!(payload[:error][:id], payload[:error][:message])
 
             if with_start
-              V2::AppStop.stop(droplet.app, stagers)
+              V2::AppStop.stop(build.app, StagingCancel.new(stagers))
             end
           end
         rescue => e
-          logger.error(logger_prefix + 'saving-staging-result-failed', staging_guid: droplet.guid, response: payload, error: e.message)
+          logger.error(logger_prefix + 'saving-staging-result-failed', staging_guid: build.guid, response: payload, error: e.message)
         end
 
-        Loggregator.emit_error(droplet.guid, "Failed to stage droplet: #{payload[:error][:message]}")
+        Loggregator.emit_error(build.guid, "Failed to stage build: #{payload[:error][:message]}")
       end
 
       def handle_success(payload, with_start)
@@ -67,7 +71,7 @@ module VCAP::CloudController
           payload[:result][:process_types] ||= {} if payload[:result]
           self.class.success_parser.validate(payload)
         rescue Membrane::SchemaValidationError => e
-          logger.error(logger_prefix + 'success.invalid-message', staging_guid: droplet.guid, payload: payload, error: e.to_s)
+          logger.error(logger_prefix + 'success.invalid-message', staging_guid: build.guid, payload: payload, error: e.to_s)
 
           payload[:error] = { message: 'Malformed message from Diego stager', id: DEFAULT_STAGING_ERROR }
           handle_failure(payload, with_start)
@@ -75,7 +79,7 @@ module VCAP::CloudController
           raise CloudController::Errors::ApiError.new_from_details('InvalidRequest')
         end
 
-        raise CloudController::Errors::ApiError.new_from_details('InvalidRequest') if droplet.in_final_state?
+        raise CloudController::Errors::ApiError.new_from_details('InvalidRequest') if build.in_final_state?
 
         app = droplet.app
         requires_start_command = with_start && payload[:result][:process_types].blank? && app.processes.first.command.blank?
@@ -89,13 +93,22 @@ module VCAP::CloudController
         else
           begin
             save_staging_result(payload)
+          rescue => e
+            logger.error(logger_prefix + 'saving-staging-result-failed', staging_guid: build.guid, response: payload, error: e.message)
+          end
+
+          begin
             start_process if with_start
           rescue => e
-            logger.error(logger_prefix + 'saving-staging-result-failed', staging_guid: droplet.guid, response: payload, error: e.message)
+            logger.error(logger_prefix + 'starting-process-failed', staging_guid: build.guid, response: payload, error: e.message)
           end
 
           BitsExpiration.new.expire_droplets!(app)
         end
+      end
+
+      def handle_missing_droplet!(payload)
+        raise NotImplementedError
       end
 
       def start_process
@@ -111,7 +124,7 @@ module VCAP::CloudController
 
           app.processes.each do |p|
             p.lock!
-            Repositories::AppUsageEventRepository.new.create_from_app(p, 'BUILDPACK_SET')
+            Repositories::AppUsageEventRepository.new.create_from_process(p, 'BUILDPACK_SET')
           end
         end
 

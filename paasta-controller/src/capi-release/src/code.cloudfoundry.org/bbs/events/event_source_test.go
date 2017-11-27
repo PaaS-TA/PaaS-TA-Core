@@ -227,7 +227,7 @@ var _ = Describe("EventSource", func() {
 				var expectedEvent *models.ActualLRPCrashedEvent
 
 				BeforeEach(func() {
-					expectedEvent = models.NewActualLRPCrashedEvent(actualLRP)
+					expectedEvent = models.NewActualLRPCrashedEvent(actualLRP, actualLRP)
 					payload, err := proto.Marshal(expectedEvent)
 					Expect(err).NotTo(HaveOccurred())
 					payload = []byte(base64.StdEncoding.EncodeToString(payload))
@@ -324,6 +324,11 @@ var _ = Describe("EventSource", func() {
 			It("returns a proto error", func() {
 				_, err := eventSource.Next()
 				Expect(err).To(BeAssignableToTypeOf(events.NewInvalidPayloadError(models.EventTypeDesiredLRPCreated, errors.New("whatever"))))
+			})
+
+			It("includes a useful error message", func() {
+				_, err := eventSource.Next()
+				Expect(err.Error()).To(ContainSubstring("event with no data"))
 			})
 		})
 

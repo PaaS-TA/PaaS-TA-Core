@@ -23,13 +23,31 @@ module VCAP::CloudController
       service_instance.space.has_developer?(context.user)
     end
 
-    def read_permissions?(service_instance)
+    def manage_permissions?(service_instance)
       return true if admin_user?
       service_instance.space.has_developer?(context.user)
     end
 
+    def manage_permissions_with_token?(service_instance)
+      read_with_token?(service_instance) || has_read_permissions_scope?
+    end
+
+    def read_permissions?(service_instance)
+      return true if admin_user? || admin_read_only_user?
+      service_instance.space.has_member?(context.user) || service_instance.space.organization.managers.include?(context.user)
+    end
+
     def read_permissions_with_token?(service_instance)
       read_with_token?(service_instance) || has_read_permissions_scope?
+    end
+
+    def read_env?(service_instance)
+      return true if admin_user? || admin_read_only_user?
+      service_instance.space.has_developer?(context.user)
+    end
+
+    def read_env_with_token?(service_instance)
+      read_with_token?(service_instance)
     end
 
     def allowed?(service_instance)

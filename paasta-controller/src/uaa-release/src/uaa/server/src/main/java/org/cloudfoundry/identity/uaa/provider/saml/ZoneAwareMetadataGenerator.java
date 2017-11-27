@@ -13,14 +13,21 @@
  */
 package org.cloudfoundry.identity.uaa.provider.saml;
 
-import org.cloudfoundry.identity.uaa.zone.IdentityZoneConfiguration;
 import org.cloudfoundry.identity.uaa.util.UaaUrlUtils;
 import org.cloudfoundry.identity.uaa.zone.IdentityZone;
+import org.cloudfoundry.identity.uaa.zone.IdentityZoneConfiguration;
 import org.cloudfoundry.identity.uaa.zone.IdentityZoneHolder;
 import org.opensaml.saml2.metadata.EntityDescriptor;
+import org.opensaml.saml2.metadata.SPSSODescriptor;
+import org.opensaml.xml.security.credential.UsageType;
+import org.springframework.security.saml.key.KeyManager;
 import org.springframework.security.saml.metadata.ExtendedMetadata;
 import org.springframework.security.saml.metadata.MetadataGenerator;
 import org.springframework.security.saml.util.SAMLUtil;
+
+import java.util.Collection;
+import java.util.HashSet;
+import java.util.Set;
 
 public class ZoneAwareMetadataGenerator extends MetadataGenerator {
 
@@ -79,4 +86,34 @@ public class ZoneAwareMetadataGenerator extends MetadataGenerator {
         result.setID(SAMLUtil.getNCNameString(result.getEntityID()));
         return result;
     }
+
+    @Override
+    protected SPSSODescriptor buildSPSSODescriptor(String entityBaseURL, String entityAlias, boolean requestSigned, boolean wantAssertionSigned, Collection<String> includedNameID) {
+        SPSSODescriptor result = super.buildSPSSODescriptor(entityBaseURL, entityAlias, requestSigned, wantAssertionSigned, includedNameID);
+
+        //metadata should not contain inactive keys
+        KeyManager samlSPKeyManager = IdentityZoneHolder.getSamlSPKeyManager();
+        if (samlSPKeyManager != null && samlSPKeyManager.getAvailableCredentials()!=null) {
+            Set<String> allKeyAliases = new HashSet(samlSPKeyManager.getAvailableCredentials());
+            String activeKeyAlias = samlSPKeyManager.getDefaultCredentialName();
+            allKeyAliases.remove(activeKeyAlias);
+            for (String keyAlias : allKeyAliases) {
+                result.getKeyDescriptors().add(getKeyDescriptor(UsageType.SIGNING, getServerKeyInfo(keyAlias)));
+            }
+        }//add inactive keys as signing verification keys
+
+        int index = result.getAssertionConsumerServices().size();
+        result.getAssertionConsumerServices()
+            .add(
+                getAssertionConsumerService(
+                    getEntityBaseURL(),
+                    getEntityAlias(),
+                    false,
+                    index,
+                    "/oauth/token",
+                    "urn:oasis:names:tc:SAML:2.0:bindings:URI"
+                ));
+        return result;
+    }
+
 }

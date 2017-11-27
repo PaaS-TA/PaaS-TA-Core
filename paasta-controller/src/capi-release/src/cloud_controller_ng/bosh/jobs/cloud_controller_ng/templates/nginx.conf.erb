@@ -3,6 +3,7 @@
 error_log <%= p("cc.nginx_error_log_destination") %> <%= p("cc.nginx_error_log_level") %>;
 error_log syslog:server=127.0.0.1,severity=error,tag=vcap_nginx_error <%= p("cc.nginx_error_log_level") %>;
 pid       /var/vcap/sys/run/nginx_cc/nginx.pid;
+worker_processes auto;
 
 events {
   worker_connections  8192;
@@ -23,7 +24,7 @@ http {
   tcp_nopush           on;
   tcp_nodelay          on;  #disable nagel's algorithm
 
-  keepalive_timeout  75 20; #inherited from router
+  keepalive_timeout    <%= p("cc.server_keepalive_timeout") %> 20;
 
   <% if_p("cc.nginx_rate_limit_general") do %>
   limit_req_zone $http_authorization zone=all:10m rate=<%=p("cc.nginx_rate_limit_general")['limit'] %>;
@@ -48,14 +49,91 @@ http {
     server unix:/var/vcap/sys/run/cloud_controller_ng/cloud_controller.sock;
   }
 
+  # This block ensures the endpoints it serves are handled by mutual TLS.
+  # Refer to the 'return 403' statement in the http block to see how we secure those endpoints.
   server {
-    listen    <%= p("cc.external_port") %>;
+    listen <%= p("cc.tls_port") %> ssl;
+
+    ssl_ciphers DHE-RSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384;
+    ssl_certificate        /var/vcap/jobs/cloud_controller_ng/config/certs/mutual_tls.crt;
+    ssl_certificate_key    /var/vcap/jobs/cloud_controller_ng/config/certs/mutual_tls.key;
+    ssl_client_certificate /var/vcap/jobs/cloud_controller_ng/config/certs/mutual_tls_ca.crt;
+    ssl_verify_client      on;
+    ssl_verify_depth       2;
+    ssl_protocols          TLSv1.2;
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_timeout 10m;
+
     server_name  _;
     server_name_in_redirect off;
     <% if p("request_timeout_in_seconds").to_i > 0 %>
       proxy_send_timeout          <%= p("request_timeout_in_seconds") %>;
       proxy_read_timeout          <%= p("request_timeout_in_seconds") %>;
     <% end %>
+    proxy_buffering             off;
+    proxy_set_header            Host $host;
+    proxy_set_header            X-Real_IP $remote_addr;
+    proxy_set_header            X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_redirect              off;
+    proxy_connect_timeout       10;
+
+
+    location /internal/v4/ {
+      proxy_pass http://cloud_controller;
+    }
+
+    location ~ /internal/v3/staging/.*/(droplet_completed|build_completed) {
+      proxy_pass http://cloud_controller;
+    }
+
+    location ~ /internal/v4/(droplets|buildpack_cache)/.*/upload {
+      # Allow download the droplets and buildpacks
+      if ($request_method = GET){
+        proxy_pass http://cloud_controller;
+      }
+
+      # Allow large uploads
+      client_max_body_size <%= p("cc.app_bits_max_body_size") %>; #already enforced upstream/but doesn't hurt.
+
+      # Pass altered request body to this location
+      upload_pass   @cc_uploads;
+
+      # Store files to this directory
+      upload_store /var/vcap/data/cloud_controller_ng/tmp/staged_droplet_uploads;
+
+      # Allow uploaded files to be read only by user
+      upload_store_access user:r;
+
+      # Set specified fields in request body
+      upload_set_form_field "droplet_path" $upload_tmp_path;
+
+      #on any error, delete uploaded files.
+      upload_cleanup 400-505;
+    }
+
+    # Pass altered request body to a backend
+    location @cc_uploads {
+      proxy_pass http://cloud_controller;
+    }
+  }
+
+  server {
+  <% if p("cc.nginx.ip").empty? %>
+    listen    <%= p("cc.external_port") %>;
+  <% else %>
+    listen    <%= p("cc.nginx.ip") %>:<%= p("cc.external_port") %>;
+  <% end %>
+
+    server_name  _;
+    server_name_in_redirect off;
+    <% if p("request_timeout_in_seconds").to_i > 0 %>
+      proxy_send_timeout          <%= p("request_timeout_in_seconds") %>;
+      proxy_read_timeout          <%= p("request_timeout_in_seconds") %>;
+    <% end %>
+
+    location /internal/v4/ {
+      return 403 'HTTPS is required';
+    }
 
     # proxy and log all CC traffic
     location / {
@@ -77,6 +155,7 @@ http {
         <% p("cc.nginx_rate_limit_zones").each do |zone| %>
       location <%= zone['location'] %> {
         limit_req zone=<%= zone['name'] %> burst=<%= zone['burst'] %> nodelay;
+        proxy_pass                  http://cloud_controller;
       }
         <% end %>
       <% end %>
@@ -109,34 +188,33 @@ http {
     }
 <% end %>
 
-    location ~ (/v2/apps/[^/]+/bits|/services/v\d+/configurations/.*/serialized/data|/v2/buildpacks/.*/bits|/v3/packages/.*/upload|/v2/apps/[^/]+/droplet/upload) {
-      # Pass altered request body to this location
-      upload_pass   @cc_uploads;
+    location ~ /v2/apps/[^/]+/bits {
+      if ($arg_application_path) { return 422; }
+
+      include public_upload.conf;
+
       upload_pass_args on;
-
-      # Allow large uploads
-      client_max_body_size <%= p("cc.app_bits_max_body_size") %>; #already enforced upstream/but doesn't hurt.
-
-      # Store files to this directory
-      upload_store /var/vcap/data/cloud_controller_ng/tmp/uploads;
-
-      # No limit for output body forwarded to CC
-      upload_max_output_body_len 0;
-
-      # Allow uploaded files to be read only by user
-      upload_store_access user:r;
-
-      # Set specified fields in request body
-      upload_set_form_field "${upload_field_name}_name" $upload_file_name;
-      upload_set_form_field "${upload_field_name}_path" $upload_tmp_path;
-
-      #forward the following fields from existing body
       upload_pass_form_field "^resources$";
-      upload_pass_form_field "^_method$";
-
-      #on any error, delete uploaded files.
-      upload_cleanup 400-505;
     }
+
+    location ~ /v2/buildpacks/.*/bits {
+      if ($arg_buildpack_path) { return 422; }
+
+      include public_upload.conf;
+    }
+
+    location ~ /v2/apps/[^/]+/droplet/upload {
+      if ($arg_droplet_path) { return 422; }
+
+      include public_upload.conf;
+    }
+
+    location ~ /v3/packages/.*/upload {
+      if ($arg_bits_path) { return 422; }
+
+      include public_upload.conf;
+    }
+
 
     location ~ /staging/(v3/)?(droplets|buildpack_cache)/.*/upload {
       # Allow download the droplets and buildpacks
@@ -169,7 +247,7 @@ http {
 
     # Pass altered request body to a backend
     location @cc_uploads {
-      proxy_pass http://unix:/var/vcap/sys/run/cloud_controller_ng/cloud_controller.sock;
+      proxy_pass http://cloud_controller;
     }
 
     location ~ ^/internal_redirect/(.*){

@@ -1,16 +1,14 @@
 package dropsonde_marshaller_test
 
 import (
-	"time"
-
 	"github.com/cloudfoundry/dropsonde/dropsonde_marshaller"
 	"github.com/cloudfoundry/dropsonde/factories"
-	"github.com/cloudfoundry/dropsonde/metric_sender/fake"
-	"github.com/cloudfoundry/dropsonde/metricbatcher"
 	"github.com/cloudfoundry/dropsonde/metrics"
-	"github.com/cloudfoundry/loggregatorlib/loggertesthelper"
 	"github.com/cloudfoundry/sonde-go/events"
+
 	"github.com/gogo/protobuf/proto"
+
+	. "github.com/apoydence/eachers"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
@@ -21,17 +19,16 @@ var _ = Describe("DropsondeMarshaller", func() {
 		outputChan  chan []byte
 		runComplete chan struct{}
 		marshaller  *dropsonde_marshaller.DropsondeMarshaller
-		fakeSender  *fake.FakeMetricSender
+		mockBatcher *mockMetricBatcher
 	)
 
 	BeforeEach(func() {
 		inputChan = make(chan *events.Envelope, 100)
 		outputChan = make(chan []byte, 10)
 		runComplete = make(chan struct{})
-		marshaller = dropsonde_marshaller.NewDropsondeMarshaller(loggertesthelper.Logger())
-		fakeSender = fake.NewFakeMetricSender()
-		batcher := metricbatcher.New(fakeSender, 200*time.Millisecond)
-		metrics.Initialize(fakeSender, batcher)
+		marshaller = dropsonde_marshaller.NewDropsondeMarshaller(Logger())
+		mockBatcher = newMockMetricBatcher()
+		metrics.Initialize(nil, mockBatcher)
 
 		go func() {
 			marshaller.Run(inputChan, outputChan)
@@ -58,15 +55,13 @@ var _ = Describe("DropsondeMarshaller", func() {
 	})
 
 	Context("metrics", func() {
-		var eventuallyExpectCounter = func(name string, value uint64) {
-			Eventually(func() uint64 { return fakeSender.GetCounter(name) }).Should(BeEquivalentTo(value))
-		}
-
 		It("emits a marshal error counter", func() {
 			envelope := &events.Envelope{}
 
 			inputChan <- envelope
-			eventuallyExpectCounter("dropsondeMarshaller.marshalErrors", 1)
+			Eventually(mockBatcher.BatchIncrementCounterInput).Should(BeCalled(
+				With("dropsondeMarshaller.marshalErrors"),
+			))
 		})
 
 		It("emits a value metric counter", func() {
@@ -78,7 +73,9 @@ var _ = Describe("DropsondeMarshaller", func() {
 
 			inputChan <- envelope
 
-			eventuallyExpectCounter("dropsondeMarshaller.valueMetricReceived", 1)
+			Eventually(mockBatcher.BatchIncrementCounterInput).Should(BeCalled(
+				With("dropsondeMarshaller.valueMetricReceived"),
+			))
 		})
 
 		It("counts unknown message types", func() {
@@ -91,7 +88,9 @@ var _ = Describe("DropsondeMarshaller", func() {
 
 			inputChan <- envelope1
 
-			eventuallyExpectCounter("dropsondeMarshaller.unknownEventTypeReceived", 1)
+			Eventually(mockBatcher.BatchIncrementCounterInput).Should(BeCalled(
+				With("dropsondeMarshaller.unknownEventTypeReceived"),
+			))
 		})
 
 		Context("when a http start stop message is received", func() {
@@ -104,7 +103,9 @@ var _ = Describe("DropsondeMarshaller", func() {
 
 				inputChan <- envelope
 
-				eventuallyExpectCounter("dropsondeMarshaller.httpStartStopReceived", 1)
+				Eventually(mockBatcher.BatchIncrementCounterInput).Should(BeCalled(
+					With("dropsondeMarshaller.httpStartStopReceived"),
+				))
 			})
 		})
 
@@ -121,7 +122,9 @@ var _ = Describe("DropsondeMarshaller", func() {
 					inputChan <- envelope
 				}
 
-				eventuallyExpectCounter("dropsondeMarshaller.httpStartStopReceived", totalMessages)
+				Eventually(mockBatcher.BatchIncrementCounterInput).Should(BeCalled(
+					With("dropsondeMarshaller.httpStartStopReceived"),
+				))
 			})
 		})
 	})

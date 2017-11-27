@@ -3,45 +3,7 @@
 LOG_DIR=/var/vcap/sys/log/stager
 CONF_DIR=/var/vcap/jobs/stager/config
 
-<% if p("capi.stager.bbs.require_ssl") %>
-  bbs_sec_flags=" \
-   -bbsClientCert=${CONF_DIR}/certs/bbs/client.crt \
-   -bbsClientKey=${CONF_DIR}/certs/bbs/client.key \
-   -bbsCACert=${CONF_DIR}/certs/bbs/ca.crt"
-
-  bbs_api_url="<%= "https://" + p("capi.stager.bbs.api_location") %>"
-<% else %>
-  bbs_sec_flags=""
-  bbs_api_url="<%= "http://" + p("capi.stager.bbs.api_location") %>"
-<% end %>
-
-exec /var/vcap/packages/stager/bin/stager ${bbs_sec_flags} \
-  -bbsAddress=${bbs_api_url} \
-  <% if_p("capi.stager.bbs.client_session_cache_size") do |value| %> \
-    -bbsClientSessionCacheSize=<%= value %> \
-  <% end %> \
-  <% if_p("capi.stager.bbs.max_idle_conns_per_host") do |value| %> \
-    -bbsMaxIdleConnsPerHost=<%= value %> \
-  <% end %> \
-  -dropsondePort=<%= p("capi.stager.dropsonde_port") %> \
-  -privilegedContainers=<%= p("capi.stager.diego_privileged_containers") %> \
-  -listenAddress=<%= p("capi.stager.listen_addr") %> \
-  -stagingTaskCallbackURL=<%= p("capi.stager.staging_task_callback_url") %> \
-  -ccBaseURL=http://<%= p("capi.stager.cc.internal_service_hostname") %>:<%= p("capi.stager.cc.external_port") %> \
-  -ccUsername=<%= Shellwords.shellescape(p("capi.stager.cc.basic_auth_username")) %> \
-  -ccPassword=<%= Shellwords.shellescape(p("capi.stager.cc.basic_auth_password")) %> \
-  -skipCertVerify=<%= p("diego.ssl.skip_cert_verify") %> \
-  -debugAddr=<%= p("capi.stager.debug_addr") %> \
-  <%= p("capi.stager.lifecycle_bundles").map { |bundle| "-lifecycle #{bundle}" }.join(" ") %> \
-  -dockerStagingStack=<%= p("capi.stager.docker_staging_stack") %> \
-  -fileServerURL=<%= p("capi.stager.file_server_url") %> \
-  -ccUploaderURL=<%= p("capi.stager.cc_uploader_url") %> \
-  -consulCluster=http://127.0.0.1:<%= p("capi.stager.consul_agent_port") %> \
-  -dockerRegistryAddress=<%= p("capi.stager.docker_registry_address") %> \
-  <% p("capi.stager.insecure_docker_registry_list").each do |url| %> \
-    -insecureDockerRegistry=<%= url %> \
-  <% end %> \
-  -logLevel=<%= p("capi.stager.log_level") %> \
+exec /var/vcap/packages/stager/bin/stager -configPath "${CONF_DIR}/stager_config.json" \
   2> >(tee -a $LOG_DIR/stager.stderr.log | logger -p user.error -t vcap.stager) \
   1> >(tee -a $LOG_DIR/stager.stdout.log | logger -p user.info -t vcap.stager)
 

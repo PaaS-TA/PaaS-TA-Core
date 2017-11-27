@@ -72,32 +72,81 @@ var _ = Describe("ServiceDefiner", func() {
 			}))
 		})
 
-		It("generates a definition with the default values", func() {
-			definitions := definer.GenerateDefinitions(config.Config{
-				Node: config.ConfigNode{
-					Name:  "some_node",
-					Index: 0,
-				},
-				Consul: config.ConfigConsul{
-					Agent: config.ConfigConsulAgent{
-						Services: map[string]config.ServiceDefinition{
-							"router": {},
+		Context("when running on linux", func() {
+			BeforeEach(func() {
+				config.SetGOOS("linux")
+			})
+
+			AfterEach(func() {
+				config.ResetGOOS()
+			})
+
+			It("generates a definition with the default values", func() {
+				definitions := definer.GenerateDefinitions(config.Config{
+					Node: config.ConfigNode{
+						Name:  "some_node",
+						Index: 0,
+						Zone:  "z1",
+					},
+					Consul: config.ConfigConsul{
+						Agent: config.ConfigConsulAgent{
+							Services: map[string]config.ServiceDefinition{
+								"router": {},
+							},
 						},
 					},
-				},
-			})
-			Expect(definitions).To(ConsistOf([]config.ServiceDefinition{
-				{
-					ServiceName: "router",
-					Name:        "router",
-					Check: &config.ServiceDefinitionCheck{
-						Name:     "dns_health_check",
-						Script:   "/var/vcap/jobs/router/bin/dns_health_check",
-						Interval: "3s",
+				})
+				Expect(definitions).To(ConsistOf([]config.ServiceDefinition{
+					{
+						ServiceName: "router",
+						Name:        "router",
+						Check: &config.ServiceDefinitionCheck{
+							Name:     "dns_health_check",
+							Script:   "/var/vcap/jobs/router/bin/dns_health_check",
+							Interval: "3s",
+						},
+						Tags: []string{"some-node-0", "z1"},
 					},
-					Tags: []string{"some-node-0"},
-				},
-			}))
+				}))
+			})
+		})
+
+		Context("when running on windows", func() {
+			BeforeEach(func() {
+				config.SetGOOS("windows")
+			})
+
+			AfterEach(func() {
+				config.ResetGOOS()
+			})
+
+			It("generates a definition with the default values", func() {
+				definitions := definer.GenerateDefinitions(config.Config{
+					Node: config.ConfigNode{
+						Name:  "some_node",
+						Index: 0,
+					},
+					Consul: config.ConfigConsul{
+						Agent: config.ConfigConsulAgent{
+							Services: map[string]config.ServiceDefinition{
+								"router": {},
+							},
+						},
+					},
+				})
+				Expect(definitions).To(ConsistOf([]config.ServiceDefinition{
+					{
+						ServiceName: "router",
+						Name:        "router",
+						Check: &config.ServiceDefinitionCheck{
+							Name:     "dns_health_check",
+							Script:   "powershell -Command /var/vcap/jobs/router/bin/dns_health_check.ps1; Exit $LASTEXITCODE",
+							Interval: "3s",
+						},
+						Tags: []string{"some-node-0"},
+					},
+				}))
+			})
 		})
 
 		It("generates a definition with the service name dasherized", func() {
@@ -114,13 +163,19 @@ var _ = Describe("ServiceDefiner", func() {
 					},
 				},
 			})
+
+			script := "/var/vcap/jobs/cloud_controller/bin/dns_health_check"
+			if Windows {
+				script = "powershell -Command /var/vcap/jobs/cloud_controller/bin/dns_health_check.ps1; Exit $LASTEXITCODE"
+			}
+
 			Expect(definitions).To(ConsistOf([]config.ServiceDefinition{
 				{
 					ServiceName: "cloud_controller",
 					Name:        "cloud-controller",
 					Check: &config.ServiceDefinitionCheck{
 						Name:     "dns_health_check",
-						Script:   "/var/vcap/jobs/cloud_controller/bin/dns_health_check",
+						Script:   script,
 						Interval: "3s",
 					},
 					Tags: []string{"some-node-0"},
@@ -182,13 +237,19 @@ var _ = Describe("ServiceDefiner", func() {
 					},
 				},
 			})
+
+			script := "/var/vcap/jobs/uaa/bin/dns_health_check"
+			if Windows {
+				script = "powershell -Command /var/vcap/jobs/uaa/bin/dns_health_check.ps1; Exit $LASTEXITCODE"
+			}
+
 			Expect(definitions).To(ConsistOf([]config.ServiceDefinition{
 				{
 					ServiceName: "uaa",
 					Name:        "uaa",
 					Check: &config.ServiceDefinitionCheck{
 						Name:     "dns_health_check",
-						Script:   "/var/vcap/jobs/uaa/bin/dns_health_check",
+						Script:   script,
 						Interval: "3s",
 					},
 					Checks: []config.ServiceDefinitionCheck{{
@@ -217,13 +278,19 @@ var _ = Describe("ServiceDefiner", func() {
 					},
 				},
 			})
+
+			script := "/var/vcap/jobs/cell/bin/dns_health_check"
+			if Windows {
+				script = "powershell -Command /var/vcap/jobs/cell/bin/dns_health_check.ps1; Exit $LASTEXITCODE"
+			}
+
 			Expect(definitions).To(ConsistOf([]config.ServiceDefinition{
 				{
 					ServiceName: "cell",
 					Name:        "cell_z1",
 					Check: &config.ServiceDefinitionCheck{
 						Name:     "dns_health_check",
-						Script:   "/var/vcap/jobs/cell/bin/dns_health_check",
+						Script:   script,
 						Interval: "3s",
 					},
 					Tags: []string{"some-node-0"},
@@ -247,13 +314,19 @@ var _ = Describe("ServiceDefiner", func() {
 					},
 				},
 			})
+
+			script := "/var/vcap/jobs/dea/bin/dns_health_check"
+			if Windows {
+				script = "powershell -Command /var/vcap/jobs/dea/bin/dns_health_check.ps1; Exit $LASTEXITCODE"
+			}
+
 			Expect(definitions).To(ConsistOf([]config.ServiceDefinition{
 				{
 					ServiceName: "dea",
 					Name:        "dea",
 					Check: &config.ServiceDefinitionCheck{
 						Name:     "dns_health_check",
-						Script:   "/var/vcap/jobs/dea/bin/dns_health_check",
+						Script:   script,
 						Interval: "3s",
 					},
 					Tags: []string{"runner"},
@@ -277,6 +350,12 @@ var _ = Describe("ServiceDefiner", func() {
 					},
 				},
 			})
+
+			script := "/var/vcap/jobs/dea/bin/dns_health_check"
+			if Windows {
+				script = "powershell -Command /var/vcap/jobs/dea/bin/dns_health_check.ps1; Exit $LASTEXITCODE"
+			}
+
 			Expect(definitions).To(ConsistOf([]config.ServiceDefinition{
 				{
 					ServiceName: "dea",
@@ -284,7 +363,7 @@ var _ = Describe("ServiceDefiner", func() {
 					Address:     "192.168.1.1",
 					Check: &config.ServiceDefinitionCheck{
 						Name:     "dns_health_check",
-						Script:   "/var/vcap/jobs/dea/bin/dns_health_check",
+						Script:   script,
 						Interval: "3s",
 					},
 					Tags: []string{"some-node-0"},
@@ -308,6 +387,12 @@ var _ = Describe("ServiceDefiner", func() {
 					},
 				},
 			})
+
+			script := "/var/vcap/jobs/router/bin/dns_health_check"
+			if Windows {
+				script = "powershell -Command /var/vcap/jobs/router/bin/dns_health_check.ps1; Exit $LASTEXITCODE"
+			}
+
 			Expect(definitions).To(ConsistOf([]config.ServiceDefinition{
 				{
 					ServiceName: "router",
@@ -315,7 +400,7 @@ var _ = Describe("ServiceDefiner", func() {
 					Port:        12345,
 					Check: &config.ServiceDefinitionCheck{
 						Name:     "dns_health_check",
-						Script:   "/var/vcap/jobs/router/bin/dns_health_check",
+						Script:   script,
 						Interval: "3s",
 					},
 					Tags: []string{"some-node-0"},
@@ -339,6 +424,12 @@ var _ = Describe("ServiceDefiner", func() {
 					},
 				},
 			})
+
+			script := "/var/vcap/jobs/router/bin/dns_health_check"
+			if Windows {
+				script = "powershell -Command /var/vcap/jobs/router/bin/dns_health_check.ps1; Exit $LASTEXITCODE"
+			}
+
 			Expect(definitions).To(ConsistOf([]config.ServiceDefinition{
 				{
 					ServiceName:       "router",
@@ -346,7 +437,7 @@ var _ = Describe("ServiceDefiner", func() {
 					EnableTagOverride: true,
 					Check: &config.ServiceDefinitionCheck{
 						Name:     "dns_health_check",
-						Script:   "/var/vcap/jobs/router/bin/dns_health_check",
+						Script:   script,
 						Interval: "3s",
 					},
 					Tags: []string{"some-node-0"},
@@ -370,6 +461,12 @@ var _ = Describe("ServiceDefiner", func() {
 					},
 				},
 			})
+
+			script := "/var/vcap/jobs/router/bin/dns_health_check"
+			if Windows {
+				script = "powershell -Command /var/vcap/jobs/router/bin/dns_health_check.ps1; Exit $LASTEXITCODE"
+			}
+
 			Expect(definitions).To(ConsistOf([]config.ServiceDefinition{
 				{
 					ServiceName: "router",
@@ -377,7 +474,7 @@ var _ = Describe("ServiceDefiner", func() {
 					ID:          "some-id",
 					Check: &config.ServiceDefinitionCheck{
 						Name:     "dns_health_check",
-						Script:   "/var/vcap/jobs/router/bin/dns_health_check",
+						Script:   script,
 						Interval: "3s",
 					},
 					Tags: []string{"some-node-0"},
@@ -401,6 +498,12 @@ var _ = Describe("ServiceDefiner", func() {
 					},
 				},
 			})
+
+			script := "/var/vcap/jobs/router/bin/dns_health_check"
+			if Windows {
+				script = "powershell -Command /var/vcap/jobs/router/bin/dns_health_check.ps1; Exit $LASTEXITCODE"
+			}
+
 			Expect(definitions).To(ConsistOf([]config.ServiceDefinition{
 				{
 					ServiceName: "router",
@@ -408,7 +511,7 @@ var _ = Describe("ServiceDefiner", func() {
 					Token:       "some-token",
 					Check: &config.ServiceDefinitionCheck{
 						Name:     "dns_health_check",
-						Script:   "/var/vcap/jobs/router/bin/dns_health_check",
+						Script:   script,
 						Interval: "3s",
 					},
 					Tags: []string{"some-node-0"},
@@ -735,14 +838,7 @@ var _ = Describe("ServiceDefiner", func() {
 					},
 				})
 
-				var errMsg string
-				if Windows {
-					errMsg = "The handle is invalid."
-				} else {
-					errMsg = "bad file descriptor"
-				}
-
-				Expect(err).To(MatchError(ContainSubstring(errMsg)))
+				Expect(err).To(MatchError(ContainSubstring("file already closed")))
 
 				errPath := filepath.Join(tempDir, "service-cloud_controller.json")
 				Expect(logger.Messages()).To(ContainSequence([]fakes.LoggerMessage{
@@ -754,7 +850,7 @@ var _ = Describe("ServiceDefiner", func() {
 					},
 					{
 						Action: "service-definer.write-definitions.write.failed",
-						Error:  fmt.Errorf("write %s: %s", errPath, errMsg),
+						Error:  fmt.Errorf("write %s: %s", errPath, "file already closed"),
 						Data: []lager.Data{{
 							"path": errPath,
 						}},

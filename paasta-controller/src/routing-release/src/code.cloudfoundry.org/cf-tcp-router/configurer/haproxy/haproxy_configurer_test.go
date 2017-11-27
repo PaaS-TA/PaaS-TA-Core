@@ -5,10 +5,10 @@ import (
 	"io/ioutil"
 	"os"
 
-	"code.cloudfoundry.org/cf-tcp-router"
 	"code.cloudfoundry.org/cf-tcp-router/configurer/haproxy"
 	"code.cloudfoundry.org/cf-tcp-router/configurer/haproxy/fakes"
 	"code.cloudfoundry.org/cf-tcp-router/models"
+	monitorFakes "code.cloudfoundry.org/cf-tcp-router/monitor/fakes"
 	"code.cloudfoundry.org/cf-tcp-router/testutil"
 	"code.cloudfoundry.org/cf-tcp-router/utils"
 
@@ -25,7 +25,12 @@ var _ = Describe("HaproxyConfigurer", func() {
 
 		var (
 			haproxyConfigurer *haproxy.Configurer
+			fakeMonitor       *monitorFakes.FakeMonitor
 		)
+
+		BeforeEach(func() {
+			fakeMonitor = &monitorFakes.FakeMonitor{}
+		})
 
 		verifyHaProxyConfigContent := func(haproxyFileName, expectedContent string, present bool) {
 			data, err := ioutil.ReadFile(haproxyFileName)
@@ -39,33 +44,33 @@ var _ = Describe("HaproxyConfigurer", func() {
 
 		Context("when empty base configuration file is passed", func() {
 			It("returns a ErrRouterConfigFileNotFound error", func() {
-				_, err := haproxy.NewHaProxyConfigurer(logger, "", haproxyConfigFile, nil)
+				_, err := haproxy.NewHaProxyConfigurer(logger, "", haproxyConfigFile, fakeMonitor, nil)
 				Expect(err).Should(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring(cf_tcp_router.ErrRouterConfigFileNotFound))
+				Expect(err.Error()).To(ContainSubstring(haproxy.ErrRouterConfigFileNotFound))
 			})
 		})
 
 		Context("when empty configuration file is passed", func() {
 			It("returns a ErrRouterConfigFileNotFound error", func() {
-				_, err := haproxy.NewHaProxyConfigurer(logger, haproxyConfigTemplate, "", nil)
+				_, err := haproxy.NewHaProxyConfigurer(logger, haproxyConfigTemplate, "", fakeMonitor, nil)
 				Expect(err).Should(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring(cf_tcp_router.ErrRouterConfigFileNotFound))
+				Expect(err.Error()).To(ContainSubstring(haproxy.ErrRouterConfigFileNotFound))
 			})
 		})
 
 		Context("when base configuration file does not exist", func() {
 			It("returns a ErrRouterConfigFileNotFound error", func() {
-				_, err := haproxy.NewHaProxyConfigurer(logger, "file/path/does/not/exists", haproxyConfigFile, nil)
+				_, err := haproxy.NewHaProxyConfigurer(logger, "file/path/does/not/exist", haproxyConfigFile, fakeMonitor, nil)
 				Expect(err).Should(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring(cf_tcp_router.ErrRouterConfigFileNotFound))
+				Expect(err.Error()).To(ContainSubstring(haproxy.ErrRouterConfigFileNotFound))
 			})
 		})
 
 		Context("when configuration file does not exist", func() {
 			It("returns a ErrRouterConfigFileNotFound error", func() {
-				_, err := haproxy.NewHaProxyConfigurer(logger, haproxyConfigTemplate, "file/path/does/not/exists", nil)
+				_, err := haproxy.NewHaProxyConfigurer(logger, haproxyConfigTemplate, "file/path/does/not/exist", fakeMonitor, nil)
 				Expect(err).Should(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring(cf_tcp_router.ErrRouterConfigFileNotFound))
+				Expect(err.Error()).To(ContainSubstring(haproxy.ErrRouterConfigFileNotFound))
 			})
 		})
 
@@ -84,7 +89,7 @@ var _ = Describe("HaproxyConfigurer", func() {
 				haproxyConfigTemplateContent, err = ioutil.ReadFile(generatedHaproxyCfgFile)
 				Expect(err).ShouldNot(HaveOccurred())
 
-				haproxyConfigurer, err = haproxy.NewHaProxyConfigurer(logger, haproxyConfigTemplate, generatedHaproxyCfgFile, nil)
+				haproxyConfigurer, err = haproxy.NewHaProxyConfigurer(logger, haproxyConfigTemplate, generatedHaproxyCfgFile, fakeMonitor, nil)
 				Expect(err).ShouldNot(HaveOccurred())
 			})
 
@@ -152,7 +157,7 @@ var _ = Describe("HaproxyConfigurer", func() {
 
 				scriptRunner = &fakes.FakeScriptRunner{}
 
-				haproxyConfigurer, err = haproxy.NewHaProxyConfigurer(logger, haproxyConfigTemplate, generatedHaproxyCfgFile, scriptRunner)
+				haproxyConfigurer, err = haproxy.NewHaProxyConfigurer(logger, haproxyConfigTemplate, generatedHaproxyCfgFile, fakeMonitor, scriptRunner)
 				Expect(err).ShouldNot(HaveOccurred())
 			})
 
@@ -191,7 +196,9 @@ var _ = Describe("HaproxyConfigurer", func() {
 						verifyHaProxyConfigContent(generatedHaproxyCfgFile, listenCfg, true)
 						verifyHaProxyConfigContent(generatedHaproxyCfgFile, serverConfig1, true)
 						verifyHaProxyConfigContent(generatedHaproxyCfgFile, serverConfig2, true)
+						Expect(fakeMonitor.StopWatchingCallCount()).To(Equal(1))
 						Expect(scriptRunner.RunCallCount()).To(Equal(1))
+						Expect(fakeMonitor.StartWatchingCallCount()).To(Equal(1))
 					})
 				})
 
@@ -240,7 +247,9 @@ listen listen_cfg_3333
 						verifyHaProxyConfigContent(generatedHaproxyCfgFile, "server server_some-ip-3_1234 some-ip-3:1234", true)
 						verifyHaProxyConfigContent(generatedHaproxyCfgFile, "server server_some-ip-4_1235 some-ip-4:1235", true)
 						verifyHaProxyConfigContent(generatedHaproxyCfgFile, string(haproxyConfigTemplateContent), true)
+						Expect(fakeMonitor.StopWatchingCallCount()).To(Equal(1))
 						Expect(scriptRunner.RunCallCount()).To(Equal(1))
+						Expect(fakeMonitor.StartWatchingCallCount()).To(Equal(1))
 					})
 				})
 			})
@@ -293,7 +302,9 @@ listen listen_cfg_2222
 					verifyHaProxyConfigContent(generatedHaproxyCfgFile, "server server_some-ip-1_1234 some-ip-1:1234", false)
 					verifyHaProxyConfigContent(generatedHaproxyCfgFile, "server server_some-ip-2_1235 some-ip-2:1235", false)
 					verifyHaProxyConfigContent(generatedHaproxyCfgFile, string(haproxyConfigTemplateContent), true)
+					Expect(fakeMonitor.StopWatchingCallCount()).To(Equal(2))
 					Expect(scriptRunner.RunCallCount()).To(Equal(2))
+					Expect(fakeMonitor.StartWatchingCallCount()).To(Equal(2))
 				})
 			})
 		})

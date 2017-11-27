@@ -3,10 +3,18 @@ name: etcd_testconsumer
 templates:
   etcd_testconsumer_ctl.sh.erb: bin/etcd_testconsumer_ctl
   pre-start.erb: bin/pre-start
+  ca.crt.erb: config/certs/ca.crt
+  client.crt.erb: config/certs/client.crt
+  client.key.erb: config/certs/client.key
 
 packages:
-  - testconsumer
+  - acceptance-tests
   - etcd-dns-checker
+
+consumes:
+- name: etcd
+  type: etcd_service
+  optional: true
 
 properties:
   etcd_testconsumer.etcd.require_ssl:

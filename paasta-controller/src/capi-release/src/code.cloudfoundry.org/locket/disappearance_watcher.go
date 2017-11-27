@@ -63,8 +63,8 @@ func WatchForDisappearancesUnder(logger lager.Logger, client consuladapter.Clien
 	logger = logger.Session("watch-for-disappearances")
 
 	go func() {
-		logger.Info("starting")
-		defer logger.Info("finished")
+		logger.Debug("starting")
+		defer logger.Debug("finished")
 
 		keys := keySet{}
 

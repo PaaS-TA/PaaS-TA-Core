@@ -1,2 +1,0 @@
-set -e -x
-cp java-buildpack/java-buildpack-offline*.zip ${BOSH_INSTALL_TARGET}

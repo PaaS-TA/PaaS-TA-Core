@@ -85,7 +85,7 @@ var _ = Describe("Docker Recipe Builder", func() {
 		}
 	})
 
-	Context("Build LRPs", func() {
+	Describe("Build LRPs", func() {
 		var (
 			err            error
 			desiredAppReq  cc_messages.DesireAppRequestFromCC
@@ -213,6 +213,8 @@ var _ = Describe("Docker Recipe Builder", func() {
 
 				Expect(desiredLRP.Network).To(Equal(networkInfo))
 
+				Expect(desiredLRP.PlacementTags).To(BeEmpty())
+
 				expectedCachedDependencies := []*models.CachedDependency{}
 				expectedCachedDependencies = append(expectedCachedDependencies, &models.CachedDependency{
 					From:     "http://file-server.com/v1/static/the/docker/lifecycle/path.tgz",
@@ -244,7 +246,7 @@ var _ = Describe("Docker Recipe Builder", func() {
 							},
 						},
 					},
-					30*time.Second,
+					10*time.Minute,
 				)))
 
 				Expect(runAction.Path).To(Equal("/tmp/lifecycle/launcher"))
@@ -269,6 +271,16 @@ var _ = Describe("Docker Recipe Builder", func() {
 				Expect(runAction.Env).To(ContainElement(&models.EnvironmentVariable{
 					Name:  "PORT",
 					Value: "8080",
+				}))
+
+				Expect(runAction.Env).NotTo(ContainElement(&models.EnvironmentVariable{
+					Name:  "VCAP_APP_PORT",
+					Value: "8080",
+				}))
+
+				Expect(runAction.Env).NotTo(ContainElement(&models.EnvironmentVariable{
+					Name:  "VCAP_APP_HOST",
+					Value: "0.0.0.0",
 				}))
 
 				Expect(desiredLRP.EgressRules).To(ConsistOf(egressRules))
@@ -333,7 +345,7 @@ var _ = Describe("Docker Recipe Builder", func() {
 								},
 							},
 						},
-						30*time.Second,
+						10*time.Minute,
 					)))
 				})
 			})
@@ -356,6 +368,36 @@ var _ = Describe("Docker Recipe Builder", func() {
 					}
 
 					Expect(downloadDestinations).To(ContainElement("/tmp/lifecycle"))
+				})
+			})
+
+			Context("when the 'http' health check is specified", func() {
+				BeforeEach(func() {
+					desiredAppReq.HealthCheckType = cc_messages.HTTPHealthCheckType
+					desiredAppReq.HealthCheckHTTPEndpoint = "/healthz"
+				})
+
+				It("builds a valid monitor value", func() {
+					Expect(desiredLRP.Monitor.GetValue()).To(Equal(models.Timeout(
+						&models.ParallelAction{
+							Actions: []*models.Action{
+								&models.Action{
+									RunAction: &models.RunAction{
+										User:      "root",
+										Path:      "/tmp/lifecycle/healthcheck",
+										Args:      []string{"-port=8080", "-uri=/healthz"},
+										LogSource: "HEALTH",
+										ResourceLimits: &models.ResourceLimits{
+											Nofile: &defaultNofile,
+										},
+										SuppressLogOutput: true,
+									},
+								},
+							},
+						},
+						10*time.Minute,
+					)))
+
 				})
 			})
 
@@ -494,6 +536,16 @@ var _ = Describe("Docker Recipe Builder", func() {
 					})
 				})
 			})
+
+			Context("when an Isolation segment is specified", func() {
+				BeforeEach(func() {
+					desiredAppReq.IsolationSegment = "foo"
+				})
+
+				It("includes the correct segment in the desiredLRP", func() {
+					Expect(desiredLRP.PlacementTags).To(ContainElement("foo"))
+				})
+			})
 		})
 
 		Context("when there is a docker image url instead of a droplet uri", func() {
@@ -541,7 +593,7 @@ var _ = Describe("Docker Recipe Builder", func() {
 							},
 						},
 					},
-					30*time.Second,
+					10*time.Minute,
 				)))
 
 				Expect(runAction.Env).To(ContainElement(&models.EnvironmentVariable{
@@ -682,7 +734,7 @@ var _ = Describe("Docker Recipe Builder", func() {
 								},
 							},
 						},
-						30*time.Second,
+						10*time.Minute,
 					)))
 
 					Expect(runAction.Env).To(ContainElement(&models.EnvironmentVariable{
@@ -817,6 +869,26 @@ var _ = Describe("Docker Recipe Builder", func() {
 			})
 		})
 
+		Context("when there is a docker username", func() {
+			BeforeEach(func() {
+				desiredAppReq.DockerUser = "someuser"
+			})
+
+			It("includes the docker username in the desiredLRP", func() {
+				Expect(desiredLRP.ImageUsername).To(Equal("someuser"))
+			})
+		})
+
+		Context("when there is a docker password", func() {
+			BeforeEach(func() {
+				desiredAppReq.DockerPassword = "apassword"
+			})
+
+			It("includes the docker password in the desiredLRP", func() {
+				Expect(desiredLRP.ImagePassword).To(Equal("apassword"))
+			})
+		})
+
 		Context("when there is a docker image url AND a droplet uri", func() {
 			BeforeEach(func() {
 				desiredAppReq.DockerImageUrl = "user/repo:tag"
@@ -908,7 +980,7 @@ var _ = Describe("Docker Recipe Builder", func() {
 
 	})
 
-	Context("BuildTask", func() {
+	Describe("BuildTask", func() {
 		var (
 			newTaskReq     *cc_messages.TaskRequestFromCC
 			taskDefinition *models.TaskDefinition
@@ -980,6 +1052,17 @@ var _ = Describe("Docker Recipe Builder", func() {
 			Expect(taskDefinition.Action).To(BeEquivalentTo(expectedAction))
 
 			Expect(taskDefinition.TrustedSystemCertificatesPath).To(Equal(recipebuilder.TrustedSystemCertificatesPath))
+			Expect(taskDefinition.PlacementTags).To(BeEmpty())
+		})
+
+		Context("when an Isolation segment is specified", func() {
+			BeforeEach(func() {
+				newTaskReq.IsolationSegment = "foo"
+			})
+
+			It("includes the correct segment in the desiredLRP", func() {
+				Expect(taskDefinition.PlacementTags).To(ContainElement("foo"))
+			})
 		})
 
 		Context("When the recipeBuilder Config has Privileged set to true", func() {
@@ -1025,6 +1108,26 @@ var _ = Describe("Docker Recipe Builder", func() {
 
 			It("returns an error", func() {
 				Expect(err).To(Equal(recipebuilder.ErrMultipleAppSources))
+			})
+		})
+
+		Context("when there is a docker username", func() {
+			BeforeEach(func() {
+				newTaskReq.DockerUser = "someuser"
+			})
+
+			It("includes the docker username in the task", func() {
+				Expect(taskDefinition.ImageUsername).To(Equal("someuser"))
+			})
+		})
+
+		Context("when there is a docker password", func() {
+			BeforeEach(func() {
+				newTaskReq.DockerPassword = "apassword"
+			})
+
+			It("includes the docker password in the task", func() {
+				Expect(taskDefinition.ImagePassword).To(Equal("apassword"))
 			})
 		})
 

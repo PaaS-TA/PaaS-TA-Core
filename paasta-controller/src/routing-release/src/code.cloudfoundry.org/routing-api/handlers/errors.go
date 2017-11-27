@@ -1,8 +1,10 @@
 package handlers
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/http"
+	"regexp"
 
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/routing-api"
@@ -46,12 +48,25 @@ func handleDBCommunicationError(w http.ResponseWriter, err error, log lager.Logg
 	log.Error("error writing to request", writeErr)
 }
 
+func handleGuidGenerationError(w http.ResponseWriter, err error, log lager.Logger) {
+	log.Error("error", err)
+	retErr := marshalRoutingApiError(routing_api.NewError(routing_api.GuidGenerationError, err.Error()), log)
+
+	w.WriteHeader(http.StatusInternalServerError)
+	_, writeErr := w.Write(retErr)
+	log.Error("error generating guid", writeErr)
+}
+
 func handleUnauthorizedError(w http.ResponseWriter, err error, log lager.Logger) {
 	log.Error("error", err)
 
 	retErr := marshalRoutingApiError(routing_api.NewError(routing_api.UnauthorizedError, err.Error()), log)
 	metrics.IncrementTokenError()
 
+	if bytes.Contains(retErr, []byte("Token does not have ")) {
+		newRegEx := regexp.MustCompile("Token does not have .* scope")
+		retErr = newRegEx.ReplaceAll(retErr, []byte("You are not authorized to perform the requested action"))
+	}
 	w.WriteHeader(http.StatusUnauthorized)
 	_, writeErr := w.Write(retErr)
 	log.Error("error writing to request", writeErr)

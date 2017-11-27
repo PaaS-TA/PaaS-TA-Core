@@ -1,12 +1,19 @@
 #!/bin/bash -eu
 
-function main() {
+preflight_check() {
   set +x
-  bosh target https://${BOSH_DIRECTOR}:25555
-  bosh login ${BOSH_USER} ${BOSH_PASSWORD}
+  test -n "${BOSH_DIRECTOR}"
+  test -n "${BOSH_CLIENT}"
+  test -n "${BOSH_CLIENT_SECRET}"
+  test -n "${BOSH_CA_CERT}"
+  test -n "${DEPLOYMENT_NAME}"
   set -x
-  bosh download manifest $DEPLOYMENT_NAME manifest.yml
-  bosh -n --color -d manifest.yml delete deployment $DEPLOYMENT_NAME
+}
+
+function main() {
+  preflight_check
+  export BOSH_ENVIRONMENT="https://${BOSH_DIRECTOR}:25555"
+  bosh -n -d $DEPLOYMENT_NAME delete-deployment --force
 }
 
 main

@@ -195,6 +195,19 @@ module CloudController
             expect(wrapped_client).to have_received(:blob).with(key).exactly(num_retries).times
           end
         end
+
+        context '#files_for' do
+          let(:prefix) { 'pre' }
+          let(:ignored_directory_prefixes) { ['no'] }
+
+          before { allow(wrapped_client).to receive(:files_for).and_raise(RetryableError) }
+
+          it 'retries the operation' do
+            expect { client.files_for(prefix, ignored_directory_prefixes) }.to raise_error RetryableError
+
+            expect(wrapped_client).to have_received(:files_for).with(prefix, ignored_directory_prefixes).exactly(num_retries).times
+          end
+        end
       end
 
       describe '#with_retries' do

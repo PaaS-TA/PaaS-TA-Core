@@ -1,14 +1,6 @@
 ### Delete a route mapping
 
 ```
-Definition
-```
-
-```http
-DELETE /v3/route_mappings/:guid HTTP/1.1
-```
-
-```
 Example Request
 ```
 
@@ -26,12 +18,11 @@ Example Response
 HTTP/1.1 204 No Content
 ```
 
-This endpoint deletes a specific route mapping.
+#### Definition
+`DELETE /v3/route_mappings/:guid`
 
-#### Body Parameters
-
-<p class='no-body-parameters-outer'>
-  <span class='no-body-parameters-required'>
-    No arguments
-  </span>
-</p>
+#### Permitted Roles
+ |
+--- | ---
+Space Developer |
+Admin |

@@ -1,0 +1,48 @@
+[submodule "src/confab/vendor/github.com/onsi/ginkgo"]
+	path = src/confab/vendor/github.com/onsi/ginkgo
+	url = https://github.com/onsi/ginkgo
+[submodule "src/confab/vendor/github.com/onsi/gomega"]
+	path = src/confab/vendor/github.com/onsi/gomega
+	url = https://github.com/onsi/gomega
+[submodule "src/confab/vendor/github.com/hashicorp/consul"]
+	path = src/confab/vendor/github.com/hashicorp/consul
+	url = https://github.com/hashicorp/consul
+[submodule "src/confab/vendor/golang.org/x/crypto"]
+	path = src/confab/vendor/golang.org/x/crypto
+	url = https://go.googlesource.com/crypto
+[submodule "src/acceptance-tests/vendor/github.com/onsi/ginkgo"]
+	path = src/acceptance-tests/vendor/github.com/onsi/ginkgo
+	url = https://github.com/onsi/ginkgo
+[submodule "src/acceptance-tests/vendor/github.com/onsi/gomega"]
+	path = src/acceptance-tests/vendor/github.com/onsi/gomega
+	url = https://github.com/onsi/gomega
+[submodule "src/acceptance-tests/vendor/golang.org/x/crypto"]
+	path = src/acceptance-tests/vendor/golang.org/x/crypto
+	url = https://go.googlesource.com/crypto
+[submodule "src/acceptance-tests/vendor/github.com/pivotal-cf-experimental/bosh-test"]
+	path = src/acceptance-tests/vendor/github.com/pivotal-cf-experimental/bosh-test
+	url = https://github.com/pivotal-cf-experimental/bosh-test
+[submodule "src/acceptance-tests/vendor/github.com/pivotal-cf-experimental/gomegamatchers"]
+	path = src/acceptance-tests/vendor/github.com/pivotal-cf-experimental/gomegamatchers
+	url = https://github.com/pivotal-cf-experimental/gomegamatchers
+[submodule "src/confab/vendor/github.com/pivotal-cf-experimental/gomegamatchers"]
+	path = src/confab/vendor/github.com/pivotal-cf-experimental/gomegamatchers
+	url = https://github.com/pivotal-cf-experimental/gomegamatchers.git
+[submodule "src/acceptance-tests/vendor/github.com/pivotal-cf-experimental/destiny"]
+	path = src/acceptance-tests/vendor/github.com/pivotal-cf-experimental/destiny
+	url = https://github.com/pivotal-cf-experimental/destiny
+[submodule "src/acceptance-tests/vendor/github.com/cloudfoundry-incubator/check-a-record"]
+	path = src/acceptance-tests/vendor/github.com/cloudfoundry-incubator/check-a-record
+	url = https://github.com/cloudfoundry-incubator/check-a-record.git
+[submodule "src/confab/vendor/code.cloudfoundry.org/lager"]
+	path = src/confab/vendor/code.cloudfoundry.org/lager
+	url = https://github.com/cloudfoundry/lager
+[submodule "src/confab/vendor/code.cloudfoundry.org/clock"]
+	path = src/confab/vendor/code.cloudfoundry.org/clock
+	url = https://github.com/cloudfoundry/clock
+[submodule "src/confab/vendor/github.com/miekg/dns"]
+	path = src/confab/vendor/github.com/miekg/dns
+	url = https://github.com/miekg/dns
+[submodule "src/acceptance-tests/testing/fake-dns-server/vendor/github.com/miekg/dns"]
+	path = src/acceptance-tests/testing/fake-dns-server/vendor/github.com/miekg/dns
+	url = https://github.com/miekg/dns.git

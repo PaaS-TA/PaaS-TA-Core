@@ -1,12 +1,11 @@
 package main_test
 
 import (
-	"fmt"
-	"net"
 	"os"
 	"os/exec"
 	"path"
 	"path/filepath"
+	"time"
 
 	"code.cloudfoundry.org/routing-api/cmd/routing-api/testrunner"
 	"code.cloudfoundry.org/routing-api/config"
@@ -55,19 +54,18 @@ var _ = Describe("ETCD Event Migrations", func() {
 		Expect(err).ToNot(HaveOccurred())
 
 		lockHolderArgs := routingAPIArgsNoSQL
-		lockHolderArgs.Port = uint16(7000 + GinkgoParallelNode())
+		lockHolderArgs.Port = uint16(testPort())
 		lockHolderRunner := testrunner.New(routingAPIBinPath, lockHolderArgs)
-		validatePort(lockHolderArgs.Port)
 		lockHolderProcess = ginkgomon.Invoke(lockHolderRunner)
 
 		routingAPIRunner = ginkgomon.New(ginkgomon.Config{
-			Name:       "routing-api",
-			Command:    exec.Command(routingAPIBinPath, routingAPIArgs.ArgSlice()...),
-			StartCheck: "routing-api.lock.acquiring-lock",
+			Name:              "routing-api",
+			Command:           exec.Command(routingAPIBinPath, routingAPIArgs.ArgSlice()...),
+			StartCheck:        "routing-api.consul-lock.acquiring-lock",
+			StartCheckTimeout: 10 * time.Second,
 		})
-		validatePort(routingAPIArgs.Port)
 		routingAPIProcess = ginkgomon.Invoke(routingAPIRunner)
-		Eventually(routingAPIProcess.Ready(), "5s").Should(BeClosed())
+		Eventually(routingAPIProcess.Ready(), "10s").Should(BeClosed())
 	})
 
 	AfterEach(func() {
@@ -158,13 +156,3 @@ var _ = Describe("ETCD Event Migrations", func() {
 		})
 	})
 })
-
-func validatePort(port uint16) {
-	Eventually(func() error {
-		l, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
-		if l != nil {
-			_ = l.Close()
-		}
-		return err
-	}, "60s", "1s").Should(BeNil())
-}

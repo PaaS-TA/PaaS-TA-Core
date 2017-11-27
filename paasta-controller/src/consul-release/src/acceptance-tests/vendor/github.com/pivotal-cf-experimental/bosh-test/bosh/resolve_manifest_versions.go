@@ -3,10 +3,9 @@ package bosh
 import yaml "gopkg.in/yaml.v2"
 
 type manifest struct {
-	DirectorUUID interface{} `yaml:"director_uuid"`
-	Name         interface{} `yaml:"name"`
-	Compilation  interface{} `yaml:"compilation,omitempty"`
-	Stemcells    []struct {
+	Name        interface{} `yaml:"name"`
+	Compilation interface{} `yaml:"compilation,omitempty"`
+	Stemcells   []struct {
 		Alias   string `yaml:"alias,omitempty"`
 		OS      string `yaml:"os,omitempty"`
 		Version string `yaml:"version,omitempty"`
@@ -36,7 +35,7 @@ type manifest struct {
 	} `yaml:"releases"`
 }
 
-func (c Client) ResolveManifestVersions(manifestYAML []byte) ([]byte, error) {
+func (c Client) ResolveManifestVersionsV2(manifestYAML []byte) ([]byte, error) {
 	m := manifest{}
 	err := yaml.Unmarshal(manifestYAML, &m)
 	if err != nil {
@@ -54,23 +53,9 @@ func (c Client) ResolveManifestVersions(manifestYAML []byte) ([]byte, error) {
 		}
 	}
 
-	for i, pool := range m.ResourcePools {
-		if pool.Stemcell.Version == "latest" {
-			stemcell, err := c.Stemcell(pool.Stemcell.Name)
-			if err != nil {
-				return nil, err
-			}
-			pool.Stemcell.Version, err = stemcell.Latest()
-			if err != nil {
-				return nil, err
-			}
-			m.ResourcePools[i] = pool
-		}
-	}
-
 	for i, stemcell := range m.Stemcells {
 		if stemcell.Version == "latest" {
-			stemcell, err := c.Stemcell(stemcell.Name)
+			stemcell, err := c.StemcellByOS(stemcell.OS)
 			if err != nil {
 				return nil, err
 			}

@@ -32,6 +32,7 @@ import (
 	"sync"
 
 	"github.com/hashicorp/consul/consul/structs"
+	"github.com/hashicorp/consul/logger"
 	"github.com/hashicorp/go-msgpack/codec"
 	"github.com/hashicorp/logutils"
 	"github.com/hashicorp/serf/serf"
@@ -105,7 +106,8 @@ type joinResponse struct {
 }
 
 type keyringRequest struct {
-	Key string
+	Key         string
+	RelayFactor uint8
 }
 
 type KeyringEntry struct {
@@ -165,28 +167,13 @@ type Member struct {
 	DelegateCur uint8
 }
 
-type AgentBackend interface {
-	ForceLeave(string) error
-	JoinWAN([]string) (int, error)
-	JoinLAN([]string) (int, error)
-	LANMembers() []serf.Member
-	WANMembers() []serf.Member
-	Leave() error
-	Shutdown() error
-	Stats() map[string]map[string]string
-	ListKeys(string) (*structs.KeyringResponses, error)
-	InstallKey(string, string) (*structs.KeyringResponses, error)
-	UseKey(string, string) (*structs.KeyringResponses, error)
-	RemoveKey(string, string) (*structs.KeyringResponses, error)
-}
-
 type AgentRPC struct {
 	sync.Mutex
-	agent     AgentBackend
+	agent     *Agent
 	clients   map[string]*rpcClient
 	listener  net.Listener
 	logger    *log.Logger
-	logWriter *logWriter
+	logWriter *logger.LogWriter
 	reloadCh  chan struct{}
 	stop      bool
 	stopCh    chan struct{}
@@ -232,8 +219,8 @@ func (c *rpcClient) String() string {
 }
 
 // NewAgentRPC is used to create a new Agent RPC handler
-func NewAgentRPC(agent AgentBackend, listener net.Listener,
-	logOutput io.Writer, logWriter *logWriter) *AgentRPC {
+func NewAgentRPC(agent *Agent, listener net.Listener,
+	logOutput io.Writer, logWriter *logger.LogWriter) *AgentRPC {
 	if logOutput == nil {
 		logOutput = os.Stderr
 	}
@@ -338,7 +325,7 @@ func (i *AgentRPC) handleClient(client *rpcClient) {
 				// The second part of this if is to block socket
 				// errors from Windows which appear to happen every
 				// time there is an EOF.
-				if err != io.EOF && !strings.Contains(err.Error(), "WSARecv") {
+				if err != io.EOF && !strings.Contains(strings.ToLower(err.Error()), "wsarecv") {
 					i.logger.Printf("[ERR] agent.rpc: failed to decode request header: %v", err)
 				}
 			}
@@ -528,9 +515,9 @@ func (i *AgentRPC) handleMonitor(client *rpcClient, seq uint64) error {
 	req.LogLevel = strings.ToUpper(req.LogLevel)
 
 	// Create a level filter
-	filter := LevelFilter()
+	filter := logger.LevelFilter()
 	filter.MinLevel = logutils.LogLevel(req.LogLevel)
-	if !ValidateLevelFilter(filter.MinLevel, filter) {
+	if !logger.ValidateLevelFilter(filter.MinLevel, filter) {
 		resp.Error = fmt.Sprintf("Unknown log level: %s", filter.MinLevel)
 		goto SEND
 	}
@@ -618,21 +605,21 @@ func (i *AgentRPC) handleKeyring(client *rpcClient, seq uint64, cmd, token strin
 	var r keyringResponse
 	var err error
 
-	if cmd != listKeysCommand {
-		if err = client.dec.Decode(&req); err != nil {
-			return fmt.Errorf("decode failed: %v", err)
-		}
+	if err = client.dec.Decode(&req); err != nil {
+		return fmt.Errorf("decode failed: %v", err)
 	}
+
+	i.agent.logger.Printf("[INFO] agent: Sending rpc command with relay factor %d", req.RelayFactor)
 
 	switch cmd {
 	case listKeysCommand:
-		queryResp, err = i.agent.ListKeys(token)
+		queryResp, err = i.agent.ListKeys(token, req.RelayFactor)
 	case installKeyCommand:
-		queryResp, err = i.agent.InstallKey(req.Key, token)
+		queryResp, err = i.agent.InstallKey(req.Key, token, req.RelayFactor)
 	case useKeyCommand:
-		queryResp, err = i.agent.UseKey(req.Key, token)
+		queryResp, err = i.agent.UseKey(req.Key, token, req.RelayFactor)
 	case removeKeyCommand:
-		queryResp, err = i.agent.RemoveKey(req.Key, token)
+		queryResp, err = i.agent.RemoveKey(req.Key, token, req.RelayFactor)
 	default:
 		respHeader := responseHeader{Seq: seq, Error: unsupportedCommand}
 		client.Send(&respHeader, nil)

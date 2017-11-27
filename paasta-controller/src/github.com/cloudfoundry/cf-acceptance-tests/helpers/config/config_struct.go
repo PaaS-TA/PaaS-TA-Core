@@ -25,12 +25,18 @@ type config struct {
 	ShouldKeepUser       *bool   `json:"keep_user_at_suite_end"`
 	UseExistingUser      *bool   `json:"use_existing_user"`
 
+	UseExistingOrganization *bool   `json:"use_existing_organization"`
+	ExistingOrganization    *string `json:"existing_organization"`
+
 	ConfigurableTestPassword *string `json:"test_password"`
 
 	PersistentAppHost      *string `json:"persistent_app_host"`
 	PersistentAppOrg       *string `json:"persistent_app_org"`
 	PersistentAppQuotaName *string `json:"persistent_app_quota_name"`
 	PersistentAppSpace     *string `json:"persistent_app_space"`
+
+	IsolationSegmentName   *string `json:"isolation_segment_name"`
+	IsolationSegmentDomain *string `json:"isolation_segment_domain"`
 
 	Backend           *string `json:"backend"`
 	SkipSSLValidation *bool   `json:"skip_ssl_validation"`
@@ -62,16 +68,24 @@ type config struct {
 	IncludeDetect                     *bool `json:"include_detect"`
 	IncludeDocker                     *bool `json:"include_docker"`
 	IncludeInternetDependent          *bool `json:"include_internet_dependent"`
+	IncludePersistentApp              *bool `json:"include_persistent_app"`
+	IncludePrivateDockerRegistry      *bool `json:"include_private_docker_registry"`
 	IncludePrivilegedContainerSupport *bool `json:"include_privileged_container_support"`
 	IncludeRouteServices              *bool `json:"include_route_services"`
 	IncludeRouting                    *bool `json:"include_routing"`
-	IncludeZipkin                     *bool `json:"include_zipkin"`
 	IncludeSSO                        *bool `json:"include_sso"`
 	IncludeSecurityGroups             *bool `json:"include_security_groups"`
 	IncludeServices                   *bool `json:"include_services"`
 	IncludeSsh                        *bool `json:"include_ssh"`
 	IncludeTasks                      *bool `json:"include_tasks"`
 	IncludeV3                         *bool `json:"include_v3"`
+	IncludeZipkin                     *bool `json:"include_zipkin"`
+	IncludeIsolationSegments          *bool `json:"include_isolation_segments"`
+	IncludeRoutingIsolationSegments   *bool `json:"include_routing_isolation_segments"`
+
+	PrivateDockerRegistryImage    *string `json:"private_docker_registry_image"`
+	PrivateDockerRegistryUsername *string `json:"private_docker_registry_username"`
+	PrivateDockerRegistryPassword *string `json:"private_docker_registry_password"`
 
 	NamePrefix *string `json:"name_prefix"`
 }
@@ -102,6 +116,9 @@ func getDefaults() config {
 	defaults.PersistentAppQuotaName = ptrToString("CATS-persistent-quota")
 	defaults.PersistentAppSpace = ptrToString("CATS-persistent-space")
 
+	defaults.IsolationSegmentName = ptrToString("")
+	defaults.IsolationSegmentDomain = ptrToString("")
+
 	defaults.BinaryBuildpackName = ptrToString("binary_buildpack")
 	defaults.GoBuildpackName = ptrToString("go_buildpack")
 	defaults.JavaBuildpackName = ptrToString("java_buildpack")
@@ -113,39 +130,50 @@ func getDefaults() config {
 
 	defaults.IncludeApps = ptrToBool(true)
 	defaults.IncludeDetect = ptrToBool(true)
+	defaults.IncludePersistentApp = ptrToBool(true)
 	defaults.IncludeRouting = ptrToBool(true)
 
 	defaults.IncludeBackendCompatiblity = ptrToBool(false)
 	defaults.IncludeContainerNetworking = ptrToBool(false)
 	defaults.IncludeDocker = ptrToBool(false)
 	defaults.IncludeInternetDependent = ptrToBool(false)
+	defaults.IncludeIsolationSegments = ptrToBool(false)
+	defaults.IncludePrivilegedContainerSupport = ptrToBool(false)
+	defaults.IncludePrivateDockerRegistry = ptrToBool(false)
 	defaults.IncludeRouteServices = ptrToBool(false)
+	defaults.IncludeSSO = ptrToBool(false)
 	defaults.IncludeSecurityGroups = ptrToBool(false)
 	defaults.IncludeServices = ptrToBool(false)
 	defaults.IncludeSsh = ptrToBool(false)
-	defaults.IncludeV3 = ptrToBool(false)
-	defaults.IncludePrivilegedContainerSupport = ptrToBool(false)
-	defaults.IncludeZipkin = ptrToBool(false)
-	defaults.IncludeSSO = ptrToBool(false)
 	defaults.IncludeTasks = ptrToBool(false)
+	defaults.IncludeV3 = ptrToBool(false)
+	defaults.IncludeZipkin = ptrToBool(false)
+	defaults.IncludeRoutingIsolationSegments = ptrToBool(false)
 
 	defaults.UseHttp = ptrToBool(false)
 	defaults.UseExistingUser = ptrToBool(false)
 	defaults.ShouldKeepUser = ptrToBool(false)
 
-	defaults.AsyncServiceOperationTimeout = ptrToInt(2)
-	defaults.BrokerStartTimeout = ptrToInt(5)
-	defaults.CfPushTimeout = ptrToInt(2)
+	defaults.UseExistingOrganization = ptrToBool(false)
+	defaults.ExistingOrganization = ptrToString("")
+
+	defaults.AsyncServiceOperationTimeout = ptrToInt(120)
+	defaults.BrokerStartTimeout = ptrToInt(300)
+	defaults.CfPushTimeout = ptrToInt(120)
 	defaults.DefaultTimeout = ptrToInt(30)
-	defaults.DetectTimeout = ptrToInt(5)
-	defaults.LongCurlTimeout = ptrToInt(2)
+	defaults.DetectTimeout = ptrToInt(300)
+	defaults.LongCurlTimeout = ptrToInt(120)
 	defaults.SleepTimeout = ptrToInt(30)
 
 	defaults.ConfigurableTestPassword = ptrToString("")
 
-	defaults.TimeoutScale = ptrToFloat(1.0)
+	defaults.TimeoutScale = ptrToFloat(2.0)
 
 	defaults.ArtifactsDirectory = ptrToString(filepath.Join("..", "results"))
+
+	defaults.PrivateDockerRegistryImage = ptrToString("")
+	defaults.PrivateDockerRegistryUsername = ptrToString("")
+	defaults.PrivateDockerRegistryPassword = ptrToString("")
 
 	defaults.NamePrefix = ptrToString("CATS")
 	return defaults
@@ -190,6 +218,21 @@ func validateConfig(config *config) Errors {
 		errs.Add(err)
 	}
 
+	err = validatePrivateDockerRegistry(config)
+	if err != nil {
+		errs.Add(err)
+	}
+
+	err = validateIsolationSegments(config)
+	if err != nil {
+		errs.Add(err)
+	}
+
+	err = validateRoutingIsolationSegments(config)
+	if err != nil {
+		errs.Add(err)
+	}
+
 	if config.UseHttp == nil {
 		errs.Add(fmt.Errorf("* 'use_http' must not be null"))
 	}
@@ -213,6 +256,12 @@ func validateConfig(config *config) Errors {
 	}
 	if config.PersistentAppSpace == nil {
 		errs.Add(fmt.Errorf("* 'persistent_app_space' must not be null"))
+	}
+	if config.IsolationSegmentName == nil {
+		errs.Add(fmt.Errorf("* 'isolation_segment_name' must not be null"))
+	}
+	if config.IsolationSegmentDomain == nil {
+		errs.Add(fmt.Errorf("* 'isolation_segment_domain' must not be null"))
 	}
 	if config.SkipSSLValidation == nil {
 		errs.Add(fmt.Errorf("* 'skip_ssl_validation' must not be null"))
@@ -286,6 +335,12 @@ func validateConfig(config *config) Errors {
 	if config.IncludeInternetDependent == nil {
 		errs.Add(fmt.Errorf("* 'include_internet_dependent' must not be null"))
 	}
+	if config.IncludePrivateDockerRegistry == nil {
+		errs.Add(fmt.Errorf("* 'include_private_docker_registry' must not be null"))
+	}
+	if config.IncludePersistentApp == nil {
+		errs.Add(fmt.Errorf("* 'include_persistent_app' must not be null"))
+	}
 	if config.IncludePrivilegedContainerSupport == nil {
 		errs.Add(fmt.Errorf("* 'include_privileged_container_support' must not be null"))
 	}
@@ -294,9 +349,6 @@ func validateConfig(config *config) Errors {
 	}
 	if config.IncludeRouting == nil {
 		errs.Add(fmt.Errorf("* 'include_routing' must not be null"))
-	}
-	if config.IncludeZipkin == nil {
-		errs.Add(fmt.Errorf("* 'include_zipkin' must not be null"))
 	}
 	if config.IncludeSSO == nil {
 		errs.Add(fmt.Errorf("* 'include_sso' must not be null"))
@@ -315,6 +367,21 @@ func validateConfig(config *config) Errors {
 	}
 	if config.IncludeV3 == nil {
 		errs.Add(fmt.Errorf("* 'include_v3' must not be null"))
+	}
+	if config.IncludeZipkin == nil {
+		errs.Add(fmt.Errorf("* 'include_zipkin' must not be null"))
+	}
+	if config.IncludeIsolationSegments == nil {
+		errs.Add(fmt.Errorf("* 'include_isolation_segments' must not be null"))
+	}
+	if config.PrivateDockerRegistryImage == nil {
+		errs.Add(fmt.Errorf("* 'private_docker_registry_image' must not be null"))
+	}
+	if config.PrivateDockerRegistryUsername == nil {
+		errs.Add(fmt.Errorf("* 'private_docker_registry_username' must not be null"))
+	}
+	if config.PrivateDockerRegistryPassword == nil {
+		errs.Add(fmt.Errorf("* 'private_docker_registry_password' must not be null"))
 	}
 	if config.NamePrefix == nil {
 		errs.Add(fmt.Errorf("* 'name_prefix' must not be null"))
@@ -410,6 +477,79 @@ func validateAdminPassword(config *config) error {
 	return nil
 }
 
+func validatePrivateDockerRegistry(config *config) error {
+	if config.IncludePrivateDockerRegistry == nil {
+		return fmt.Errorf("* 'include_private_docker_registry' must not be null")
+	}
+	if config.PrivateDockerRegistryImage == nil {
+		return fmt.Errorf("* 'private_docker_registry_image' must not be null")
+	}
+	if config.PrivateDockerRegistryUsername == nil {
+		return fmt.Errorf("* 'private_docker_registry_username' must not be null")
+	}
+	if config.PrivateDockerRegistryPassword == nil {
+		return fmt.Errorf("* 'private_docker_registry_password' must not be null")
+	}
+
+	if !config.GetIncludePrivateDockerRegistry() {
+		return nil
+	}
+
+	if config.GetPrivateDockerRegistryImage() == "" {
+		return fmt.Errorf("* Invalid configuration: 'private_docker_registry_image' must be provided if 'include_private_docker_registry' is true")
+	}
+	if config.GetPrivateDockerRegistryUsername() == "" {
+		return fmt.Errorf("* Invalid configuration: 'private_docker_registry_username' must be provided if 'include_private_docker_registry' is true")
+	}
+	if config.GetPrivateDockerRegistryPassword() == "" {
+		return fmt.Errorf("* Invalid configuration: 'private_docker_registry_password' must be provided if 'include_private_docker_registry' is true")
+	}
+
+	return nil
+}
+
+func validateIsolationSegments(config *config) error {
+	if config.IncludeIsolationSegments == nil {
+		return fmt.Errorf("* 'include_isolation_segments' must not be null")
+	}
+	if config.IsolationSegmentName == nil {
+		return fmt.Errorf("* 'isolation_segment_name' must not be null")
+	}
+
+	if !config.GetIncludeIsolationSegments() {
+		return nil
+	}
+
+	if config.GetIsolationSegmentName() == "" {
+		return fmt.Errorf("* Invalid configuration: 'isolation_segment_name' must be provided if 'include_isolation_segments' is true")
+	}
+	return nil
+}
+
+func validateRoutingIsolationSegments(config *config) error {
+	if config.IncludeRoutingIsolationSegments == nil {
+		return fmt.Errorf("* 'include_routing_isolation_segments' must not be null")
+	}
+	if config.IsolationSegmentName == nil {
+		return fmt.Errorf("* 'isolation_segment_name' must not be null")
+	}
+	if config.IsolationSegmentDomain == nil {
+		return fmt.Errorf("* 'isolation_segment_domain' must not be null")
+	}
+
+	if !config.GetIncludeRoutingIsolationSegments() {
+		return nil
+	}
+
+	if config.GetIsolationSegmentName() == "" {
+		return fmt.Errorf("* Invalid configuration: 'isolation_segment_name' must be provided if 'include_routing_isolation_segments' is true")
+	}
+	if config.GetIsolationSegmentDomain() == "" {
+		return fmt.Errorf("* Invalid configuration: 'isolation_segment_domain' must be provided if 'include_routing_isolation_segments' is true")
+	}
+	return nil
+}
+
 func load(path string, config *config) Errors {
 	errs := Errors{}
 	err := loadConfigFromPath(path, config)
@@ -446,35 +586,35 @@ func (c config) GetScaledTimeout(timeout time.Duration) time.Duration {
 }
 
 func (c *config) DefaultTimeoutDuration() time.Duration {
-	return time.Duration(*c.DefaultTimeout) * time.Second
+	return c.GetScaledTimeout(time.Duration(*c.DefaultTimeout) * time.Second)
 }
 
 func (c *config) LongTimeoutDuration() time.Duration {
-	return time.Duration(*c.DefaultTimeout) * time.Second
+	return c.GetScaledTimeout(time.Duration(*c.DefaultTimeout) * time.Second)
 }
 
 func (c *config) LongCurlTimeoutDuration() time.Duration {
-	return time.Duration(*c.LongCurlTimeout) * time.Minute
+	return c.GetScaledTimeout(time.Duration(*c.LongCurlTimeout) * time.Second)
 }
 
 func (c *config) SleepTimeoutDuration() time.Duration {
-	return time.Duration(*c.SleepTimeout) * time.Second
+	return c.GetScaledTimeout(time.Duration(*c.SleepTimeout) * time.Second)
 }
 
 func (c *config) DetectTimeoutDuration() time.Duration {
-	return time.Duration(*c.DetectTimeout) * time.Minute
+	return c.GetScaledTimeout(time.Duration(*c.DetectTimeout) * time.Second)
 }
 
 func (c *config) CfPushTimeoutDuration() time.Duration {
-	return time.Duration(*c.CfPushTimeout) * time.Minute
+	return c.GetScaledTimeout(time.Duration(*c.CfPushTimeout) * time.Second)
 }
 
 func (c *config) BrokerStartTimeoutDuration() time.Duration {
-	return time.Duration(*c.BrokerStartTimeout) * time.Minute
+	return c.GetScaledTimeout(time.Duration(*c.BrokerStartTimeout) * time.Second)
 }
 
 func (c *config) AsyncServiceOperationTimeoutDuration() time.Duration {
-	return time.Duration(*c.AsyncServiceOperationTimeout) * time.Minute
+	return c.GetScaledTimeout(time.Duration(*c.AsyncServiceOperationTimeout) * time.Second)
 }
 
 func (c *config) Protocol() string {
@@ -507,8 +647,32 @@ func (c *config) GetPersistentAppQuotaName() string {
 	return *c.PersistentAppQuotaName
 }
 
+func (c *config) GetIsolationSegmentName() string {
+	return *c.IsolationSegmentName
+}
+
+func (c *config) GetIsolationSegmentDomain() string {
+	return *c.IsolationSegmentDomain
+}
+
 func (c *config) GetNamePrefix() string {
 	return *c.NamePrefix
+}
+
+func (c *config) GetExistingOrganization() string {
+	return *c.ExistingOrganization
+}
+
+func (c *config) GetUseExistingOrganization() bool {
+	return *c.UseExistingOrganization
+}
+
+func (c *config) GetExistingSpace() string {
+	return ""
+}
+
+func (c *config) GetUseExistingSpace() bool {
+	return false
 }
 
 func (c *config) GetUseExistingUser() bool {
@@ -551,6 +715,10 @@ func (c *config) GetIncludeApps() bool {
 	return *c.IncludeApps
 }
 
+func (c *config) GetIncludePersistentApp() bool {
+	return *c.IncludePersistentApp
+}
+
 func (c *config) GetIncludeBackendCompatiblity() bool {
 	return *c.IncludeBackendCompatiblity
 }
@@ -587,6 +755,10 @@ func (c *config) GetIncludeTasks() bool {
 	return *c.IncludeTasks
 }
 
+func (c *config) GetIncludePrivateDockerRegistry() bool {
+	return *c.IncludePrivateDockerRegistry
+}
+
 func (c *config) GetIncludePrivilegedContainerSupport() bool {
 	return *c.IncludePrivilegedContainerSupport
 }
@@ -605,6 +777,14 @@ func (c *config) GetIncludeSSO() bool {
 
 func (c *config) GetIncludeV3() bool {
 	return *c.IncludeV3
+}
+
+func (c *config) GetIncludeIsolationSegments() bool {
+	return *c.IncludeIsolationSegments
+}
+
+func (c *config) GetIncludeRoutingIsolationSegments() bool {
+	return *c.IncludeRoutingIsolationSegments
 }
 
 func (c *config) GetRubyBuildpackName() string {
@@ -633,4 +813,16 @@ func (c *config) GetPersistentAppHost() string {
 
 func (c *config) GetBackend() string {
 	return *c.Backend
+}
+
+func (c *config) GetPrivateDockerRegistryImage() string {
+	return *c.PrivateDockerRegistryImage
+}
+
+func (c *config) GetPrivateDockerRegistryUsername() string {
+	return *c.PrivateDockerRegistryUsername
+}
+
+func (c *config) GetPrivateDockerRegistryPassword() string {
+	return *c.PrivateDockerRegistryPassword
 }

@@ -116,7 +116,7 @@ func (adapter *retryable) retry(action func() error) error {
 	var failedAttempts uint
 	for {
 		err = action()
-		if err != ErrorTimeout {
+		if cErr, ok := err.(Error); ok && cErr.Type() != ErrorTimeout {
 			break
 		}
 

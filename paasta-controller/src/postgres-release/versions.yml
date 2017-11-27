@@ -1,0 +1,21 @@
+versions:
+  18: "PostgreSQL 9.6.3"
+  17: "PostgreSQL 9.6.3"
+  16: "PostgreSQL 9.6.2"
+  15: "PostgreSQL 9.6.2"
+  14: "PostgreSQL 9.4.9"
+  13: "PostgreSQL 9.4.9"
+  12: "PostgreSQL 9.4.9"
+  11: "PostgreSQL 9.4.9"
+  10: "PostgreSQL 9.4.9"
+  9: "PostgreSQL 9.4.9"
+  8: "PostgreSQL 9.4.9"
+  7: "PostgreSQL 9.4.9"
+  6: "PostgreSQL 9.4.9"
+  5: "PostgreSQL 9.4.9"
+  4: "PostgreSQL 9.4.6"
+  3: "PostgreSQL 9.4.6"
+  2: "PostgreSQL 9.4.6"
+  1: "PostgreSQL 9.4.6"
+older: 5
+old: 16

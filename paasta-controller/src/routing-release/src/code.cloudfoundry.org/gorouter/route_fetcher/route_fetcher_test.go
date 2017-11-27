@@ -6,13 +6,13 @@ import (
 	"time"
 
 	"code.cloudfoundry.org/clock/fakeclock"
-	"code.cloudfoundry.org/lager"
-	"code.cloudfoundry.org/lager/lagertest"
 
 	"code.cloudfoundry.org/gorouter/config"
+	"code.cloudfoundry.org/gorouter/logger"
 	testRegistry "code.cloudfoundry.org/gorouter/registry/fakes"
 	"code.cloudfoundry.org/gorouter/route"
 	. "code.cloudfoundry.org/gorouter/route_fetcher"
+	"code.cloudfoundry.org/gorouter/test_util"
 	"code.cloudfoundry.org/routing-api"
 	fake_routing_api "code.cloudfoundry.org/routing-api/fake_routing_api"
 	"code.cloudfoundry.org/routing-api/models"
@@ -38,9 +38,9 @@ var _ = Describe("RouteFetcher", func() {
 	var (
 		cfg         *config.Config
 		uaaClient   *testUaaClient.FakeClient
-		registry    *testRegistry.FakeRegistryInterface
+		registry    *testRegistry.FakeRegistry
 		fetcher     *RouteFetcher
-		logger      lager.Logger
+		logger      logger.Logger
 		client      *fake_routing_api.FakeClient
 		eventSource *fake_routing_api.FakeEventSource
 
@@ -55,13 +55,13 @@ var _ = Describe("RouteFetcher", func() {
 	)
 
 	BeforeEach(func() {
-		logger = lagertest.NewTestLogger("test")
+		logger = test_util.NewTestZapLogger("test")
 		cfg = config.DefaultConfig()
 		cfg.PruneStaleDropletsInterval = 2 * time.Millisecond
 
 		retryInterval := 0
 		uaaClient = &testUaaClient.FakeClient{}
-		registry = &testRegistry.FakeRegistryInterface{}
+		registry = &testRegistry.FakeRegistry{}
 
 		token = &schema.Token{
 			AccessToken: "access_token",
@@ -153,6 +153,7 @@ var _ = Describe("RouteFetcher", func() {
 						*expectedRoute.TTL,
 						expectedRoute.RouteServiceUrl,
 						expectedRoute.ModificationTag,
+						"",
 					)))
 			}
 		})
@@ -226,6 +227,7 @@ var _ = Describe("RouteFetcher", func() {
 						*expectedRoute.TTL,
 						expectedRoute.RouteServiceUrl,
 						expectedRoute.ModificationTag,
+						"",
 					)))
 			}
 		})
@@ -462,6 +464,7 @@ var _ = Describe("RouteFetcher", func() {
 						*eventRoute.TTL,
 						eventRoute.RouteServiceUrl,
 						eventRoute.ModificationTag,
+						"",
 					)))
 			})
 		})
@@ -497,6 +500,7 @@ var _ = Describe("RouteFetcher", func() {
 						*eventRoute.TTL,
 						eventRoute.RouteServiceUrl,
 						eventRoute.ModificationTag,
+						"",
 					)))
 			})
 		})

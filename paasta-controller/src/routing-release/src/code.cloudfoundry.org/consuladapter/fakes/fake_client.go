@@ -33,6 +33,12 @@ type FakeClient struct {
 	kVReturns     struct {
 		result1 consuladapter.KV
 	}
+	StatusStub        func() consuladapter.Status
+	statusMutex       sync.RWMutex
+	statusArgsForCall []struct{}
+	statusReturns     struct {
+		result1 consuladapter.Status
+	}
 	LockOptsStub        func(opts *api.LockOptions) (consuladapter.Lock, error)
 	lockOptsMutex       sync.RWMutex
 	lockOptsArgsForCall []struct {
@@ -137,6 +143,30 @@ func (fake *FakeClient) KVReturns(result1 consuladapter.KV) {
 	fake.KVStub = nil
 	fake.kVReturns = struct {
 		result1 consuladapter.KV
+	}{result1}
+}
+
+func (fake *FakeClient) Status() consuladapter.Status {
+	fake.statusMutex.Lock()
+	fake.statusArgsForCall = append(fake.statusArgsForCall, struct{}{})
+	fake.statusMutex.Unlock()
+	if fake.StatusStub != nil {
+		return fake.StatusStub()
+	} else {
+		return fake.statusReturns.result1
+	}
+}
+
+func (fake *FakeClient) StatusCallCount() int {
+	fake.statusMutex.RLock()
+	defer fake.statusMutex.RUnlock()
+	return len(fake.statusArgsForCall)
+}
+
+func (fake *FakeClient) StatusReturns(result1 consuladapter.Status) {
+	fake.StatusStub = nil
+	fake.statusReturns = struct {
+		result1 consuladapter.Status
 	}{result1}
 }
 

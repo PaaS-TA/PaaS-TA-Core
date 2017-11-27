@@ -1,0 +1,15 @@
+---
+applications:
+  server.zip:
+    name: szxcvbn
+    framework:
+      name: standalone
+      info:
+        mem: 64M
+        description: Standalone Application
+        exec:
+    runtime: java
+    command: java $JAVA_OPTS -jar server_2.9.2-0.3-SNAPSHOT.jar
+    url: szxcvbn.${target-base}
+    mem: 512M
+    instances: 1

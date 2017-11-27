@@ -26,4 +26,9 @@ consul_cluster:
   servers: "http://localhost:5678"
   lock_ttl: 10s
   retry_interval: 5s
-
+skip_consul_lock: true
+locket:
+  locket_address: "http://localhost:5678"
+  locket_ca_cert_file: "some-locket-ca-cert"
+  locket_client_cert_file: "some-locket-client-cert"
+  locket_client_key_file: "some-locket-client-key"

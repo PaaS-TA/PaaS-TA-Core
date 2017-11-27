@@ -32,6 +32,10 @@ var _ = AppsDescribe("Admin Buildpacks", func() {
 		buildpackArchivePath string
 	)
 
+	noAppDetectedErrorRegexp := "NoAppDetectedError|An app was not successfully detected by any available buildpack"
+	buildpackCompileFailedRegexp := "BuildpackCompileFailed|App staging failed in the buildpack compile phase"
+	buildpackReleaseFailedRegexp := "BuildpackReleaseFailed|App staging failed in the buildpack release phase"
+
 	matchingFilename := func(appName string) string {
 		return fmt.Sprintf("simple-buildpack-please-match-%s", appName)
 	}
@@ -259,7 +263,7 @@ exit 1
 		start := cf.Cf("start", appName).Wait(Config.CfPushTimeoutDuration())
 		Expect(start).To(Exit(0))
 		appOutput := cf.Cf("app", appName).Wait(Config.DefaultTimeoutDuration())
-		Expect(appOutput).To(Say("buildpack: Simple"))
+		Expect(appOutput).To(Say("buildpack:\\s+Simple"))
 	}
 
 	itDoesNotDetectForEmptyApp := func() {
@@ -268,7 +272,7 @@ exit 1
 
 		start := cf.Cf("start", appName).Wait(Config.CfPushTimeoutDuration())
 		Expect(start).To(Exit(1))
-		Expect(start).To(Say("NoAppDetectedError"))
+		Expect(combineOutput(start.Out, start.Err)).To(Say(noAppDetectedErrorRegexp))
 	}
 
 	itDoesNotDetectWhenBuildpackDisabled := func() {
@@ -281,7 +285,7 @@ exit 1
 
 		start := cf.Cf("start", appName).Wait(Config.CfPushTimeoutDuration())
 		Expect(start).To(Exit(1))
-		Expect(start).To(Say("NoAppDetectedError"))
+		Expect(combineOutput(start.Out, start.Err)).To(Say(noAppDetectedErrorRegexp))
 	}
 
 	itDoesNotDetectWhenBuildpackDeleted := func() {
@@ -293,7 +297,7 @@ exit 1
 
 		start := cf.Cf("start", appName).Wait(Config.CfPushTimeoutDuration())
 		Expect(start).To(Exit(1))
-		Expect(start).To(Say("NoAppDetectedError"))
+		Expect(combineOutput(start.Out, start.Err)).To(Say(noAppDetectedErrorRegexp))
 	}
 
 	itRaisesBuildpackCompileFailedError := func() {
@@ -308,7 +312,7 @@ exit 1
 
 		start := cf.Cf("start", appName).Wait(Config.CfPushTimeoutDuration())
 		Expect(start).To(Exit(1))
-		Expect(start).To(Say("BuildpackCompileFailed"))
+		Expect(combineOutput(start.Out, start.Err)).To(Say(buildpackCompileFailedRegexp))
 	}
 
 	itRaisesBuildpackReleaseFailedError := func() {
@@ -317,7 +321,7 @@ exit 1
 
 		start := cf.Cf("start", appName).Wait(Config.CfPushTimeoutDuration())
 		Expect(start).To(Exit(1))
-		Expect(start).To(Say("BuildpackReleaseFailed"))
+		Expect(combineOutput(start.Out, start.Err)).To(Say(buildpackReleaseFailedRegexp))
 	}
 
 	Context("when the buildpack is not specified", func() {
@@ -337,6 +341,35 @@ exit 1
 
 			setupBadDetectBuildpack(appConfig{Empty: false})
 			itDoesNotDetectWhenBuildpackDeleted()
+		})
+	})
+
+	Context("when the buildpack is specified", func() {
+		It("stages the app using the specified buildpack", func() {
+			setupBadDetectBuildpack(appConfig{Empty: false})
+
+			Expect(cf.Cf("push", appName, "--no-start", "-b", buildpackName, "-m", DEFAULT_MEMORY_LIMIT, "-p", appPath, "-d", Config.GetAppsDomain()).Wait(Config.DefaultTimeoutDuration())).To(Exit(0))
+			app_helpers.SetBackend(appName)
+
+			start := cf.Cf("start", appName).Wait(Config.CfPushTimeoutDuration())
+			Expect(start).To(Exit(0))
+
+			appOutput := cf.Cf("app", appName).Wait(Config.DefaultTimeoutDuration())
+			Expect(appOutput).To(Say("buildpack:\\s+" + buildpackName))
+		})
+
+		It("fails if the specified buildpack is disabled", func() {
+			setupBadDetectBuildpack(appConfig{Empty: false})
+
+			workflowhelpers.AsUser(TestSetup.AdminUserContext(), Config.DefaultTimeoutDuration(), func() {
+				Expect(cf.Cf("update-buildpack", buildpackName, "--disable").Wait(Config.DefaultTimeoutDuration())).To(Exit(0))
+			})
+
+			Expect(cf.Cf("push", appName, "--no-start", "-b", buildpackName, "-m", DEFAULT_MEMORY_LIMIT, "-p", appPath, "-d", Config.GetAppsDomain()).Wait(Config.DefaultTimeoutDuration())).To(Exit(0))
+			app_helpers.SetBackend(appName)
+
+			start := cf.Cf("start", appName).Wait(Config.CfPushTimeoutDuration())
+			Expect(start).To(Exit(1))
 		})
 	})
 
@@ -360,3 +393,9 @@ exit 1
 		})
 	})
 })
+
+func combineOutput(outBuffer *Buffer, errBuffer *Buffer) *Buffer {
+	combinedOutput := BufferWithBytes(outBuffer.Contents())
+	combinedOutput.Write(errBuffer.Contents())
+	return combinedOutput
+}

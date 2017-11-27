@@ -10,11 +10,11 @@ import (
 
 	"code.cloudfoundry.org/bbs"
 	"code.cloudfoundry.org/cfhttp"
-	"code.cloudfoundry.org/cflager"
 	"code.cloudfoundry.org/clock"
 	"code.cloudfoundry.org/consuladapter"
 	"code.cloudfoundry.org/debugserver"
 	"code.cloudfoundry.org/lager"
+	"code.cloudfoundry.org/lager/lagerflags"
 	"code.cloudfoundry.org/locket"
 	"code.cloudfoundry.org/routing-api"
 	"code.cloudfoundry.org/tcp-emitter/config"
@@ -89,7 +89,7 @@ var consulCluster = flag.String(
 
 var lockTTL = flag.Duration(
 	"lockTTL",
-	locket.LockTTL,
+	locket.DefaultSessionTTL,
 	"TTL for service lock",
 )
 
@@ -149,12 +149,12 @@ var bbsMaxIdleConnsPerHost = flag.Int(
 
 func main() {
 	debugserver.AddFlags(flag.CommandLine)
-	cflager.AddFlags(flag.CommandLine)
+	lagerflags.AddFlags(flag.CommandLine)
 	flag.Parse()
 
 	cfhttp.Initialize(*communicationTimeout)
 
-	logger, reconfigurableSink := cflager.New("tcp-emitter")
+	logger, reconfigurableSink := lagerflags.New("tcp-emitter")
 	logger.Info("starting")
 
 	clock := clock.NewClock()
@@ -184,6 +184,13 @@ func main() {
 		}
 	} else {
 		logger.Error("invalid-scheme-in-bbs-address", err)
+		os.Exit(1)
+	}
+
+	// Check BBS connectivity
+	connected := bbsClient.Ping(logger)
+	if !connected {
+		logger.Error("failed-to-connect-to-bbs", nil)
 		os.Exit(1)
 	}
 
@@ -221,14 +228,14 @@ func main() {
 		*lockTTL, *lockRetryInterval, clock)
 
 	members := grouper.Members{
-		{"lock-maintainer", lockMaintainer},
-		{"watcher", watcher},
-		{"syncer", syncRunner},
+		grouper.Member{Name: "lock-maintainer", Runner: lockMaintainer},
+		grouper.Member{Name: "watcher", Runner: watcher},
+		grouper.Member{Name: "syncer", Runner: syncRunner},
 	}
 
 	if dbgAddr := debugserver.DebugAddress(flag.CommandLine); dbgAddr != "" {
 		members = append(grouper.Members{
-			{"debug-server", debugserver.Runner(dbgAddr, reconfigurableSink)},
+			grouper.Member{Name: "debug-server", Runner: debugserver.Runner(dbgAddr, reconfigurableSink)},
 		}, members...)
 	}
 

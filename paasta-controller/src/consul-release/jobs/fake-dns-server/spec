@@ -7,4 +7,15 @@ templates:
 packages:
   - acceptance-tests
 
-properties: {}
+provides:
+- name: dns
+  type: dns
+
+properties:
+  fake_dns_server.host_to_add.name:
+    description: "Name of the entry to add to the hosts file"
+    default: ""
+
+  fake_dns_server.host_to_add.address:
+    description: "Address of the entry to add to the hosts file"
+    default: ""

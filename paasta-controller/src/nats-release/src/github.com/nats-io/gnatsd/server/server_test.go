@@ -1,22 +1,26 @@
-// Copyright 2015 Apcera Inc. All rights reserved.
+// Copyright 2015-2016 Apcera Inc. All rights reserved.
 
 package server
 
 import (
+	"flag"
+	"fmt"
 	"net"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/nats-io/go-nats"
 )
 
 var DefaultOptions = Options{
-	Host:        "localhost",
-	Port:        11222,
-	HTTPPort:    11333,
-	ClusterPort: 11444,
-	ProfPort:    11280,
-	NoLog:       true,
-	NoSigs:      true,
+	Host:     "localhost",
+	Port:     11222,
+	HTTPPort: 11333,
+	Cluster:  ClusterOpts{Port: 11444},
+	ProfPort: 11280,
+	NoLog:    true,
+	NoSigs:   true,
 }
 
 // New Go Routine based server
@@ -32,30 +36,11 @@ func RunServer(opts *Options) *Server {
 	// Run server in Go routine.
 	go s.Start()
 
-	end := time.Now().Add(10 * time.Second)
-	for time.Now().Before(end) {
-		addr := s.GetListenEndpoint()
-		if addr == "" {
-			time.Sleep(10 * time.Millisecond)
-			// Retry. We might take a little while to open a connection.
-			continue
-		}
-		conn, err := net.Dial("tcp", addr)
-		if err != nil {
-			// Retry after 50ms
-			time.Sleep(50 * time.Millisecond)
-			continue
-		}
-		conn.Close()
-		// Wait a bit to give a chance to the server to remove this
-		// "client" from its state, which may otherwise interfere with
-		// some tests.
-		time.Sleep(25 * time.Millisecond)
-
-		return s
+	// Wait for accept loop(s) to be started
+	if !s.ReadyForConnections(10 * time.Second) {
+		panic("Unable to start NATS Server in Go Routine")
 	}
-	panic("Unable to start NATS Server in Go Routine")
-
+	return s
 }
 
 func TestStartupAndShutdown(t *testing.T) {
@@ -136,5 +121,157 @@ func TestTlsCipher(t *testing.T) {
 	}
 	if !strings.Contains(tlsCipher(0x9999), "Unknown") {
 		t.Fatalf("Expected an unknown cipher.")
+	}
+}
+
+func TestGetConnectURLs(t *testing.T) {
+	opts := DefaultOptions
+	opts.Port = 4222
+
+	var globalIP net.IP
+
+	checkGlobalConnectURLs := func() {
+		s := New(&opts)
+		defer s.Shutdown()
+
+		urls := s.getClientConnectURLs()
+		if len(urls) == 0 {
+			t.Fatalf("Expected to get a list of urls, got none for listen addr: %v", opts.Host)
+		}
+		for _, u := range urls {
+			tcpaddr, err := net.ResolveTCPAddr("tcp", u)
+			if err != nil {
+				t.Fatalf("Error resolving: %v", err)
+			}
+			ip := tcpaddr.IP
+			if !ip.IsGlobalUnicast() {
+				t.Fatalf("IP %v is not global", ip.String())
+			}
+			if ip.IsUnspecified() {
+				t.Fatalf("IP %v is unspecified", ip.String())
+			}
+			addr := strings.TrimSuffix(u, ":4222")
+			if addr == opts.Host {
+				t.Fatalf("Returned url is not right: %v", u)
+			}
+			if globalIP == nil {
+				globalIP = ip
+			}
+		}
+	}
+
+	listenAddrs := []string{"0.0.0.0", "::"}
+	for _, listenAddr := range listenAddrs {
+		opts.Host = listenAddr
+		checkGlobalConnectURLs()
+	}
+
+	checkConnectURLsHasOnlyOne := func() {
+		s := New(&opts)
+		defer s.Shutdown()
+
+		urls := s.getClientConnectURLs()
+		if len(urls) != 1 {
+			t.Fatalf("Expected one URL, got %v", urls)
+		}
+		tcpaddr, err := net.ResolveTCPAddr("tcp", urls[0])
+		if err != nil {
+			t.Fatalf("Error resolving: %v", err)
+		}
+		ip := tcpaddr.IP
+		if ip.String() != opts.Host {
+			t.Fatalf("Expected connect URL to be %v, got %v", opts.Host, ip.String())
+		}
+	}
+
+	singleConnectReturned := []string{"127.0.0.1", "::1"}
+	if globalIP != nil {
+		singleConnectReturned = append(singleConnectReturned, globalIP.String())
+	}
+	for _, listenAddr := range singleConnectReturned {
+		opts.Host = listenAddr
+		checkConnectURLsHasOnlyOne()
+	}
+}
+
+func TestNoDeadlockOnStartFailure(t *testing.T) {
+	opts := DefaultOptions
+	opts.Host = "x.x.x.x" // bad host
+	opts.Port = 4222
+	opts.Cluster.Host = "localhost"
+	opts.Cluster.Port = 6222
+
+	s := New(&opts)
+	// This should return since it should fail to start a listener
+	// on x.x.x.x:4222
+	s.Start()
+	// We should be able to shutdown
+	s.Shutdown()
+}
+
+func TestMaxConnections(t *testing.T) {
+	opts := DefaultOptions
+	opts.MaxConn = 1
+	s := RunServer(&opts)
+	defer s.Shutdown()
+
+	addr := fmt.Sprintf("nats://%s:%d", opts.Host, opts.Port)
+	nc, err := nats.Connect(addr)
+	if err != nil {
+		t.Fatalf("Error creating client: %v\n", err)
+	}
+	defer nc.Close()
+
+	nc2, err := nats.Connect(addr)
+	if err == nil {
+		nc2.Close()
+		t.Fatal("Expected connection to fail")
+	}
+}
+
+func TestProcessCommandLineArgs(t *testing.T) {
+	var host string
+	var port int
+	cmd := flag.NewFlagSet("gnatsd", flag.ExitOnError)
+	cmd.StringVar(&host, "a", "0.0.0.0", "Host.")
+	cmd.IntVar(&port, "p", 4222, "Port.")
+
+	cmd.Parse([]string{"-a", "127.0.0.1", "-p", "9090"})
+	showVersion, showHelp, err := ProcessCommandLineArgs(cmd)
+	if err != nil {
+		t.Errorf("Expected no errors, got: %s", err)
+	}
+	if showVersion || showHelp {
+		t.Errorf("Expected not having to handle subcommands")
+	}
+
+	cmd.Parse([]string{"version"})
+	showVersion, showHelp, err = ProcessCommandLineArgs(cmd)
+	if err != nil {
+		t.Errorf("Expected no errors, got: %s", err)
+	}
+	if !showVersion {
+		t.Errorf("Expected having to handle version command")
+	}
+	if showHelp {
+		t.Errorf("Expected not having to handle help command")
+	}
+
+	cmd.Parse([]string{"help"})
+	showVersion, showHelp, err = ProcessCommandLineArgs(cmd)
+	if err != nil {
+		t.Errorf("Expected no errors, got: %s", err)
+	}
+	if showVersion {
+		t.Errorf("Expected not having to handle version command")
+	}
+	if !showHelp {
+		t.Errorf("Expected having to handle help command")
+	}
+
+	cmd.Parse([]string{"foo", "-p", "9090"})
+	_, _, err = ProcessCommandLineArgs(cmd)
+	if err == nil {
+		t.Errorf("Expected an error handling the command arguments")
 	}
 }

@@ -1,0 +1,29 @@
+{
+  "bbs_api_url": "http://bbs.example.com",
+  "bbs_ca_cert": "bbs-ca-cert",
+  "bbs_client_cert": "bbs-client-cert",
+  "bbs_client_key": "bbs-client-key",
+  "bbs_client_cache_size": 10,
+  "bbs_max_idle_conns_per_host": 11,
+  "cc_base_url": "cc_base_url",
+  "cc_basic_auth_password": "cc_basic_auth_password",
+  "cc_uploader_url": "cc_uploader_url",
+  "cc_basic_auth_username": "cc_basic_auth_username",
+  "consul_cluster": "consul_cluster",
+  "debug_server_config": {
+    "debug_address": "debug_address"
+  },
+  "docker_registry_address": "docker_registry_address",
+  "docker_staging_stack": "docker_staging_stack",
+  "dropsonde_port": 12,
+  "insecure_docker_registries": ["insecure_docker_registries"],
+  "file_server_url": "file_server_url",
+  "lager_config": {
+    "log_level": "fatal"
+  },
+  "lifecycles":["lifecycles"],
+  "stager_listen_addr": "stager_listen_addr",
+  "diego_privileged_containers": true,
+  "skip_cert_verify": false,
+  "staging_task_callback_url": "staging_task_callback_url"
+}

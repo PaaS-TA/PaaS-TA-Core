@@ -3,7 +3,7 @@
 set -e -x
 
 # Install certstrap
-go get -v github.com/square/certstrap
+go get -u github.com/square/certstrap
 
 # Place keys and certificates here
 depot_path="etcd-certs"

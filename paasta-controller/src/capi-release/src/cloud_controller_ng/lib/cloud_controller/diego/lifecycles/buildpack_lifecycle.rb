@@ -1,18 +1,18 @@
 require 'cloud_controller/diego/lifecycles/buildpack_info'
 require 'cloud_controller/diego/lifecycles/buildpack_lifecycle_data_validator'
-require 'queries/buildpack_lifecycle_fetcher'
+require 'fetchers/buildpack_lifecycle_fetcher'
 
 module VCAP::CloudController
   class BuildpackLifecycle
-    attr_reader :staging_message, :buildpack_info
+    attr_reader :staging_message, :buildpack_infos
 
     def initialize(package, staging_message)
       @staging_message = staging_message
       @package         = package
 
-      db_result       = BuildpackLifecycleFetcher.new.fetch(buildpack_to_use, staging_stack)
-      @buildpack_info = BuildpackInfo.new(buildpack_to_use, db_result[:buildpack])
-      @validator      = BuildpackLifecycleDataValidator.new({ buildpack_info: buildpack_info, stack: db_result[:stack] })
+      db_result = BuildpackLifecycleFetcher.fetch(buildpacks_to_use, staging_stack)
+      @buildpack_infos = db_result[:buildpack_infos]
+      @validator = BuildpackLifecycleDataValidator.new({ buildpack_infos: buildpack_infos, stack: db_result[:stack] })
     end
 
     delegate :valid?, :errors, to: :validator
@@ -21,11 +21,11 @@ module VCAP::CloudController
       Lifecycles::BUILDPACK
     end
 
-    def create_lifecycle_data_model(droplet)
+    def create_lifecycle_data_model(build)
       VCAP::CloudController::BuildpackLifecycleDataModel.create(
-        buildpack: buildpack_to_use,
-        stack:     requested_stack,
-        droplet:   droplet
+        buildpacks: Array(buildpacks_to_use),
+        stack:     staging_stack,
+        build:     build
       )
     end
 
@@ -35,24 +35,17 @@ module VCAP::CloudController
       }
     end
 
-    def pre_known_receipt_information
-      {
-        buildpack_receipt_buildpack_guid: buildpack_info.buildpack_record.try(:guid),
-        buildpack_receipt_stack_name:     staging_stack
-      }
-    end
-
     def staging_stack
       requested_stack || app_stack || VCAP::CloudController::Stack.default.name
     end
 
     private
 
-    def buildpack_to_use
-      if staging_message.buildpack_data.requested?(:buildpack)
-        staging_message.buildpack_data.buildpack
+    def buildpacks_to_use
+      if staging_message.buildpack_data.buildpacks
+        staging_message.buildpack_data.buildpacks
       else
-        @package.app.lifecycle_data.try(:buildpack)
+        @package.app.lifecycle_data.buildpacks
       end
     end
 

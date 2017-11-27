@@ -1,4 +1,5 @@
 # encoding: utf-8
+
 require 'spec_helper'
 
 module VCAP::CloudController
@@ -7,16 +8,16 @@ module VCAP::CloudController
     let(:space) { Space.make }
 
     describe '#staging_in_progress' do
-      context 'when a droplet is in staging state' do
-        let!(:droplet) { DropletModel.make(app_guid: app_model.guid, state: DropletModel::STAGING_STATE) }
+      context 'when a build is in staging state' do
+        let!(:build) { BuildModel.make(app_guid: app_model.guid, state: BuildModel::STAGING_STATE) }
 
         it 'returns true' do
           expect(app_model.staging_in_progress?).to eq(true)
         end
       end
 
-      context 'when a droplet is not in neither pending or staging state' do
-        let!(:droplet) { DropletModel.make(app_guid: app_model.guid, state: DropletModel::STAGED_STATE) }
+      context 'when a build is not in neither pending or staging state' do
+        let!(:build) { BuildModel.make(app_guid: app_model.guid, state: BuildModel::STAGED_STATE) }
 
         it 'returns false' do
           expect(app_model.staging_in_progress?).to eq(false)
@@ -28,6 +29,22 @@ module VCAP::CloudController
       describe 'max_task_sequence_id' do
         it 'defaults to 0' do
           expect(app_model.max_task_sequence_id).to eq(1)
+        end
+      end
+    end
+
+    describe '#destroy' do
+      context 'when the app has buildpack_lifecycle_data' do
+        subject(:lifecycle_data) do
+          BuildpackLifecycleDataModel.create(buildpacks: ['http://some-buildpack.com', 'http://another-buildpack.net'])
+        end
+
+        it 'destroys the buildpack_lifecycle_data and associated buildpack_lifecycle_buildpacks' do
+          app_model.update(buildpack_lifecycle_data: lifecycle_data)
+          expect {
+            app_model.destroy
+          }.to change { BuildpackLifecycleDataModel.count }.by(-1).
+            and change { BuildpackLifecycleBuildpackModel.count }.by(-2)
         end
       end
     end
@@ -168,7 +185,7 @@ module VCAP::CloudController
       end
 
       it 'is a persistable hash' do
-        expect(app_model.reload.lifecycle_data.buildpack).to eq(lifecycle_data.buildpack)
+        expect(app_model.reload.lifecycle_data.buildpacks).to eq(lifecycle_data.buildpacks)
         expect(app_model.reload.lifecycle_data.stack).to eq(lifecycle_data.stack)
       end
 
@@ -177,6 +194,61 @@ module VCAP::CloudController
 
         it 'returns a docker data model' do
           expect(non_buildpack_app_model.lifecycle_data).to be_a(DockerLifecycleDataModel)
+        end
+      end
+    end
+
+    describe '#database_uri' do
+      let(:parent_app) { AppModel.make(environment_variables: { 'jesse' => 'awesome' }, space: space) }
+      let(:process) { ProcessModel.make(app: parent_app) }
+
+      context 'when there are database-like services' do
+        before do
+          sql_service_plan     = ServicePlan.make(service: Service.make(label: 'elephantsql-n/a'))
+          sql_service_instance = ManagedServiceInstance.make(space: space, service_plan: sql_service_plan, name: 'elephantsql-vip-uat')
+          ServiceBinding.make(app: parent_app, service_instance: sql_service_instance, credentials: { 'uri' => 'mysql://foo.com' })
+
+          banana_service_plan     = ServicePlan.make(service: Service.make(label: 'chiquita-n/a'))
+          banana_service_instance = ManagedServiceInstance.make(space: space, service_plan: banana_service_plan, name: 'chiqiuta-yummy')
+          ServiceBinding.make(app: parent_app, service_instance: banana_service_instance, credentials: { 'uri' => 'banana://yum.com' })
+        end
+
+        it 'returns database uri' do
+          expect(process.reload.database_uri).to eq('mysql2://foo.com')
+        end
+      end
+
+      context 'when there are non-database-like services' do
+        before do
+          banana_service_plan     = ServicePlan.make(service: Service.make(label: 'chiquita-n/a'))
+          banana_service_instance = ManagedServiceInstance.make(space: space, service_plan: banana_service_plan, name: 'chiqiuta-yummy')
+          ServiceBinding.make(app: parent_app, service_instance: banana_service_instance, credentials: { 'uri' => 'banana://yum.com' })
+
+          uncredentialed_service_plan     = ServicePlan.make(service: Service.make(label: 'mysterious-n/a'))
+          uncredentialed_service_instance = ManagedServiceInstance.make(space: space, service_plan: uncredentialed_service_plan, name: 'mysterious-mystery')
+          ServiceBinding.make(app: parent_app, service_instance: uncredentialed_service_instance, credentials: {})
+        end
+
+        it 'returns nil' do
+          expect(process.reload.database_uri).to be_nil
+        end
+      end
+
+      context 'when there are no services' do
+        it 'returns nil' do
+          expect(process.reload.database_uri).to be_nil
+        end
+      end
+
+      context 'when the service binding credentials is nil' do
+        before do
+          banana_service_plan     = ServicePlan.make(service: Service.make(label: 'chiquita-n/a'))
+          banana_service_instance = ManagedServiceInstance.make(space: space, service_plan: banana_service_plan, name: 'chiqiuta-yummy')
+          ServiceBinding.make(app: parent_app, service_instance: banana_service_instance, credentials: nil)
+        end
+
+        it 'returns nil' do
+          expect(process.reload.database_uri).to be_nil
         end
       end
     end

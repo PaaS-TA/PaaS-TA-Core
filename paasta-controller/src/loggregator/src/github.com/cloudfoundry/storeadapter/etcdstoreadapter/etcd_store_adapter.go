@@ -24,19 +24,29 @@ type ETCDStoreAdapter struct {
 
 func New(options *ETCDOptions, workPool *workpool.WorkPool) (*ETCDStoreAdapter, error) {
 	if options.IsSSL {
-		return newTLSClient(options.ClusterUrls, options.CertFile, options.KeyFile, options.CAFile, workPool)
+		return newTLSClient(options, workPool)
 	}
 
-	return newHTTPClient(options.ClusterUrls, workPool), nil
+	return newHTTPClient(options, workPool), nil
 }
 
-func newHTTPClient(urls []string, workPool *workpool.WorkPool) *ETCDStoreAdapter {
-	client := etcd.NewClient(urls)
+func newHTTPClient(options *ETCDOptions, workPool *workpool.WorkPool) *ETCDStoreAdapter {
+	client := etcd.NewClient(options.ClusterUrls)
+	tr := &http.Transport{
+		Dial: (&net.Dialer{
+			Timeout:   time.Second,
+			KeepAlive: time.Second,
+		}).Dial,
+		MaxIdleConns:        options.MaxIdleConns,
+		MaxIdleConnsPerHost: options.MaxIdleConns,
+		IdleConnTimeout:     2 * time.Minute,
+	}
+	client.SetTransport(tr)
 	return newAdapter(client, workPool)
 }
 
-func newTLSClient(urls []string, cert, key, caCert string, workPool *workpool.WorkPool) (*ETCDStoreAdapter, error) {
-	client, err := NewETCDTLSClient(urls, cert, key, caCert)
+func newTLSClient(options *ETCDOptions, workPool *workpool.WorkPool) (*ETCDStoreAdapter, error) {
+	client, err := NewETCDTLSClient(options)
 	if err != nil {
 		return nil, err
 	}
@@ -44,9 +54,14 @@ func newTLSClient(urls []string, cert, key, caCert string, workPool *workpool.Wo
 	return newAdapter(client, workPool), nil
 }
 
-func NewETCDTLSClient(urls []string, certFile, keyFile, caCertFile string) (*etcd.Client, error) {
-	client := etcd.NewClient(urls)
-	tlsCert, err := tls.LoadX509KeyPair(certFile, keyFile)
+var supportedCipherSuites = []uint16{
+	tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+	tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+}
+
+func NewETCDTLSClient(options *ETCDOptions) (*etcd.Client, error) {
+	client := etcd.NewClient(options.ClusterUrls)
+	tlsCert, err := tls.LoadX509KeyPair(options.CertFile, options.KeyFile)
 	if err != nil {
 		return nil, err
 	}
@@ -54,6 +69,7 @@ func NewETCDTLSClient(urls []string, certFile, keyFile, caCertFile string) (*etc
 	tlsConfig := &tls.Config{
 		Certificates:       []tls.Certificate{tlsCert},
 		InsecureSkipVerify: false,
+		CipherSuites:       supportedCipherSuites,
 	}
 
 	tr := &http.Transport{
@@ -62,10 +78,13 @@ func NewETCDTLSClient(urls []string, certFile, keyFile, caCertFile string) (*etc
 			Timeout:   time.Second,
 			KeepAlive: time.Second,
 		}).Dial,
+		MaxIdleConns:        options.MaxIdleConns,
+		MaxIdleConnsPerHost: options.MaxIdleConns,
+		IdleConnTimeout:     2 * time.Minute,
 	}
 	client.SetTransport(tr)
-	if caCertFile != "" {
-		err = client.AddRootCA(caCertFile)
+	if options.CAFile != "" {
+		err = client.AddRootCA(options.CAFile)
 	}
 	if err != nil {
 		return nil, err
@@ -119,15 +138,15 @@ func (adapter *ETCDStoreAdapter) etcdErrorCode(err error) int {
 func (adapter *ETCDStoreAdapter) convertError(err error) error {
 	switch adapter.etcdErrorCode(err) {
 	case 501:
-		return storeadapter.ErrorTimeout
+		return storeadapter.NewError(err, storeadapter.ErrorTimeout)
 	case 100:
-		return storeadapter.ErrorKeyNotFound
+		return storeadapter.NewError(err, storeadapter.ErrorKeyNotFound)
 	case 102:
-		return storeadapter.ErrorNodeIsDirectory
+		return storeadapter.NewError(err, storeadapter.ErrorNodeIsDirectory)
 	case 105:
-		return storeadapter.ErrorKeyExists
+		return storeadapter.NewError(err, storeadapter.ErrorKeyExists)
 	case 101:
-		return storeadapter.ErrorKeyComparisonFailed
+		return storeadapter.NewError(err, storeadapter.ErrorKeyComparisonFailed)
 	}
 
 	return err
@@ -175,7 +194,7 @@ func (adapter *ETCDStoreAdapter) Get(key string) (storeadapter.StoreNode, error)
 	}
 
 	if response.Node.Dir {
-		return storeadapter.StoreNode{}, storeadapter.ErrorNodeIsDirectory
+		return storeadapter.StoreNode{}, storeadapter.NewError(errors.New(storeadapter.ErrorNodeIsDirectoryDescription), storeadapter.ErrorNodeIsDirectory)
 	}
 
 	return storeadapter.StoreNode{
@@ -205,7 +224,7 @@ func (adapter *ETCDStoreAdapter) ListRecursively(key string) (storeadapter.Store
 	}
 
 	if !response.Node.Dir {
-		return storeadapter.StoreNode{}, storeadapter.ErrorNodeIsNotDirectory
+		return storeadapter.StoreNode{}, storeadapter.NewError(errors.New(storeadapter.ErrorNodeIsDirectoryDescription), storeadapter.ErrorNodeIsNotDirectory)
 	}
 
 	if len(response.Node.Nodes) == 0 {
@@ -380,7 +399,7 @@ func (adapter *ETCDStoreAdapter) CompareAndDeleteByIndex(nodes ...storeadapter.S
 func (adapter *ETCDStoreAdapter) UpdateDirTTL(key string, ttl uint64) error {
 	response, err := adapter.Get(key)
 	if err == nil && response.Dir == false {
-		return storeadapter.ErrorNodeIsNotDirectory
+		return storeadapter.NewError(errors.New(storeadapter.ErrorNodeIsDirectoryDescription), storeadapter.ErrorNodeIsDirectory)
 	}
 
 	results := make(chan error, 1)
@@ -525,7 +544,7 @@ func (adapter *ETCDStoreAdapter) makeWatchEvent(event *etcd.Response) (storeadap
 
 func (adapter *ETCDStoreAdapter) MaintainNode(storeNode storeadapter.StoreNode) (<-chan bool, chan (chan bool), error) {
 	if storeNode.TTL == 0 {
-		return nil, nil, storeadapter.ErrorInvalidTTL
+		return nil, nil, storeadapter.NewError(errors.New(storeadapter.ErrorInvalidTTLDescription), storeadapter.ErrorInvalidTTL)
 	}
 
 	if len(storeNode.Value) == 0 {
@@ -588,7 +607,7 @@ func (adapter *ETCDStoreAdapter) maintainNode(storeNode storeadapter.StoreNode, 
 					}
 
 					err = adapter.convertError(err)
-					if err == storeadapter.ErrorKeyNotFound {
+					if cErr, ok := err.(storeadapter.Error); ok && cErr.Type() == storeadapter.ErrorKeyNotFound {
 						created = false
 						continue
 					}
@@ -611,7 +630,7 @@ func (adapter *ETCDStoreAdapter) maintainNode(storeNode storeadapter.StoreNode, 
 					}
 
 					err = adapter.convertError(err)
-					if err == storeadapter.ErrorKeyExists {
+					if cErr, ok := err.(storeadapter.Error); ok && cErr.Type() == storeadapter.ErrorKeyExists {
 						created = true
 						continue
 					}

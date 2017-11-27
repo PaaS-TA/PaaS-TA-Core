@@ -32,6 +32,12 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+import static java.util.Collections.emptyList;
+import static java.util.Optional.ofNullable;
+import static org.springframework.util.StringUtils.hasText;
 
 public abstract class UaaUrlUtils {
 
@@ -68,20 +74,43 @@ public abstract class UaaUrlUtils {
         return builder;
     }
 
+    private static final Pattern allowedRedirectUriPattern = Pattern.compile(
+        "^http(\\*|s)?://" +            //URL starts with 'www.' or 'http://' or 'https://' or 'http*://
+        "(.*:.*@)?" +                   //username/password in URL
+        "(([a-zA-Z0-9\\-\\*]+\\.)*" +   //subdomains
+        "[a-zA-Z0-9\\-]+\\.)?" +        //hostname
+        "[a-zA-Z0-9\\-]+" +             //tld
+        "(:[0-9]+)?(/.*|$)"             //port and path
+    );
+    public static boolean isValidRegisteredRedirectUrl(String url) {
+        if (hasText(url)) {
+            return allowedRedirectUriPattern.matcher(url).matches();
+        }
+        return false;
+    }
+
+    /**
+     * Finds and returns a matching redirect URL according to the following logic:
+     * <ul>
+     *     <li>If the requstedRedirectUri matches the whitelist the requestedRedirectUri is returned</li>
+     *     <li>If the whitelist is null or empty AND the fallbackRedirectUri is null, the requestedRedirectUri is returned - OPEN REDIRECT</li>
+     *     <li>If the whitelist is null or empty AND the fallbackRedirectUri is not null, the fallbackRedirectUri is returned</li>
+     * </ul>
+     * @param redirectUris - a whitelist collection of ant path patterns
+     * @param requestedRedirectUri - the requested redirect URI, returned if whitelist matches or the fallbackRedirectUri is null
+     * @param fallbackRedirectUri - returned if non null and the requestedRedirectUri doesn't match the whitelist redirectUris
+     * @return a redirect URI, either the requested or fallback as described above
+     */
     public static String findMatchingRedirectUri(Collection<String> redirectUris, String requestedRedirectUri, String fallbackRedirectUri) {
         AntPathMatcher matcher = new AntPathMatcher();
 
-        if (redirectUris == null) {
-            return requestedRedirectUri;
-        }
-
-        for (String pattern : redirectUris) {
+        for (String pattern : ofNullable(redirectUris).orElse(emptyList())) {
             if (matcher.match(pattern, requestedRedirectUri)) {
                 return requestedRedirectUri;
             }
         }
 
-        return fallbackRedirectUri;
+        return ofNullable(fallbackRedirectUri).orElse(requestedRedirectUri);
     }
 
     public static String getHostForURI(String uri) {
@@ -91,10 +120,10 @@ public abstract class UaaUrlUtils {
 
     public static String getBaseURL(HttpServletRequest request) {
         //returns scheme, host and context path
-        //for example http://localhost:8080/uaa or http://login.identity.cf-app.com
+        //for example http://localhost:8080/uaa or http://login.uaa-acceptance.cf-app.com
         String requestURL = request.getRequestURL().toString();
-        return StringUtils.hasText(request.getServletPath()) ?
-            requestURL.substring(0, requestURL.indexOf(request.getServletPath())) :
+        return hasText(request.getServletPath()) ?
+            requestURL.substring(0, requestURL.lastIndexOf(request.getServletPath())) :
             requestURL;
     }
 
@@ -145,19 +174,22 @@ public abstract class UaaUrlUtils {
     public static String addFragmentComponent(String urlString, String component) {
         URI uri = URI.create(urlString);
         UriComponentsBuilder builder = UriComponentsBuilder.fromUri(uri);
-        builder.fragment(StringUtils.hasText(uri.getFragment()) ? uri.getFragment() + "&" + component : component);
+        builder.fragment(hasText(uri.getFragment()) ? uri.getFragment() + "&" + component : component);
         return builder.build().toUriString();
     }
 
     public static String addSubdomainToUrl(String url) {
+        return addSubdomainToUrl(url, getSubdomain());
+    }
+    public static String addSubdomainToUrl(String url, String subdomain) {
         UriComponentsBuilder builder = UriComponentsBuilder.fromHttpUrl(url);
-        builder.host(getSubdomain() + builder.build().getHost());
+        builder.host(subdomain + builder.build().getHost());
         return builder.build().toUriString();
     }
 
     public static String getSubdomain() {
         String subdomain = IdentityZoneHolder.get().getSubdomain();
-        if (StringUtils.hasText(subdomain)) {
+        if (hasText(subdomain)) {
             subdomain += ".";
         }
         return subdomain.trim();

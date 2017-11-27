@@ -78,23 +78,37 @@ func cpuWeight(memoryMB int) uint32 {
 	return uint32((100 * cpuProxy) / MaxCpuProxy)
 }
 
-func createLrpEnv(env []*models.EnvironmentVariable, exposedPorts []uint32) []*models.EnvironmentVariable {
+func createLrpEnv(env []*models.EnvironmentVariable, exposedPorts []uint32, includeDeprecated bool) []*models.EnvironmentVariable {
 	if len(exposedPorts) > 0 {
-		env = append(env, &models.EnvironmentVariable{Name: "PORT", Value: fmt.Sprintf("%d", exposedPorts[0])})
+		portValue := fmt.Sprintf("%d", exposedPorts[0])
+		env = append(env, &models.EnvironmentVariable{Name: "PORT", Value: portValue})
+		if includeDeprecated {
+			env = append(env, &models.EnvironmentVariable{Name: "VCAP_APP_PORT", Value: portValue})
+		}
 	}
+
+	if includeDeprecated {
+		env = append(env, &models.EnvironmentVariable{Name: "VCAP_APP_HOST", Value: "0.0.0.0"})
+	}
+
 	return env
 }
 
-func getParallelAction(ports []uint32, user string) *models.ParallelAction {
+func getParallelAction(ports []uint32, user string, uri string) *models.ParallelAction {
 	fileDescriptorLimit := DefaultFileDescriptorLimit
 	parallelAction := &models.ParallelAction{}
 	for _, port := range ports {
+		args := []string{fmt.Sprintf("-port=%d", port)}
+		if uri != "" {
+			args = append(args, fmt.Sprintf("-uri=%s", uri))
+		}
+
 		parallelAction.Actions = append(parallelAction.Actions,
 			&models.Action{
 				RunAction: &models.RunAction{
 					User:      user,
 					Path:      "/tmp/lifecycle/healthcheck",
-					Args:      []string{fmt.Sprintf("-port=%d", port)},
+					Args:      args,
 					LogSource: HealthLogSource,
 					ResourceLimits: &models.ResourceLimits{
 						Nofile: &fileDescriptorLimit,

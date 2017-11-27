@@ -21,17 +21,30 @@ dependencies {
   compile group: 'org.springframework', name: 'spring-context-support', version:springVersion
   compile group: 'org.springframework.security', name: 'spring-security-core', version: parent.springSecurityVersion
   compile group: 'org.springframework.security', name: 'spring-security-jwt', version: parent.springSecurityJwtVersion
+  compile group: 'org.apache.httpcomponents', name: 'httpclient', version: parent.commonsHttpClientVersion
   compile group: 'org.springframework.security', name: 'spring-security-openid', version:springSecurityVersion
+  compile group: 'org.springframework.security', name: 'spring-security-web', version:springSecurityVersion
   compile(group: 'org.springframework.security.extensions', name: 'spring-security-saml2-core', version:parent.springSecuritySamlVersion) {
     exclude(module: 'opensaml')
   }
-  compile(group: 'org.opensaml', name: 'opensaml', version: '2.6.4') {
+  compile(group: 'org.opensaml', name: 'opensaml', version: '2.6.6') {
     exclude(module: 'bcprov-jdk15on')
+    exclude(group: 'org.slf4j', module: 'log4j-over-slf4j')
+    exclude(group: 'org.owasp.esapi', module: 'esapi')
+    exclude(group: 'ca.juliusdavies', module: 'not-yet-commons-ssl')
   }
   compile(group: 'org.springframework.security.oauth', name: 'spring-security-oauth2', version: parent.springSecurityOAuthVersion) {
     exclude(module: 'commons-codec')
     exclude(module: 'jackson-mapper-asl')
+    exclude(module: 'spring-security-web')
   }
+
+  compile files('lib/not-yet-commons-ssl-0.3.17.jar')
+
+  compile group:'org.owasp.esapi', name:'esapi', version:parent.esapiVersion
+
+  compile group:'org.bouncycastle', name:'bcprov-jdk15on', version:parent.bcprovVersion
+  compile group:'org.bouncycastle', name:'bcpkix-jdk15on', version:parent.bcpkixVersion
 
   compile group: 'com.google.guava', name:'guava', version:parent.guavaVersion
 
@@ -39,7 +52,7 @@ dependencies {
 
   compile group: 'org.thymeleaf', name: 'thymeleaf-spring4', version: parent.thymeleafVersion
   compile group: 'nz.net.ultraq.thymeleaf', name: 'thymeleaf-layout-dialect', version: parent.thymeleafDialectVersion
-  compile group: 'org.thymeleaf.extras', name: 'thymeleaf-extras-springsecurity3', version: parent.thymeleafExtrasVersion
+  compile group: 'org.thymeleaf.extras', name: 'thymeleaf-extras-springsecurity4', version: parent.thymeleafExtrasVersion
 
   compile(group: 'com.unboundid.product.scim', name: 'scim-sdk', version: parent.scimSDKVersion) {
     exclude(module: 'servlet-api')
@@ -51,6 +64,9 @@ dependencies {
   compile group: 'org.hibernate', name: 'hibernate-validator', version: parent.hibernateValidatorVersion
   compile group: 'org.flywaydb', name: 'flyway-core', version: parent.flywayVersion
   compile group: 'org.mariadb.jdbc', name: 'mariadb-java-client', version: parent.mariaDBClientVersion
+  compile(group: 'com.microsoft.sqlserver', name: 'mssql-jdbc', version: parent.mssqlVersion) {
+    exclude(group: 'com.microsoft.azure', module: 'azure-keyvault')
+  }
   compile group: 'org.hsqldb', name: 'hsqldb', version: parent.hsqldbVersion
 
   compile group: 'org.yaml', name: 'snakeyaml', version: parent.snakeYamlVersion
@@ -69,13 +85,15 @@ dependencies {
     exclude(module: 'hamcrest-core')
   }
   testCompile group: 'org.hamcrest', name: 'hamcrest-all', version: parent.hamcrestVersion
-  testCompile (group: 'org.mockito', name: 'mockito-all', version: parent.mockitoVersion)  {
+  testCompile (group: 'org.mockito', name: 'mockito-core', version: parent.mockitoVersion)  {
     exclude(module: 'hamcrest-core')
   }
 
   testCompile group: 'org.flywaydb', name: 'flyway-core', version: parent.flywayVersion
-  testCompile group: 'postgresql', name: 'postgresql', version: parent.postgresqlVersion
-
+  testCompile group: 'org.postgresql', name: 'postgresql', version: parent.postgresqlVersion
+  testCompile (group: 'com.microsoft.sqlserver', name: 'mssql-jdbc', version: parent.mssqlVersion){
+    exclude(group: 'com.microsoft.azure', module: 'azure-keyvault')
+  }
   testCompile group: 'org.apache.tomcat', name: 'tomcat-jdbc', version:parent.tomcatJdbcPoolVersion
 
   testCompile group: 'com.jayway.jsonpath', name: 'json-path-assert', version: parent.jsonPathVersion

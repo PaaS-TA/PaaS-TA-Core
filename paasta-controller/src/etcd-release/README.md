@@ -2,10 +2,10 @@
 
 This is a [BOSH](http://bosh.io) release for [etcd](https://github.com/coreos/etcd).
 
-* [CI](https://mega.ci.cf-app.com/pipelines/etcd)
+* [CI](https://p-concourse.wings.cf-app.com/teams/system-team-infra-infra1-08f1/pipelines/etcd?groups=etcd)
 * [Roadmap](https://www.pivotaltracker.com/n/projects/1382120)
 
-###Contents
+### Contents
 
 * [Using Etcd](#using-etcd)
 * [Deploying](#deploying)
@@ -50,20 +50,23 @@ In order to deploy etcd-release you must follow the standard steps for deploying
 
 We assume you have already deployed and targeted a BOSH director. For more instructions on how to do that please see the [BOSH documentation](http://bosh.io/docs).
 
-###1. Uploading a stemcell
+### 1. Uploading a stemcell
 Find the "BOSH Lite Warden" stemcell you wish to use. [bosh.io](https://bosh.io/stemcells) provides a resource to find and download stemcells.  Then run `bosh upload stemcell STEMCELL_URL_OR_PATH_TO_DOWNLOADED_STEMCELL`.
 
-###2. Creating a release
-From within the etcd-release director run `bosh create release --force` to create a development release.
+### 2. Creating a release
 
-###3. Uploading a release
+Run `git submodule --init --recursive` to clone all submodules within `etcd-release` if you have done so already.
+
+From within the etcd-release directory run `bosh create release --force` to create a development release.
+
+### 3. Uploading a release
 Once you've created a development release run `bosh upload release` to upload your development release to the director.
 
 ### 4. Using a sample deployment manifest
 
 We provide a set of sample deployment manifests that can be used as a starting point for creating your own manifest, but they should not be considered comprehensive. They are located in manifests/aws and manifests/bosh-lite.
 
-###5. Deploy
+### 5. Deploy
 
 Run `bosh -d OUTPUT_MANIFEST_PATH deploy`.
 

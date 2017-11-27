@@ -3,7 +3,6 @@ package dropsonde_unmarshaller_test
 import (
 	"github.com/cloudfoundry/dropsonde/dropsonde_unmarshaller"
 	"github.com/cloudfoundry/dropsonde/metrics"
-	"github.com/cloudfoundry/loggregatorlib/loggertesthelper"
 	"github.com/gogo/protobuf/proto"
 
 	"sync"
@@ -17,7 +16,7 @@ var _ = Describe("DropsondeUnmarshallerCollection", func() {
 	var collection *dropsonde_unmarshaller.DropsondeUnmarshallerCollection
 
 	BeforeEach(func() {
-		collection = dropsonde_unmarshaller.NewDropsondeUnmarshallerCollection(loggertesthelper.Logger(), 5)
+		collection = dropsonde_unmarshaller.NewDropsondeUnmarshallerCollection(5)
 		metrics.Initialize(nil, nil)
 	})
 

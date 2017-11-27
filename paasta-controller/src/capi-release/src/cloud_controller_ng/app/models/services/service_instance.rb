@@ -19,6 +19,7 @@ module VCAP::CloudController
            key_map: lambda { |klazz|
              klazz == VCAP::CloudController::ManagedServiceInstance
            }
+    plugin :columns_updated
 
     one_to_one :service_instance_operation
 
@@ -82,6 +83,7 @@ module VCAP::CloudController
                                                      ServiceInstance.where(arr.zip(vals))
                                                    end)
       validates_max_length 50, :name
+      validates_max_length 10_000, :syslog_drain_url, allow_nil: true
     end
 
     # Make sure all derived classes use the base access class
@@ -102,7 +104,8 @@ module VCAP::CloudController
     end
 
     def to_hash(opts={})
-      if !SecurityContext.admin? && !SecurityContext.admin_read_only? && !space.has_developer?(SecurityContext.current_user)
+      access_context = VCAP::CloudController::Security::AccessContext.new
+      if access_context.cannot?(:read_env, self)
         opts[:redact] = ['credentials']
       end
       hash = super(opts)
@@ -180,7 +183,7 @@ module VCAP::CloudController
     end
 
     def update_service_bindings
-      if @columns_updated.key?(:syslog_drain_url)
+      if columns_updated.key?(:syslog_drain_url)
         service_bindings_dataset.update(syslog_drain_url: syslog_drain_url)
       end
     end

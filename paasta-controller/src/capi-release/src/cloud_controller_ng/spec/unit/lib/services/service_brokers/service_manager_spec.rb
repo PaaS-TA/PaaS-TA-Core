@@ -12,8 +12,7 @@ module VCAP::Services::ServiceBrokers
     let(:service_description) { Sham.description }
     let(:service_event_repository) do
       VCAP::CloudController::Repositories::ServiceEventRepository.new(
-        user: VCAP::CloudController::SecurityContext.current_user,
-        user_email: VCAP::CloudController::SecurityContext.current_user_email,
+        VCAP::CloudController::UserAuditInfo.from_context(VCAP::CloudController::SecurityContext)
       )
     end
 
@@ -31,6 +30,31 @@ module VCAP::Services::ServiceBrokers
         'id' => 'abcde123',
         'secret' => 'sekret',
         'redirect_uri' => 'http://example.com'
+      }
+    end
+    let(:plan_schemas_hash) do
+      {
+          'schemas' => {
+              'service_instance' => {
+                  'create' => {
+                      'parameters' => {
+                          '$schema' => 'http://json-schema.org/draft-04/schema', 'type' => 'object'
+                      }
+                  },
+                  'update' => {
+                      'parameters' => {
+                          'type' => 'object'
+                      }
+                  }
+              },
+              'service_binding' => {
+                'create' => {
+                  'parameters' => {
+                    '$schema' => 'http://json-schema.org/draft-04/schema', 'type' => 'object'
+                  }
+                }
+              }
+          }
       }
     end
 
@@ -52,7 +76,8 @@ module VCAP::Services::ServiceBrokers
                 'name'        => plan_name,
                 'description' => plan_description,
                 'free'        => false,
-              }.merge(plan_metadata_hash)
+                'bindable'    => true,
+              }.merge(plan_metadata_hash).merge(plan_schemas_hash)
             ]
           }.merge(service_metadata_hash)
         ]
@@ -117,7 +142,7 @@ module VCAP::Services::ServiceBrokers
         expect(event.actee_name).to eq(service_name)
         expect(event.space_guid).to eq('')
         expect(event.organization_guid).to eq('')
-        expect(event.metadata).to include({
+        expect(event.metadata).to eq({
           'service_broker_guid' => service.service_broker.guid,
           'unique_id' => service_id,
           'provider' => service.provider,
@@ -148,7 +173,7 @@ module VCAP::Services::ServiceBrokers
         expect(event.actee_name).to eq(plan_name)
         expect(event.space_guid).to eq('')
         expect(event.organization_guid).to eq('')
-        expect(event.metadata).to include({
+        expect(event.metadata).to eq({
           'name' => service_plan.name,
           'free' => service_plan.free,
           'description' => service_plan.description,
@@ -156,7 +181,11 @@ module VCAP::Services::ServiceBrokers
           'extra' => '{"cost":"0.0"}',
           'unique_id' => service_plan.unique_id,
           'public' => service_plan.public,
-          'active' => service_plan.active
+          'bindable' => true,
+          'active' => service_plan.active,
+          'create_instance_schema' => '{"$schema":"http://json-schema.org/draft-04/schema","type":"object"}',
+          'update_instance_schema' => '{"type":"object"}',
+          'create_binding_schema' => '{"$schema":"http://json-schema.org/draft-04/schema","type":"object"}'
         })
       end
 
@@ -191,6 +220,9 @@ module VCAP::Services::ServiceBrokers
           expect(plan.name).to eq(plan_name)
           expect(plan.description).to eq(plan_description)
           expect(JSON.parse(plan.extra)).to eq({ 'cost' => '0.0' })
+          expect(plan.create_instance_schema).to eq('{"$schema":"http://json-schema.org/draft-04/schema","type":"object"}')
+          expect(plan.update_instance_schema).to eq('{"type":"object"}')
+          expect(plan.create_binding_schema).to eq('{"$schema":"http://json-schema.org/draft-04/schema","type":"object"}')
 
           expect(plan.free).to be false
         end
@@ -219,6 +251,42 @@ module VCAP::Services::ServiceBrokers
           service_manager.sync_services_and_plans(catalog)
           plan = VCAP::CloudController::ServicePlan.last
           expect(plan.extra).to be_nil
+        end
+      end
+
+      context 'when the catalog service plan schemas is empty' do
+        let(:plan_schemas_hash) { { 'schemas' => nil } }
+
+        it 'leaves the plan schemas field as nil' do
+          service_manager.sync_services_and_plans(catalog)
+          plan = VCAP::CloudController::ServicePlan.last
+          expect(plan.create_instance_schema).to be_nil
+          expect(plan.update_instance_schema).to be_nil
+          expect(plan.create_binding_schema).to be_nil
+        end
+      end
+
+      context 'when the catalog service plan has no schemas key' do
+        let(:plan_schemas_hash) { {} }
+
+        it 'leaves the plan schemas field as nil' do
+          service_manager.sync_services_and_plans(catalog)
+          plan = VCAP::CloudController::ServicePlan.last
+          expect(plan.create_instance_schema).to be_nil
+          expect(plan.update_instance_schema).to be_nil
+          expect(plan.create_binding_schema).to be_nil
+        end
+      end
+
+      context 'when the catalog service plan has no create schema' do
+        let(:plan_schemas_hash) { { 'schemas' => { 'service_instance' => nil } } }
+
+        it 'leaves the plan schemas field as nil' do
+          service_manager.sync_services_and_plans(catalog)
+          plan = VCAP::CloudController::ServicePlan.last
+          expect(plan.create_instance_schema).to be_nil
+          expect(plan.update_instance_schema).to be_nil
+          expect(plan.create_binding_schema).to be_nil
         end
       end
 
@@ -270,6 +338,7 @@ module VCAP::Services::ServiceBrokers
           expect(plan.description).to eq(plan_description)
 
           expect(plan.free).to be false
+          expect(plan.bindable).to be true
         end
 
         context 'and a plan already exists' do
@@ -277,7 +346,10 @@ module VCAP::Services::ServiceBrokers
             VCAP::CloudController::ServicePlan.make(
               service: service,
               unique_id: plan_id,
-              free: true
+              free: true,
+              bindable: false,
+              create_instance_schema: nil,
+              update_instance_schema: nil
             )
           end
 
@@ -285,6 +357,10 @@ module VCAP::Services::ServiceBrokers
             expect(plan.name).to_not eq(plan_name)
             expect(plan.description).to_not eq(plan_description)
             expect(plan.free).to be true
+            expect(plan.bindable).to be false
+            expect(plan.create_instance_schema).to be_nil
+            expect(plan.update_instance_schema).to be_nil
+            expect(plan.create_binding_schema).to be_nil
 
             expect {
               service_manager.sync_services_and_plans(catalog)
@@ -294,6 +370,38 @@ module VCAP::Services::ServiceBrokers
             expect(plan.name).to eq(plan_name)
             expect(plan.description).to eq(plan_description)
             expect(plan.free).to be false
+            expect(plan.bindable).to be true
+            expect(plan.create_instance_schema).to eq('{"$schema":"http://json-schema.org/draft-04/schema","type":"object"}')
+            expect(plan.update_instance_schema).to eq('{"type":"object"}')
+            expect(plan.create_binding_schema).to eq('{"$schema":"http://json-schema.org/draft-04/schema","type":"object"}')
+          end
+
+          it 'creates service audit events for each service plan updated' do
+            service_manager.sync_services_and_plans(catalog)
+
+            service_plan = VCAP::CloudController::ServicePlan.last
+
+            event = VCAP::CloudController::Event.first(type: 'audit.service_plan.update')
+            expect(event.type).to eq('audit.service_plan.update')
+            expect(event.actor_type).to eq('service_broker')
+            expect(event.actor).to eq(broker.guid)
+            expect(event.actor_name).to eq(broker.name)
+            expect(event.timestamp).to be
+            expect(event.actee).to eq(service_plan.guid)
+            expect(event.actee_type).to eq('service_plan')
+            expect(event.actee_name).to eq(plan_name)
+            expect(event.space_guid).to eq('')
+            expect(event.organization_guid).to eq('')
+            expect(event.metadata).to include({
+              'name' => service_plan.name,
+              'description' => service_plan.description,
+              'extra' => '{"cost":"0.0"}',
+              'bindable' => true,
+              'free' => false,
+              'create_instance_schema' => '{"$schema":"http://json-schema.org/draft-04/schema","type":"object"}',
+              'update_instance_schema' => '{"type":"object"}',
+              'create_binding_schema' => '{"$schema":"http://json-schema.org/draft-04/schema","type":"object"}'
+            })
           end
 
           context 'when the plan is public' do
@@ -372,13 +480,13 @@ module VCAP::Services::ServiceBrokers
 
               it 'adds a formatted warning' do
                 service_manager.sync_services_and_plans(catalog)
-                expect(service_manager.warnings).to include(<<HEREDOC)
-Warning: Service plans are missing from the broker's catalog (#{broker.broker_url}/v2/catalog) but can not be removed from Cloud Foundry while instances exist. The plans have been deactivated to prevent users from attempting to provision new instances of these plans. The broker should continue to support bind, unbind, and delete for existing instances; if these operations fail contact your broker provider.
-#{service_name}
-  #{missing_plan_name}
-  #{missing_plan2_name}
-#{missing_service2_name}
-  #{missing_service2_plan_name}
+                expect(service_manager.warnings).to include(<<~HEREDOC)
+                  Warning: Service plans are missing from the broker's catalog (#{broker.broker_url}/v2/catalog) but can not be removed from Cloud Foundry while instances exist. The plans have been deactivated to prevent users from attempting to provision new instances of these plans. The broker should continue to support bind, unbind, and delete for existing instances; if these operations fail contact your broker provider.
+                  #{service_name}
+                    #{missing_plan_name}
+                    #{missing_plan2_name}
+                  #{missing_service2_name}
+                    #{missing_service2_plan_name}
 HEREDOC
               end
             end
@@ -386,13 +494,13 @@ HEREDOC
             context 'when there are no existing service instances' do
               it 'does not add a formatted warning' do
                 service_manager.sync_services_and_plans(catalog)
-                expect(service_manager.warnings).to_not include(<<HEREDOC)
-Warning: Service plans are missing from the broker's catalog (#{broker.broker_url}/v2/catalog) but can not be removed from Cloud Foundry while instances exist. The plans have been deactivated to prevent users from attempting to provision new instances of these plans. The broker should continue to support bind, unbind, and delete for existing instances; if these operations fail contact your broker provider.
-#{service_name}
-  #{missing_plan_name}
-  #{missing_plan2_name}
-#{missing_service2_name}
-  #{missing_service2_plan_name}
+                expect(service_manager.warnings).to_not include(<<~HEREDOC)
+                  Warning: Service plans are missing from the broker's catalog (#{broker.broker_url}/v2/catalog) but can not be removed from Cloud Foundry while instances exist. The plans have been deactivated to prevent users from attempting to provision new instances of these plans. The broker should continue to support bind, unbind, and delete for existing instances; if these operations fail contact your broker provider.
+                  #{service_name}
+                    #{missing_plan_name}
+                    #{missing_plan2_name}
+                  #{missing_service2_name}
+                    #{missing_service2_plan_name}
 HEREDOC
               end
             end

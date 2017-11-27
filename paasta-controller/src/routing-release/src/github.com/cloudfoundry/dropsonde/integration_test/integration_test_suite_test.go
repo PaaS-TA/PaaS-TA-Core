@@ -4,13 +4,12 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	"io/ioutil"
 	"log"
 	"testing"
 )
 
 func TestIntegrationTest(t *testing.T) {
-	log.SetOutput(ioutil.Discard)
+	log.SetOutput(GinkgoWriter)
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "IntegrationTest Suite")
 }

@@ -1,6 +1,7 @@
 package fakestoreadapter
 
 import (
+	"errors"
 	"regexp"
 	"strings"
 	"sync"
@@ -152,13 +153,13 @@ func (adapter *FakeStoreAdapter) setMulti(nodes []storeadapter.StoreNode) error 
 			existingNode, exists := container.nodes[component]
 			if i == len(components)-1 {
 				if exists && existingNode.dir {
-					return storeadapter.ErrorNodeIsDirectory
+					return storeadapter.NewError(errors.New(storeadapter.ErrorNodeIsDirectoryDescription), storeadapter.ErrorNodeIsDirectory)
 				}
 				container.nodes[component] = &containerNode{storeNode: node}
 			} else {
 				if exists {
 					if !existingNode.dir {
-						return storeadapter.ErrorNodeIsNotDirectory
+						return storeadapter.NewError(errors.New(storeadapter.ErrorNodeIsNotDirectoryDescription), storeadapter.ErrorNodeIsNotDirectory)
 					}
 					container = existingNode
 				} else {
@@ -185,7 +186,7 @@ func (adapter *FakeStoreAdapter) Create(node storeadapter.StoreNode) error {
 
 	_, err := adapter.get(node.Key)
 	if err == nil {
-		return storeadapter.ErrorKeyExists
+		return storeadapter.NewError(errors.New(storeadapter.ErrorKeyExistsDescription), storeadapter.ErrorKeyExists)
 	}
 
 	return adapter.setMulti([]storeadapter.StoreNode{node})
@@ -209,7 +210,7 @@ func (adapter *FakeStoreAdapter) get(key string) (storeadapter.StoreNode, error)
 	}
 
 	if container.dir {
-		return storeadapter.StoreNode{}, storeadapter.ErrorNodeIsDirectory
+		return storeadapter.StoreNode{}, storeadapter.NewError(errors.New(storeadapter.ErrorNodeIsDirectoryDescription), storeadapter.ErrorNodeIsDirectory)
 	} else {
 		return container.storeNode, nil
 	}
@@ -221,7 +222,7 @@ func (adapter *FakeStoreAdapter) walkToNode(key string) (*containerNode, error) 
 		var exists bool
 		container, exists = container.nodes[component]
 		if !exists {
-			return nil, storeadapter.ErrorKeyNotFound
+			return nil, storeadapter.NewError(errors.New(storeadapter.ErrorKeyNotFoundDescription), storeadapter.ErrorKeyNotFound)
 		}
 	}
 
@@ -233,7 +234,7 @@ func (adapter *FakeStoreAdapter) ListRecursively(key string) (storeadapter.Store
 	defer adapter.Unlock()
 
 	if adapter.ListErrInjector != nil && adapter.ListErrInjector.KeyRegexp.MatchString(key) {
-		return storeadapter.StoreNode{}, adapter.ListErrInjector.Error
+		return storeadapter.StoreNode{}, storeadapter.NewError(adapter.ListErrInjector.Error, storeadapter.ErrorOther)
 	}
 
 	container, err := adapter.walkToNode(key)
@@ -242,7 +243,7 @@ func (adapter *FakeStoreAdapter) ListRecursively(key string) (storeadapter.Store
 	}
 
 	if !container.dir {
-		return storeadapter.StoreNode{}, storeadapter.ErrorNodeIsNotDirectory
+		return storeadapter.StoreNode{}, storeadapter.NewError(errors.New(storeadapter.ErrorNodeIsNotDirectoryDescription), storeadapter.ErrorNodeIsNotDirectory)
 	}
 
 	return adapter.listContainerNode(key, container), nil
@@ -294,7 +295,7 @@ func (adapter *FakeStoreAdapter) deleteKeys(keys ...string) error {
 			parentNode = container
 			container, exists = container.nodes[component]
 			if !exists {
-				return storeadapter.ErrorKeyNotFound
+				return storeadapter.NewError(errors.New(storeadapter.ErrorKeyNotFoundDescription), storeadapter.ErrorKeyNotFound)
 			}
 		}
 
@@ -336,7 +337,7 @@ func (adapter *FakeStoreAdapter) CompareAndDelete(nodes ...storeadapter.StoreNod
 	}
 
 	if string(node.Value) != string(existingNode.Value) {
-		return storeadapter.ErrorKeyComparisonFailed
+		return storeadapter.NewError(errors.New(storeadapter.ErrorKeyComparisonFailedDescription), storeadapter.ErrorKeyComparisonFailed)
 	}
 
 	return adapter.deleteKeys(node.Key)
@@ -352,7 +353,7 @@ func (adapter *FakeStoreAdapter) UpdateDirTTL(key string, ttl uint64) error {
 		return err
 	}
 	if !container.dir {
-		return storeadapter.ErrorNodeIsNotDirectory
+		return storeadapter.NewError(errors.New(storeadapter.ErrorNodeIsNotDirectoryDescription), storeadapter.ErrorNodeIsNotDirectory)
 	}
 
 	go func() {
@@ -377,7 +378,7 @@ func (adapter *FakeStoreAdapter) CompareAndSwap(oldNode storeadapter.StoreNode, 
 	}
 
 	if string(oldNode.Value) != string(existingNode.Value) {
-		return storeadapter.ErrorKeyComparisonFailed
+		return storeadapter.NewError(errors.New(storeadapter.ErrorKeyComparisonFailedDescription), storeadapter.ErrorKeyComparisonFailed)
 	}
 
 	return adapter.setMulti([]storeadapter.StoreNode{newNode})

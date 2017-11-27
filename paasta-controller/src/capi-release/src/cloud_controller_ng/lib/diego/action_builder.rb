@@ -38,12 +38,20 @@ module Diego
         action(Bbs::Models::TimeoutAction.new(action: action(action), timeout_ms: timeout_ms))
       end
 
+      def try_action(action)
+        action(Bbs::Models::TryAction.new(action: action(action)))
+      end
+
       def emit_progress(action, start_message:, success_message:, failure_message_prefix:)
         action(Bbs::Models::EmitProgressAction.new(
                  action:                 action(action),
                  start_message:          start_message,
                  success_message:        success_message,
                  failure_message_prefix: failure_message_prefix))
+      end
+
+      def codependent(actions)
+        action(::Diego::Bbs::Models::CodependentAction.new(actions: actions.map { |a| action(a) }))
       end
 
       private
@@ -59,6 +67,8 @@ module Diego
       :serial,
       :parallel,
       :timeout,
-      :emit_progress
+      :emit_progress,
+      :codependent,
+      :try_action
   end
 end

@@ -1137,6 +1137,78 @@ module VCAP::CloudController
           expect(service_instance_guids).to include(instance1.guid, instance2.guid)
         end
       end
+
+      context 'with pagination' do
+        before { set_current_user_as_admin }
+        let(:results_per_page) { 1 }
+        let(:service_instance) { ManagedServiceInstance.make(gateway_name: Sham.name) }
+        let(:org1) { Organization.make(guid: '1') }
+        let(:org2) { Organization.make(guid: '2') }
+        let(:space1) { Space.make(organization: org1) }
+        let(:space2) { Space.make(organization: org2) }
+        let!(:instances) do
+          [ManagedServiceInstance.make(name: 'instance-1', space: space1),
+           ManagedServiceInstance.make(name: 'instance-2', space: space1),
+           ManagedServiceInstance.make(name: 'instance-3', space: space1),
+           ManagedServiceInstance.make(name: 'instance-4', space: space2),
+          ]
+        end
+
+        context 'at page 1' do
+          let(:page) { 1 }
+          it 'passes the org_guid filter into the next_url' do
+            get "v2/service_instances?page=#{page}&results-per-page=#{results_per_page}&q=organization_guid:#{org1.guid}"
+            expect(last_response.status).to eq(200), last_response.body
+            services = decoded_response['resources'].map { |resource| resource.fetch('metadata').fetch('guid') }
+            expect(services.length).to eq(1)
+            expect(services).to include(instances[0].guid)
+            result = JSON.parse(last_response.body)
+            expect(result['next_url']).to include("q=organization_guid:#{org1.guid}"), result['next_url']
+            expect(result['prev_url']).to be_nil
+          end
+        end
+
+        context 'at page 2' do
+          let(:page) { 2 }
+          it 'passes the org_guid filter into the next_url' do
+            get "v2/service_instances?page=#{page}&results-per-page=#{results_per_page}&q=organization_guid:#{org1.guid}"
+            expect(last_response.status).to eq(200), last_response.body
+            services = decoded_response['resources'].map { |resource| resource.fetch('metadata').fetch('guid') }
+            expect(services.length).to eq(1)
+            expect(services).to include(instances[1].guid)
+            result = JSON.parse(last_response.body)
+            expect(result['next_url']).to include("q=organization_guid:#{org1.guid}"), result['next_url']
+            expect(result['prev_url']).to include("q=organization_guid:#{org1.guid}"), result['prev_url']
+          end
+        end
+
+        context 'at page 3' do
+          let(:page) { 3 }
+          it 'passes the org_guid filter into the next_url' do
+            get "v2/service_instances?page=#{page}&results-per-page=#{results_per_page}&q=organization_guid:#{org1.guid}"
+            expect(last_response.status).to eq(200), last_response.body
+            services = decoded_response['resources'].map { |resource| resource.fetch('metadata').fetch('guid') }
+            expect(services.length).to eq(1)
+            expect(services).to include(instances[2].guid)
+            result = JSON.parse(last_response.body)
+            expect(result['next_url']).to be_nil
+            expect(result['prev_url']).to include("q=organization_guid:#{org1.guid}"), result['prev_url']
+          end
+        end
+
+        context 'at page 4' do
+          let(:page) { 4 }
+          it 'passes the org_guid filter into the next_url' do
+            get "v2/service_instances?page=#{page}&results-per-page=#{results_per_page}&q=organization_guid:#{org1.guid}"
+            expect(last_response.status).to eq(200), last_response.body
+            services = decoded_response['resources'].map { |resource| resource.fetch('metadata').fetch('guid') }
+            expect(services.length).to eq(0)
+            result = JSON.parse(last_response.body)
+            expect(result['next_url']).to be_nil
+            expect(result['prev_url']).to include("q=organization_guid:#{org1.guid}"), result['prev_url']
+          end
+        end
+      end
     end
 
     describe 'GET /v2/service_instances/:service_instance_guid' do
@@ -2990,8 +3062,8 @@ module VCAP::CloudController
 
       context 'when the route is mapped to a diego app' do
         before do
-          diego_app = AppFactory.make(diego: true, space: route.space, state: 'STARTED')
-          RouteMappingModel.make(app: diego_app.app, route: route, process_type: diego_app.type)
+          diego_process = AppFactory.make(diego: true, space: route.space, state: 'STARTED')
+          RouteMappingModel.make(app: diego_process.app, route: route, process_type: diego_process.type)
         end
 
         it 'successfully binds to the route' do
@@ -3001,8 +3073,8 @@ module VCAP::CloudController
 
         context 'and is mapped to another diego app as well' do
           before do
-            another_diego_app = AppFactory.make(diego: true, space: route.space, state: 'STARTED')
-            RouteMappingModel.make(app: another_diego_app.app, route: route, process_type: another_diego_app.type)
+            another_diego_process = AppFactory.make(diego: true, space: route.space, state: 'STARTED')
+            RouteMappingModel.make(app: another_diego_process.app, route: route, process_type: another_diego_process.type)
           end
 
           it 'raises RouteServiceRequiresDiego' do
@@ -3015,8 +3087,8 @@ module VCAP::CloudController
 
       context 'when the route is mapped to a non-diego app' do
         before do
-          app = AppFactory.make(diego: false, space: route.space, state: 'STARTED')
-          RouteMappingModel.make(app: app.app, route: route, process_type: app.type)
+          process = AppFactory.make(diego: false, space: route.space, state: 'STARTED')
+          RouteMappingModel.make(app: process.app, route: route, process_type: process.type)
         end
 
         it 'raises RouteServiceRequiresDiego' do
@@ -3029,8 +3101,8 @@ module VCAP::CloudController
 
         context 'and is mapped to a diego app' do
           before do
-            diego_app = AppFactory.make(diego: true, space: route.space, state: 'STARTED')
-            RouteMappingModel.make(app: diego_app.app, route: route, process_type: diego_app.type)
+            diego_process = AppFactory.make(diego: true, space: route.space, state: 'STARTED')
+            RouteMappingModel.make(app: diego_process.app, route: route, process_type: diego_process.type)
           end
 
           it 'raises RouteServiceRequiresDiego' do
@@ -3048,6 +3120,21 @@ module VCAP::CloudController
         before do
           service_instance.service.bindable = false
           service_instance.service.save
+
+          put "/v2/service_instances/#{service_instance.guid}/routes/#{route.guid}"
+        end
+
+        it 'raises UnbindableService error' do
+          hash_body = JSON.parse(last_response.body)
+          expect(hash_body['error_code']).to eq('CF-UnbindableService')
+          expect(last_response).to have_status_code(400)
+        end
+      end
+
+      context 'when attempting to bind to an unbindable service plan' do
+        before do
+          service_instance.service_plan.bindable = false
+          service_instance.service_plan.save
 
           put "/v2/service_instances/#{service_instance.guid}/routes/#{route.guid}"
         end
@@ -3257,72 +3344,116 @@ module VCAP::CloudController
         it 'returns a 400 InvalidRelation error' do
           delete "/v2/service_instances/#{service_instance.guid}/routes/#{route.guid}"
           expect(last_response.status).to eq(400)
-          expect(JSON.parse(last_response.body)['description']).to include('Invalid relation')
+          expect(JSON.parse(last_response.body)['description']).to include('is not bound to service instance')
         end
       end
     end
 
     describe 'GET /v2/service_instances/:service_instance_guid/permissions' do
-      let(:space)     { Space.make }
-      let(:developer) { make_developer_for_space(space) }
-
-      before { set_current_user(developer) }
+      let(:org) { Organization.make }
+      let(:space) { Space.make(organization: org) }
+      let(:instance) { ManagedServiceInstance.make(space: space) }
+      let(:user) { User.make }
 
       context 'when the user is a member of the space this instance exists in' do
-        let(:instance)  { ManagedServiceInstance.make(space: space) }
+        describe 'permissions' do
+          {
+            'space_auditor'       => { manage: false, read: true },
+            'space_developer'     => { manage: true, read: true },
+            'space_manager'       => { manage: false, read: true },
+            'org_auditor'         => { manage: false, read: false },
+            'org_billing_manager' => { manage: false, read: false },
+            'org_manager'         => { manage: false, read: true },
+            'admin'               => { manage: true, read: true },
+            'admin_read_only'     => { manage: false, read: true },
+            'global_auditor'      => { manage: false, read: false },
+          }.each do |role, expected_return_values|
+            context "as an #{role}" do
+              before do
+                set_current_user_as_role(
+                  role:   role,
+                  org:    org,
+                  space:  space,
+                  user:   user,
+                  scopes: ['cloud_controller.read']
+                )
+              end
 
-        context 'when the user has only the cloud_controller.read scope' do
-          it 'returns a JSON payload indicating they have permission to manage this instance' do
-            set_current_user(developer, { scopes: ['cloud_controller.read'] })
-            get "/v2/service_instances/#{instance.guid}/permissions"
-            expect(last_response.status).to eql(200)
-            expect(JSON.parse(last_response.body)['manage']).to be true
+              it "returns #{expected_return_values}" do
+                get "/v2/service_instances/#{instance.guid}/permissions"
+                expect(last_response.status).to eq(200), "Expected 200, got: #{last_response.status}, role: #{role}"
+                manage_response = JSON.parse(last_response.body)['manage']
+                read_response   = JSON.parse(last_response.body)['read']
+                expect(manage_response).to eq(expected_return_values[:manage]), "Expected #{expected_return_values[:manage]}, got: #{read_response}, role: #{role}"
+                expect(read_response).to eq(expected_return_values[:read]), "Expected #{expected_return_values[:read]}, got: #{read_response}, role: #{role}"
+              end
+            end
           end
         end
 
-        context 'when the user has only the cloud_controller_service_permissions.read scope' do
-          it 'returns a JSON payload indicating they have permission to manage this instance' do
-            set_current_user(developer, { scopes: ['cloud_controller_service_permissions.read'] })
-            get "/v2/service_instances/#{instance.guid}/permissions"
-            expect(last_response.status).to eql(200)
-            expect(JSON.parse(last_response.body)['manage']).to be true
-          end
-        end
+        describe 'scopes' do
+          let(:developer) { make_developer_for_space(space) }
 
-        context 'when the user does not have either necessary scope' do
-          it 'returns InvalidAuthToken' do
-            set_current_user(developer, { scopes: ['cloud_controller.write'] })
-            get "/v2/service_instances/#{instance.guid}/permissions"
-            expect(last_response.status).to eql(403)
-            expect(JSON.parse(last_response.body)['description']).to eql('Your token lacks the necessary scopes to access this resource.')
+          context 'when the user has only the cloud_controller.read scope' do
+            it 'returns a JSON payload indicating they have permission to manage this instance' do
+              set_current_user(developer, { scopes: ['cloud_controller.read'] })
+              get "/v2/service_instances/#{instance.guid}/permissions"
+              expect(last_response.status).to eql(200)
+              expect(JSON.parse(last_response.body)['manage']).to be true
+              expect(JSON.parse(last_response.body)['read']).to be true
+            end
+          end
+
+          context 'when the user has only the cloud_controller_service_permissions.read scope' do
+            it 'returns a JSON payload indicating they have permission to manage this instance' do
+              set_current_user(developer, { scopes: ['cloud_controller_service_permissions.read'] })
+              get "/v2/service_instances/#{instance.guid}/permissions"
+              expect(last_response.status).to eql(200)
+              expect(JSON.parse(last_response.body)['manage']).to be true
+              expect(JSON.parse(last_response.body)['read']).to be true
+            end
+          end
+
+          context 'when the user does not have either necessary scope' do
+            it 'returns InsufficientScope' do
+              set_current_user(developer, { scopes: ['cloud_controller.write'] })
+              get "/v2/service_instances/#{instance.guid}/permissions"
+              expect(last_response.status).to eql(403)
+              expect(JSON.parse(last_response.body)['description']).to eql('Your token lacks the necessary scopes to access this resource.')
+            end
           end
         end
       end
 
       context 'when the user is NOT a member of the space this instance exists in' do
-        let(:instance)  { ManagedServiceInstance.make }
+        let(:instance) { ManagedServiceInstance.make }
 
         it 'returns a JSON payload indicating the user does not have permission to manage this instance' do
+          set_current_user(user)
           get "/v2/service_instances/#{instance.guid}/permissions"
           expect(last_response.status).to eql(200)
           expect(JSON.parse(last_response.body)['manage']).to be false
+          expect(JSON.parse(last_response.body)['read']).to be false
         end
       end
 
       context 'when the user has not authenticated with Cloud Controller' do
-        let(:instance)  { ManagedServiceInstance.make }
         let(:developer) { nil }
 
         it 'returns an error saying that the user is not authenticated' do
-          get "/v2/service_instances/#{instance.guid}/permissions"
+          set_current_user(developer)
+          get '/v2/service_instances/any-guid/permissions'
           expect(last_response.status).to eq(401)
+          expect(last_response.body).to include('NotAuthenticated')
         end
       end
 
       context 'when the service instance does not exist' do
         it 'returns an error saying the instance was not found' do
+          set_current_user(user)
           get '/v2/service_instances/nonexistent_instance/permissions'
           expect(last_response.status).to eql 404
+          expect(last_response.body).to include('ServiceInstanceNotFound')
         end
       end
     end

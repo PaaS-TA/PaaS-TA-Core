@@ -4,9 +4,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 
-	"code.cloudfoundry.org/bbs/fake_bbs"
 	"code.cloudfoundry.org/bbs/handlers"
 	"code.cloudfoundry.org/bbs/models"
+	"code.cloudfoundry.org/bbs/serviceclient/serviceclientfakes"
 	"code.cloudfoundry.org/lager/lagertest"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -18,51 +18,57 @@ var _ = Describe("Cell Handlers", func() {
 		logger            *lagertest.TestLogger
 		responseRecorder  *httptest.ResponseRecorder
 		handler           *handlers.CellHandler
-		fakeServiceClient *fake_bbs.FakeServiceClient
+		fakeServiceClient *serviceclientfakes.FakeServiceClient
 		exitCh            chan struct{}
+		cells             []*models.CellPresence
+		cellSet           models.CellSet
 	)
 
 	BeforeEach(func() {
-		fakeServiceClient = new(fake_bbs.FakeServiceClient)
+		fakeServiceClient = new(serviceclientfakes.FakeServiceClient)
 		logger = lagertest.NewTestLogger("test")
 		responseRecorder = httptest.NewRecorder()
 		exitCh = make(chan struct{}, 1)
-		handler = handlers.NewCellHandler(logger, fakeServiceClient, exitCh)
+		handler = handlers.NewCellHandler(fakeServiceClient, exitCh)
+		cells = []*models.CellPresence{
+			{
+				CellId:     "cell-1",
+				RepAddress: "1.1.1.1",
+				Zone:       "z1",
+				Capacity: &models.CellCapacity{
+					MemoryMb:   1000,
+					DiskMb:     1000,
+					Containers: 50,
+				},
+				RootfsProviders: []*models.Provider{
+					&models.Provider{"preloaded", []string{"provider-1", "provider-2"}},
+					&models.Provider{"provider-3", nil},
+				},
+				PlacementTags: []string{"test1", "test2"},
+			},
+			{
+				CellId:     "cell-2",
+				RepAddress: "2.2.2.2",
+				Zone:       "z2",
+				Capacity: &models.CellCapacity{
+					MemoryMb:   2000,
+					DiskMb:     2000,
+					Containers: 20,
+				},
+				RootfsProviders: []*models.Provider{
+					&models.Provider{"preloaded", []string{"provider-1"}},
+				},
+				PlacementTags: []string{"test3", "test4"},
+			},
+		}
+		cellSet = models.NewCellSet()
+		cellSet.Add(cells[0])
+		cellSet.Add(cells[1])
 	})
 
 	Describe("Cells", func() {
-		var cells []*models.CellPresence
-		var cellSet models.CellSet
-		BeforeEach(func() {
-			cells = []*models.CellPresence{
-				{
-					CellId:     "cell-1",
-					RepAddress: "1.1.1.1",
-					Zone:       "z1",
-					Capacity: &models.CellCapacity{
-						MemoryMb:   1000,
-						DiskMb:     1000,
-						Containers: 50,
-					},
-				},
-				{
-					CellId:     "cell-2",
-					RepAddress: "2.2.2.2",
-					Zone:       "z2",
-					Capacity: &models.CellCapacity{
-						MemoryMb:   2000,
-						DiskMb:     2000,
-						Containers: 20,
-					},
-				},
-			}
-			cellSet = models.NewCellSet()
-			cellSet.Add(cells[0])
-			cellSet.Add(cells[1])
-		})
-
 		JustBeforeEach(func() {
-			handler.Cells(responseRecorder, newTestRequest(""))
+			handler.Cells(logger, responseRecorder, newTestRequest(""))
 		})
 
 		Context("when reading cells succeeds", func() {

@@ -2,7 +2,7 @@
 name: ruby-2.2.5
 files:
 - ruby-2.2.5/ruby-2.2.5.tar.gz
-- ruby-2.2.5/bundler-1.11.2.gem
+- ruby-2.2.5/bundler-1.15.0.gem
 - ruby-2.2.5/yaml-0.1.6.tar.gz
 - architecture-support/config/config.sub
 - architecture-support/config/config.guess

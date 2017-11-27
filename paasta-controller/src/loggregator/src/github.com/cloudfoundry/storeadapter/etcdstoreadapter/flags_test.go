@@ -25,9 +25,11 @@ var _ = Describe("Flags", func() {
 				"-etcdKeyFile", "../assets/client.key",
 				"-etcdCaFile", "../assets/ca.crt",
 				"-etcdCluster", "https://mycluster1, https://mycluster2:435",
+				"--etcdMaxIdleConns", "2",
 			}
 			httpCommandLine = []string{
 				"-etcdCluster", "http://a.b.c, http://d.e.f",
+				"--etcdMaxIdleConns", "3",
 			}
 		})
 
@@ -82,11 +84,12 @@ var _ = Describe("Flags", func() {
 				options, err := sslFlags.Validate()
 				Expect(err).NotTo(HaveOccurred())
 				Expect(options).To(Equal(&ETCDOptions{
-					CertFile:    "../assets/client.crt",
-					KeyFile:     "../assets/client.key",
-					CAFile:      "../assets/ca.crt",
-					ClusterUrls: []string{"https://mycluster1", "https://mycluster2:435"},
-					IsSSL:       true,
+					CertFile:     "../assets/client.crt",
+					KeyFile:      "../assets/client.key",
+					CAFile:       "../assets/ca.crt",
+					ClusterUrls:  []string{"https://mycluster1", "https://mycluster2:435"},
+					IsSSL:        true,
+					MaxIdleConns: 2,
 				}))
 			})
 
@@ -131,11 +134,12 @@ var _ = Describe("Flags", func() {
 				options, err := httpFlags.Validate()
 				Expect(err).NotTo(HaveOccurred())
 				Expect(options).To(Equal(&ETCDOptions{
-					CertFile:    "",
-					KeyFile:     "",
-					CAFile:      "",
-					ClusterUrls: []string{"http://a.b.c", "http://d.e.f"},
-					IsSSL:       false,
+					CertFile:     "",
+					KeyFile:      "",
+					CAFile:       "",
+					ClusterUrls:  []string{"http://a.b.c", "http://d.e.f"},
+					IsSSL:        false,
+					MaxIdleConns: 3,
 				}))
 			})
 

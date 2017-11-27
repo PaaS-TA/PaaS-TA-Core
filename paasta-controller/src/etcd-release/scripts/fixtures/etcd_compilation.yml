@@ -1,6 +1,4 @@
 ---
-director_uuid: REPLACE_ME_DIRECTOR_UUID
-
 name: etcd-compilation
 
 releases:

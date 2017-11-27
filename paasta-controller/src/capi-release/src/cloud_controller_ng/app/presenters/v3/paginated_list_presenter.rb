@@ -7,17 +7,20 @@ require 'presenters/v3/process_presenter'
 require 'presenters/v3/route_mapping_presenter'
 require 'presenters/v3/service_binding_presenter'
 require 'presenters/v3/task_presenter'
-require 'presenters/v2/organization_presenter'
+require 'presenters/v3/organization_presenter'
+require 'presenters/v3/space_presenter'
 
 module VCAP::CloudController
   module Presenters
     module V3
       class PaginatedListPresenter
         PRESENTERS = {
-          'App'                   => VCAP::CloudController::Presenters::V3::ProcessPresenter,
+          'ProcessModel'          => VCAP::CloudController::Presenters::V3::ProcessPresenter,
           'AppModel'              => VCAP::CloudController::Presenters::V3::AppPresenter,
           'DropletModel'          => VCAP::CloudController::Presenters::V3::DropletPresenter,
           'IsolationSegmentModel' => VCAP::CloudController::Presenters::V3::IsolationSegmentPresenter,
+          'Organization'          => VCAP::CloudController::Presenters::V3::OrganizationPresenter,
+          'Space'                 => VCAP::CloudController::Presenters::V3::SpacePresenter,
           'PackageModel'          => VCAP::CloudController::Presenters::V3::PackagePresenter,
           'RouteMappingModel'     => VCAP::CloudController::Presenters::V3::RouteMappingPresenter,
           'ServiceBinding'        => VCAP::CloudController::Presenters::V3::ServiceBindingPresenter,

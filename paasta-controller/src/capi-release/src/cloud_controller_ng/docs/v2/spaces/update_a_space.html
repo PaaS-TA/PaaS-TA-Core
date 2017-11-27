@@ -150,6 +150,7 @@
               </td>
               <td>
                 <ul class="valid_values">
+                  <li>Only the currently associated organization guid</li>
                 </ul>
               </td>
               <td>
@@ -301,7 +302,7 @@
       <h4>Headers</h4>
       <pre class="request headers">Authorization: bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ1c2VyX2lkIjoidWFhLWlkLTM2MSIsImVtYWlsIjoiZW1haWwtMjU1QHNvbWVkb21haW4uY29tIiwic2NvcGUiOlsiY2xvdWRfY29udHJvbGxlci5hZG1pbiJdLCJhdWQiOlsiY2xvdWRfY29udHJvbGxlciJdLCJleHAiOjE0NjYwMDg5MDB9.OlvGOF2_cyoI6lteR43OsRocZ1kXkDd4JLa_VvpP3CE
 Host: example.org
-Content-Type: application/x-www-form-urlencoded
+Content-Type: application/json
 Cookie: </pre>
 
         <h4>cURL</h4>
@@ -310,7 +311,7 @@ Cookie: </pre>
 }&#39; -X PUT \
 	-H &quot;Authorization: bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ1c2VyX2lkIjoidWFhLWlkLTM2MSIsImVtYWlsIjoiZW1haWwtMjU1QHNvbWVkb21haW4uY29tIiwic2NvcGUiOlsiY2xvdWRfY29udHJvbGxlci5hZG1pbiJdLCJhdWQiOlsiY2xvdWRfY29udHJvbGxlciJdLCJleHAiOjE0NjYwMDg5MDB9.OlvGOF2_cyoI6lteR43OsRocZ1kXkDd4JLa_VvpP3CE&quot; \
 	-H &quot;Host: example.org&quot; \
-	-H &quot;Content-Type: application/x-www-form-urlencoded&quot; \
+	-H &quot;Content-Type: application/json&quot; \
 	-H &quot;Cookie: &quot;</pre>
 
         <h3>Response</h3>
@@ -342,7 +343,8 @@ Cookie: </pre>
     "service_instances_url": "/v2/spaces/97c30add-7929-4140-8ac7-410270de659e/service_instances",
     "app_events_url": "/v2/spaces/97c30add-7929-4140-8ac7-410270de659e/app_events",
     "events_url": "/v2/spaces/97c30add-7929-4140-8ac7-410270de659e/events",
-    "security_groups_url": "/v2/spaces/97c30add-7929-4140-8ac7-410270de659e/security_groups"
+    "security_groups_url": "/v2/spaces/97c30add-7929-4140-8ac7-410270de659e/security_groups",
+    "staging_security_groups_url": "/v2/spaces/97c30add-7929-4140-8ac7-410270de659e/staging_security_groups"
   }
 }</pre>
 

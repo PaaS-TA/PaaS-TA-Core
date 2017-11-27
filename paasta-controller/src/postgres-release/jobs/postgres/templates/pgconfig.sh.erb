@@ -1,0 +1,45 @@
+#!/bin/bash -ex
+current_version="9.6.3"
+pgversion_current="postgres-${current_version}"
+pgversion_old="postgres-9.6.2"
+pgversion_older="postgres-9.4.9"
+
+JOB_DIR=/var/vcap/jobs/postgres
+PACKAGE_DIR="/var/vcap/packages/${pgversion_current}"
+STORE_DIR=/var/vcap/store
+PG_STORE_DIR=${STORE_DIR}/postgres
+
+DATA_DIR="${PG_STORE_DIR}/${pgversion_current}"
+
+DATA_DIR_PREVIOUS="${PG_STORE_DIR}/postgres-previous"
+DATA_DIR_OLD="${PG_STORE_DIR}/postgres-unknown"
+PACKAGE_DIR_OLD=/var/vcap/packages/postgres-unknown
+POSTGRES_UPGRADE_LOCK="$PG_STORE_DIR/POSTGRES_UPGRADE_LOCK"
+pgversion_upgrade_from=postgres-unknown
+
+if [ -d "${PG_STORE_DIR}/${pgversion_old}" -a -f "${PG_STORE_DIR}/${pgversion_old}/postgresql.conf" ]; then
+  pgversion_upgrade_from=$pgversion_old
+  DATA_DIR_OLD="${PG_STORE_DIR}/${pgversion_old}"
+  PACKAGE_DIR_OLD=/var/vcap/packages/${pgversion_old}
+fi
+
+if [ -d "${PG_STORE_DIR}/${pgversion_older}" -a -f "${PG_STORE_DIR}/${pgversion_older}/postgresql.conf" ]; then
+  pgversion_upgrade_from=$pgversion_older
+  DATA_DIR_OLD="${PG_STORE_DIR}/${pgversion_older}"
+  PACKAGE_DIR_OLD=/var/vcap/packages/${pgversion_older}
+fi
+
+RUN_DIR=/var/vcap/sys/run/postgres
+LOG_DIR=/var/vcap/sys/log/postgres
+# external_pid_file in postgresql.conf takes care of
+# overwriting $PIDFILE with actual DB server pid
+PIDFILE="${RUN_DIR}/postgres.pid"
+
+HOST="0.0.0.0"
+PORT="<%= p("databases.port") %>"
+
+if [[ -n "${LD_LIBRARY_PATH:-}" ]]; then
+  LD_LIBRARY_PATH="${PACKAGE_DIR}/lib:${LD_LIBRARY_PATH}"
+else
+  LD_LIBRARY_PATH="${PACKAGE_DIR}/lib"
+fi

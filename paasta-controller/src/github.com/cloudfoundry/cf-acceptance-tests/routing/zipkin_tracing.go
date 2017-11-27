@@ -3,7 +3,6 @@ package routing
 import (
 	"fmt"
 	"regexp"
-	"strconv"
 
 	"code.cloudfoundry.org/cf-routing-test-helpers/helpers"
 	"github.com/cloudfoundry-incubator/cf-test-helpers/cf"
@@ -14,10 +13,10 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gbytes"
+	"github.com/onsi/gomega/gexec"
 )
 
 var _ = ZipkinDescribe("Zipkin Tracing", func() {
-
 	var (
 		app1              string
 		helloRoutingAsset = assets.NewAssets().SpringSleuthZip
@@ -26,14 +25,13 @@ var _ = ZipkinDescribe("Zipkin Tracing", func() {
 
 	BeforeEach(func() {
 		app1 = random_name.CATSRandomName("APP")
-		helpers.PushApp(app1, helloRoutingAsset, Config.GetJavaBuildpackName(), Config.GetAppsDomain(), Config.CfPushTimeoutDuration(), "1G")
+		helpers.PushApp(app1, helloRoutingAsset, Config.GetJavaBuildpackName(), Config.GetAppsDomain(), CF_JAVA_TIMEOUT, "512M")
 
 		hostname = app1
 	})
 
 	AfterEach(func() {
 		helpers.AppReport(app1, Config.DefaultTimeoutDuration())
-
 		helpers.DeleteApp(app1, Config.DefaultTimeoutDuration())
 	})
 
@@ -49,16 +47,18 @@ var _ = ZipkinDescribe("Zipkin Tracing", func() {
 
 				appLogsSession := cf.Cf("logs", "--recent", app1)
 
-				Eventually(appLogsSession.Out, "5s").Should(gbytes.Say("x_b3_traceid"))
-				_, _, parentSpanId := grabIDs(string(appLogsSession.Out.Contents()), "")
+				Eventually(appLogsSession, Config.DefaultTimeoutDuration()).Should(gexec.Exit(0))
 
-				Expect(parentSpanId).To(Equal("-"))
+				Eventually(appLogsSession.Out).Should(gbytes.Say("x_b3_traceid"))
+				parentSpanID := getID(`x_b3_parentspanid:"([0-9a-fA-F-]*)"`, string(appLogsSession.Out.Contents()))
+
+				Expect(parentSpanID).To(Equal("-"))
 
 				By("when request has zipkin trace headers")
 
-				traceId := "fee1f7ba6aeec41c"
+				traceID := "fee1f7ba6aeec41c"
 
-				header1 := fmt.Sprintf(`X-B3-TraceId: %s `, traceId)
+				header1 := fmt.Sprintf(`X-B3-TraceId: %s `, traceID)
 				header2 := `X-B3-SpanId: 579b36fd31cd8714`
 				Eventually(func() string {
 					curlOutput = cf_helpers.CurlApp(Config, hostname, "/", "-H", header1, "-H", header2)
@@ -67,49 +67,24 @@ var _ = ZipkinDescribe("Zipkin Tracing", func() {
 
 				appLogsSession = cf.Cf("logs", "--recent", hostname)
 
-				Eventually(appLogsSession.Out).Should(gbytes.Say("x_b3_traceid:\"fee1f7ba6aeec41c"))
-				_, appLogSpanId, _ := grabIDs(string(appLogsSession.Out.Contents()), traceId)
+				Eventually(appLogsSession, Config.DefaultTimeoutDuration()).Should(gexec.Exit(0))
 
-				Expect(curlOutput).To(ContainSubstring(traceId))
-				Expect(curlOutput).To(ContainSubstring(fmt.Sprintf("parents: [%s]", appLogSpanId)))
+				Expect(appLogsSession.Out).To(gbytes.Say(`x_b3_traceid:"fee1f7ba6aeec41c"`))
 
+				spanIDRegex := fmt.Sprintf("x_b3_traceid:\"%s\" x_b3_spanid:\"([0-9a-fA-F]*)\"", traceID)
+
+				appLogSpanID := getID(spanIDRegex, string(appLogsSession.Out.Contents()))
+
+				Expect(curlOutput).To(ContainSubstring(traceID))
+				Expect(curlOutput).To(ContainSubstring(fmt.Sprintf("parents: [%s]", appLogSpanID)))
 			})
 		})
 	})
 })
 
-func grabIDs(logLines string, traceId string) (string, string, string) {
-	defer GinkgoRecover()
-	var re *regexp.Regexp
+func getID(logRegex, logLines string) string {
+	matches := regexp.MustCompile(logRegex).FindStringSubmatch(logLines)
+	Expect(matches).To(HaveLen(2))
 
-	if traceId == "" {
-		re = regexp.MustCompile("x_b3_traceid:\"([0-9a-fA-F]*)\" x_b3_spanid:\"([0-9a-fA-F]*)\" x_b3_parentspanid:\"([0-9a-fA-F-]*)\"")
-	} else {
-		regex := fmt.Sprintf("x_b3_traceid:\"(%s)\" x_b3_spanid:\"([0-9a-fA-F]*)\" x_b3_parentspanid:\"([0-9a-fA-F-]*)\"", traceId)
-		re = regexp.MustCompile(regex)
-	}
-	matches := re.FindStringSubmatch(logLines)
-
-	Expect(matches).To(HaveLen(4))
-
-	// traceid, spanid, parentspanid
-	trimmedMatches, err := trimZeros(matches[1:])
-	Expect(err).ToNot(HaveOccurred())
-	return trimmedMatches[0], trimmedMatches[1], trimmedMatches[2]
-}
-
-func trimZeros(in []string) ([]string, error) {
-	var out []string
-	for _, s := range in {
-		if s != "-" {
-			x, err := strconv.ParseUint(s, 16, 64)
-			if err != nil {
-				return nil, err
-			}
-			out = append(out, fmt.Sprintf("%x", x))
-		} else {
-			out = append(out, "-")
-		}
-	}
-	return out, nil
+	return matches[1]
 }

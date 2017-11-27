@@ -3,7 +3,7 @@
 SCRIPT_NAME=$(basename ${0})
 RUN_DIR=/var/vcap/sys/run/iptables_agent
 LOG_DIR=/var/vcap/sys/log/iptables_agent
-PKG_DIR=/var/vcap/packages/iptables-agent
+PKG_DIR=/var/vcap/packages/acceptance-tests
 PIDFILE=${RUN_DIR}/iptables_agent.pid
 
 exec > >(tee -a >(logger -p user.info -t vcap.${SCRIPT_NAME}.stdout) | awk -W interactive '{ system("echo -n [$(date +\"%Y-%m-%d %H:%M:%S%z\")]"); print " " $0 }' >> ${LOG_DIR}/${SCRIPT_NAME}.log)

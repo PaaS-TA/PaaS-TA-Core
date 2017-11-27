@@ -26,7 +26,7 @@ type SqlDB struct {
 	httpEventHub eventhub.Hub
 }
 
-const DeleteError = "Delete Fails: Route does not exist"
+var DeleteError = DBError{Type: KeyNotFound, Message: "Delete Fails: Route does not exist"}
 
 func NewSqlDB(cfg *config.SqlDB) (*SqlDB, error) {
 	if cfg == nil {
@@ -165,6 +165,20 @@ func (s *SqlDB) ReadRouterGroup(guid string) (models.RouterGroup, error) {
 	return routerGroup, err
 }
 
+func (s *SqlDB) ReadRouterGroupByName(name string) (models.RouterGroup, error) {
+	routerGroupDB := models.RouterGroupDB{}
+	routerGroup := models.RouterGroup{}
+	err := s.Client.Where("name = ?", name).First(&routerGroupDB)
+	if err == nil {
+		routerGroup = routerGroupDB.ToRouterGroup()
+	}
+
+	if recordNotFound(err) {
+		err = nil
+	}
+	return routerGroup, err
+}
+
 func (s *SqlDB) SaveRouterGroup(routerGroup models.RouterGroup) error {
 	existingRouterGroup, err := s.ReadRouterGroup(routerGroup.Guid)
 	if err != nil {
@@ -190,9 +204,7 @@ func updateRouterGroup(existingRouterGroup, currentRouterGroup *models.RouterGro
 	if currentRouterGroup.Name != "" {
 		existingRouterGroup.Name = currentRouterGroup.Name
 	}
-	if currentRouterGroup.ReservablePorts != "" {
-		existingRouterGroup.ReservablePorts = currentRouterGroup.ReservablePorts
-	}
+	existingRouterGroup.ReservablePorts = currentRouterGroup.ReservablePorts
 }
 
 func updateTcpRouteMapping(existingTcpRouteMapping models.TcpRouteMapping, currentTcpRouteMapping models.TcpRouteMapping) models.TcpRouteMapping {
@@ -200,10 +212,10 @@ func updateTcpRouteMapping(existingTcpRouteMapping models.TcpRouteMapping, curre
 	if currentTcpRouteMapping.TTL != nil {
 		existingTcpRouteMapping.TTL = currentTcpRouteMapping.TTL
 	}
+	existingTcpRouteMapping.IsolationSegment = currentTcpRouteMapping.IsolationSegment
 
 	existingTcpRouteMapping.ExpiresAt = time.Now().
 		Add(time.Duration(*existingTcpRouteMapping.TTL) * time.Second)
-
 	return existingTcpRouteMapping
 }
 
@@ -296,7 +308,7 @@ func (s *SqlDB) DeleteRoute(route models.Route) error {
 		return err
 	}
 	if route == (models.Route{}) {
-		return errors.New(DeleteError)
+		return DeleteError
 	}
 
 	_, err = s.Client.Delete(&route)
@@ -316,11 +328,21 @@ func (s *SqlDB) ReadTcpRouteMappings() ([]models.TcpRouteMapping, error) {
 	return tcpRoutes, nil
 }
 
+func (s *SqlDB) ReadFilteredTcpRouteMappings(columnName string, values []string) ([]models.TcpRouteMapping, error) {
+	var tcpRoutes []models.TcpRouteMapping
+	now := time.Now()
+	err := s.Client.Where(columnName+" in (?)", values).Where("expires_at > ?", now).Find(&tcpRoutes)
+	if err != nil {
+		return nil, err
+	}
+	return tcpRoutes, nil
+}
+
 func (s *SqlDB) readTcpRouteMapping(tcpMapping models.TcpRouteMapping) (models.TcpRouteMapping, error) {
 	var routes []models.TcpRouteMapping
 	var tcpRoute models.TcpRouteMapping
-	err := s.Client.Where("host_ip = ? and host_port = ? and external_port = ?",
-		tcpMapping.HostIP, tcpMapping.HostPort, tcpMapping.ExternalPort).Find(&routes)
+	err := s.Client.Where("router_group_guid = ? and host_ip = ? and host_port = ? and external_port = ?",
+		tcpMapping.RouterGroupGuid, tcpMapping.HostIP, tcpMapping.HostPort, tcpMapping.ExternalPort).Find(&routes)
 
 	if err != nil {
 		return tcpRoute, err
@@ -393,7 +415,7 @@ func (s *SqlDB) DeleteTcpRouteMapping(tcpMapping models.TcpRouteMapping) error {
 		return err
 	}
 	if tcpMapping == (models.TcpRouteMapping{}) {
-		return errors.New(DeleteError)
+		return DeleteError
 	}
 
 	_, err = s.Client.Delete(&tcpMapping)

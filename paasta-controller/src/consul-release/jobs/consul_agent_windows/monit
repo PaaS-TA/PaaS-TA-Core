@@ -1,9 +1,24 @@
 {
+<% if p("consul.client.enabled") == true %>
   "processes": [
     {
       "name": "consul",
       "executable": "C:\\var\\vcap\\packages\\confab-windows\\bin\\confab.exe",
-      "args": [ "start", "", "-config-file", "/var/vcap/jobs/consul_agent_windows/confab.json", "-foreground" ]
+      "args": [
+        "start",
+        "",
+        "-config-file",
+        "/var/vcap/jobs/consul_agent_windows/confab.json",
+        "-config-consul-link-file",
+        "/var/vcap/jobs/consul_agent_windows/consul_link.json",
+        "-foreground"
+      ],
+      "env": {
+        "__PIPE_SYSLOG_HOST": "<%= p('syslog_daemon_config.address') %>",
+        "__PIPE_SYSLOG_PORT": "<%= p('syslog_daemon_config.port') %>",
+        "__PIPE_SYSLOG_TRANSPORT": "<%= p('syslog_daemon_config.transport') %>"
+      }
     }
   ]
+<% end %>
 }

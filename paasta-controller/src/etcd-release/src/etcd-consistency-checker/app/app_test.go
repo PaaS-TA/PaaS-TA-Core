@@ -2,11 +2,11 @@ package app_test
 
 import (
 	"crypto/tls"
-	"etcd-consistency-checker/app"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"time"
+
+	"github.com/cloudfoundry-incubator/etcd-release/src/etcd-consistency-checker/app"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
@@ -32,12 +32,31 @@ var _ = Describe("App", func() {
 			func(newServer func(http.Handler) *httptest.Server, ca, cert, key string) {
 				etcdServer1Handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					switch r.URL.Path {
-					case "/v2/stats/leader":
+					case "/v2/members":
 						if r.Method == "GET" {
 							w.WriteHeader(http.StatusOK)
 							w.Write([]byte(`{
-							"leader": "XXXXXXXXXXXXXXXXXXXXXX"
-						}`))
+							  "members": [
+								{
+								  "clientURLs": ["etcd-1-url"],
+								  "id": "XXXXXXXXXXXXXXX"
+								},
+								{
+								  "clientURLs": ["etcd-2-url"],
+								  "id": "YYYYYYYYYYYYYYY"
+								}
+							  ]
+							}`))
+							return
+						}
+					case "/v2/stats/self":
+						if r.Method == "GET" {
+							w.WriteHeader(http.StatusOK)
+							w.Write([]byte(`{
+							  "leaderInfo": {
+								"leader": "XXXXXXXXXXXXXXX"
+							  }
+							}`))
 							return
 						}
 					}
@@ -48,18 +67,39 @@ var _ = Describe("App", func() {
 				etcdServer2CallCount := 0
 				etcdServer2Handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					switch r.URL.Path {
-					case "/v2/stats/leader":
+					case "/v2/members":
+						if r.Method == "GET" {
+							w.WriteHeader(http.StatusOK)
+							w.Write([]byte(`{
+							  "members": [
+							    {
+							      "clientURLs": ["etcd-1-url"],
+							      "id": "XXXXXXXXXXXXXXX"
+							    },
+							    {
+							      "clientURLs": ["etcd-2-url"],
+							      "id": "YYYYYYYYYYYYYYY"
+							    }
+							  ]
+							}`))
+							return
+						}
+					case "/v2/stats/self":
 						if r.Method == "GET" {
 							if etcdServer2CallCount >= 3 {
 								w.WriteHeader(http.StatusOK)
 								w.Write([]byte(`{
-								"leader": "YYYYYYYYYYYYYYYYYYYYY"
-							}`))
+								  "leaderInfo": {
+								    "leader": "YYYYYYYYYYYYYYY"
+								  }
+								}`))
 							} else {
-								w.WriteHeader(http.StatusForbidden)
+								w.WriteHeader(http.StatusOK)
 								w.Write([]byte(`{
-								 "message": "not current leader"
-							}`))
+								  "leaderInfo": {
+								    "leader": "XXXXXXXXXXXXXXX"
+								  }
+								}`))
 							}
 							etcdServer2CallCount++
 							return
@@ -90,7 +130,9 @@ var _ = Describe("App", func() {
 				)
 
 				err := a.Run()
-				Expect(err).To(MatchError(fmt.Sprintf("more than one leader exists: [%s %s]", etcdServer1.URL, etcdServer2.URL)))
+				Expect(err).To(MatchError(ContainSubstring("more than one leader exists:")))
+				Expect(err).To(MatchError(ContainSubstring("etcd-1-url")))
+				Expect(err).To(MatchError(ContainSubstring("etcd-2-url")))
 				Expect(etcdServer2CallCount).To(Equal(4))
 				Expect(sleeperCallCount).To(Equal(3))
 				Expect(sleeperCallDuration).To(Equal(1 * time.Second))
@@ -100,13 +142,65 @@ var _ = Describe("App", func() {
 		)
 
 		It("filters connection errors to the cluster members", func() {
-			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			etcdServer1Handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				switch r.URL.Path {
-				case "/v2/stats/leader":
+				case "/v2/members":
 					if r.Method == "GET" {
 						w.WriteHeader(http.StatusOK)
 						w.Write([]byte(`{
-							"leader": "XXXXXXXXXXXXXXXXXXXXXX"
+						  "members": [
+							{
+							  "clientURLs": ["etcd-url"],
+							  "id": "XXXXXXXXXXXXXXX"
+							},
+							{
+							  "clientURLs": ["etcd-url"],
+							  "id": "YYYYYYYYYYYYYYY"
+							}
+						  ]
+						}`))
+						return
+					}
+				case "/v2/stats/self":
+					if r.Method == "GET" {
+						w.WriteHeader(http.StatusOK)
+						w.Write([]byte(`{
+						  "leaderInfo": {
+						    "leader": "XXXXXXXXXXXXXXX"
+						  }
+						}`))
+						return
+					}
+				}
+				w.WriteHeader(http.StatusTeapot)
+				return
+			})
+			etcdServer2Handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				switch r.URL.Path {
+				case "/v2/members":
+					if r.Method == "GET" {
+						w.WriteHeader(http.StatusOK)
+						w.Write([]byte(`{
+						  "members": [
+							{
+							  "clientURLs": ["etcd-url"],
+							  "id": "XXXXXXXXXXXXXXX"
+							},
+							{
+							  "clientURLs": ["etcd-url"],
+							  "id": "YYYYYYYYYYYYYYY"
+							}
+						  ]
+						}`))
+						return
+					}
+				case "/v2/stats/self":
+					if r.Method == "GET" {
+						w.WriteHeader(http.StatusOK)
+						w.Write([]byte(`{
+						  "leaderInfo": {
+							"leader": "YYYYYYYYYYYYYYY"
+						  }
 						}`))
 						return
 					}
@@ -115,8 +209,8 @@ var _ = Describe("App", func() {
 				return
 			})
 
-			etcdServer1 := httptest.NewServer(handler)
-			etcdServer2 := httptest.NewServer(handler)
+			etcdServer1 := httptest.NewServer(etcdServer1Handler)
+			etcdServer2 := httptest.NewServer(etcdServer2Handler)
 			a := app.New(app.Config{
 				ClusterMembers: []string{
 					etcdServer1.URL,
@@ -129,7 +223,7 @@ var _ = Describe("App", func() {
 			)
 
 			err := a.Run()
-			Expect(err).To(MatchError(fmt.Sprintf("more than one leader exists: [%s %s]", etcdServer1.URL, etcdServer2.URL)))
+			Expect(err).To(MatchError("more than one leader exists: [etcd-url etcd-url]"))
 		})
 
 		Context("failure cases", func() {
@@ -187,10 +281,10 @@ var _ = Describe("App", func() {
 				Expect(err).To(MatchError(ContainSubstring("invalid URL escape")))
 			})
 
-			It("returns an error when the stats/leader returns malformed json for a leader node", func() {
+			It("returns an error when the stats/self returns malformed json", func() {
 				server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					switch r.URL.Path {
-					case "/v2/stats/leader":
+					case "/v2/stats/self":
 						if r.Method == "GET" {
 							w.WriteHeader(http.StatusOK)
 							w.Write([]byte(`%%%%%%%%%%%%%%%%%%%%%%%`))
@@ -209,13 +303,45 @@ var _ = Describe("App", func() {
 				Expect(err).To(MatchError(ContainSubstring("invalid character")))
 			})
 
-			It("returns an error when the stats/leader returns malformed json for a non leader node", func() {
+			It("returns an error when the stats/leader returns an unknown status code", func() {
 				server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					switch r.URL.Path {
-					case "/v2/stats/leader":
+					case "/v2/stats/self":
 						if r.Method == "GET" {
-							w.WriteHeader(http.StatusForbidden)
+							w.WriteHeader(http.StatusInternalServerError)
+							w.Write([]byte("something bad happened"))
+							return
+						}
+					}
+					w.WriteHeader(http.StatusTeapot)
+					return
+				}))
+
+				a := app.New(app.Config{
+					ClusterMembers: []string{server.URL},
+				}, sleeper)
+
+				err := a.Run()
+				Expect(err).To(MatchError(ContainSubstring("unexpected status code 500 - something bad happened")))
+			})
+
+			It("returns an error when members returns malformed json", func() {
+				server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					switch r.URL.Path {
+					case "/v2/members":
+						if r.Method == "GET" {
+							w.WriteHeader(http.StatusOK)
 							w.Write([]byte(`%%%%%%%%%%%%%%%%%%%%%%%`))
+							return
+						}
+					case "/v2/stats/self":
+						if r.Method == "GET" {
+							w.WriteHeader(http.StatusOK)
+							w.Write([]byte(`{
+							  "leaderInfo": {
+								"leader": "XXXXXXXXXXXXXXX"
+							  }
+							}`))
 							return
 						}
 					}
@@ -231,35 +357,23 @@ var _ = Describe("App", func() {
 				Expect(err).To(MatchError(ContainSubstring("invalid character")))
 			})
 
-			It("returns an error when the stats/leader returns an unknown message for a non leader node", func() {
+			It("returns an error when members returns an unknown status code", func() {
 				server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					switch r.URL.Path {
-					case "/v2/stats/leader":
-						if r.Method == "GET" {
-							w.WriteHeader(http.StatusForbidden)
-							w.Write([]byte(`{"message": "unknown"}`))
-							return
-						}
-					}
-					w.WriteHeader(http.StatusTeapot)
-					return
-				}))
-
-				a := app.New(app.Config{
-					ClusterMembers: []string{server.URL},
-				}, sleeper)
-
-				err := a.Run()
-				Expect(err).To(MatchError(ContainSubstring(`unexpected status code 403 - {"message": "unknown"}`)))
-			})
-
-			It("returns an error when the stats/leader returns an unknown status code", func() {
-				server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-					switch r.URL.Path {
-					case "/v2/stats/leader":
+					case "/v2/members":
 						if r.Method == "GET" {
 							w.WriteHeader(http.StatusInternalServerError)
 							w.Write([]byte("something bad happened"))
+							return
+						}
+					case "/v2/stats/self":
+						if r.Method == "GET" {
+							w.WriteHeader(http.StatusOK)
+							w.Write([]byte(`{
+							  "leaderInfo": {
+								"leader": "XXXXXXXXXXXXXXX"
+							  }
+							}`))
 							return
 						}
 					}

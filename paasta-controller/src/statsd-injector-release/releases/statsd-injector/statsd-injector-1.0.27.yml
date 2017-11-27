@@ -1,0 +1,25 @@
+name: statsd-injector
+version: 1.0.27
+commit_hash: 78853df
+uncommitted_changes: false
+jobs:
+- name: statsd_injector
+  version: 91d166845474019119de737c946e7cb4aa8fd036
+  fingerprint: 91d166845474019119de737c946e7cb4aa8fd036
+  sha1: 09ee4234450a1aa2eb29c95085df5cb8e6fbbc2b
+packages:
+- name: golang1.8.3
+  version: 6b1bfba0bc0455c57678161490ce4fa4fd5f70f4
+  fingerprint: 6b1bfba0bc0455c57678161490ce4fa4fd5f70f4
+  sha1: 1df915f847893905147d4dc7cd13653b27c2a72a
+  dependencies: []
+- name: statsd_injector
+  version: 74d7d28e62262ca2fc1349751d4e1d6b332f72e6
+  fingerprint: 74d7d28e62262ca2fc1349751d4e1d6b332f72e6
+  sha1: fecb64e3621cec7a95d09b2441a4b8e92f1d042e
+  dependencies:
+  - golang1.8.3
+license:
+  version: 6cef01f8bf35114db58dba2d83de485cdc08de8c
+  fingerprint: 6cef01f8bf35114db58dba2d83de485cdc08de8c
+  sha1: 8d76941ba19394f9a68f59d014bc4120d34dea04

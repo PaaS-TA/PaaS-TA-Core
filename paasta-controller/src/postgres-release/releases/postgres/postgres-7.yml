@@ -1,0 +1,25 @@
+---
+packages:
+- name: postgres-9.4.9
+  version: 8a20abd4ccec4d356cc29169d38be561d99bc1ff
+  fingerprint: 8a20abd4ccec4d356cc29169d38be561d99bc1ff
+  sha1: da8d8064186a844289753823ff9e690b25f459b4
+  dependencies: []
+- name: postgres-common
+  version: 368d38d49a3cc717559ebcdb2390b68882a85053
+  fingerprint: 368d38d49a3cc717559ebcdb2390b68882a85053
+  sha1: 83f957a121a41cfc36ecdaa806e0747c76f52f42
+  dependencies: []
+jobs:
+- name: postgres
+  version: d21f787a348dc72c3290a97b753cb0545760be36
+  fingerprint: d21f787a348dc72c3290a97b753cb0545760be36
+  sha1: 273060db0c3a38c3c64116e32eb6285447feadde
+license:
+  version: 2fbc337cd1b43c3089936226f5392120ef0f0558
+  fingerprint: 2fbc337cd1b43c3089936226f5392120ef0f0558
+  sha1: 293bbb78caaa42e6656b1d849b340f6c1847efbd
+commit_hash: 27753b5b
+uncommitted_changes: false
+name: postgres
+version: '7'

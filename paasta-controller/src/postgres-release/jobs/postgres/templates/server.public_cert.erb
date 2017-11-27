@@ -1,0 +1,7 @@
+<%=
+  cert = nil
+  if p("databases.tls.certificate") != ''
+      cert = p("databases.tls.certificate")
+  end
+  cert
+%>

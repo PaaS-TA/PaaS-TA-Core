@@ -4,7 +4,6 @@ platform: linux
 image: docker:///cfinfrastructure/deployment
 
 inputs:
-  - name: postgres-release
   - name: oss-s3-buckets-stack
   - name: release-repo
   - name: release-repo-master
@@ -13,7 +12,7 @@ outputs:
   - name: final-release-repo
 
 run:
-  path: postgres-release/ci/scripts/create-final-release/task.sh
+  path: release-repo/ci/scripts/create-final-release/task.sh
 
 params:
   RELEASE_NAME:

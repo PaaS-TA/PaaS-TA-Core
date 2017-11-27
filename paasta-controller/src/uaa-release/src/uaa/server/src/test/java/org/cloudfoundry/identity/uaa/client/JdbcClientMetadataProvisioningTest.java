@@ -35,40 +35,45 @@ public class JdbcClientMetadataProvisioningTest extends JdbcTestBase {
     public static final String CLIENT_NAME = "Test name";
     JdbcClientMetadataProvisioning db;
 
+    private String randomGUID = "4097895b-ebc1-4732-b6e5-2c33dd2c7cd1";
     private RandomValueStringGenerator generator = new RandomValueStringGenerator(8);
 
     @Before
     public void createDatasource() throws Exception {
-        MultitenantJdbcClientDetailsService clientService = new MultitenantJdbcClientDetailsService(dataSource);
-        db = new JdbcClientMetadataProvisioning(clientService, clientService, jdbcTemplate);
+        MultitenantJdbcClientDetailsService clientService = new MultitenantJdbcClientDetailsService(jdbcTemplate);
+        db = new JdbcClientMetadataProvisioning(clientService, jdbcTemplate);
     }
 
     @Test(expected = EmptyResultDataAccessException.class)
     public void constraintViolation_WhenNoMatchingClientFound() throws Exception {
         ClientMetadata clientMetadata = createTestClientMetadata(generator.generate(), true, new URL("http://app.launch/url"), base64EncodedImg);
-        db.update(clientMetadata);
+        db.update(clientMetadata, IdentityZoneHolder.get().getId());
     }
 
     @Test
     public void retrieveClientMetadata() throws Exception {
         String clientId = generator.generate();
-        jdbcTemplate.execute("insert into oauth_client_details(client_id, identity_zone_id) values ('" + clientId + "', '" + IdentityZone.getUaa().getId() + "')");
+        jdbcTemplate.execute(
+            String.format("insert into oauth_client_details(client_id, identity_zone_id, created_by) values ('%s', '%s', '%s')",
+                clientId, IdentityZone.getUaa().getId(), randomGUID)
+            );
         ClientMetadata clientMetadata = createTestClientMetadata(clientId, true, new URL("http://app.launch/url"), base64EncodedImg);
-        ClientMetadata createdClientMetadata = db.update(clientMetadata);
+        ClientMetadata createdClientMetadata = db.update(clientMetadata, IdentityZoneHolder.get().getId());
 
-        ClientMetadata retrievedClientMetadata = db.retrieve(createdClientMetadata.getClientId());
+        ClientMetadata retrievedClientMetadata = db.retrieve(createdClientMetadata.getClientId(), IdentityZoneHolder.get().getId());
 
         assertThat(retrievedClientMetadata.getClientId(), is(clientMetadata.getClientId()));
         assertThat(retrievedClientMetadata.getIdentityZoneId(), is(IdentityZone.getUaa().getId()));
         assertThat(retrievedClientMetadata.isShowOnHomePage(), is(clientMetadata.isShowOnHomePage()));
         assertThat(retrievedClientMetadata.getAppLaunchUrl(), is(clientMetadata.getAppLaunchUrl()));
         assertThat(retrievedClientMetadata.getAppIcon(), is(clientMetadata.getAppIcon()));
+        assertThat(retrievedClientMetadata.getCreatedBy(), is(clientMetadata.getCreatedBy()));
     }
 
     @Test(expected = EmptyResultDataAccessException.class)
     public void retrieveClientMetadata_ThatDoesNotExist() throws Exception {
         String clientId = generator.generate();
-        db.retrieve(clientId);
+        db.retrieve(clientId, IdentityZoneHolder.get().getId());
     }
 
     @Test
@@ -76,13 +81,13 @@ public class JdbcClientMetadataProvisioningTest extends JdbcTestBase {
         String clientId = generator.generate();
         jdbcTemplate.execute("insert into oauth_client_details(client_id, identity_zone_id) values ('" + clientId + "', '" + IdentityZone.getUaa().getId() + "')");
         ClientMetadata clientMetadata1 = createTestClientMetadata(clientId, true, new URL("http://app.launch/url"), base64EncodedImg);
-        db.update(clientMetadata1);
+        db.update(clientMetadata1, IdentityZoneHolder.get().getId());
         String clientId2 = generator.generate();
         jdbcTemplate.execute("insert into oauth_client_details(client_id, identity_zone_id) values ('" + clientId2 + "', '" + IdentityZone.getUaa().getId() + "')");
         ClientMetadata clientMetadata2 = createTestClientMetadata(clientId2, true, new URL("http://app.launch/url"), base64EncodedImg);
-        db.update(clientMetadata2);
+        db.update(clientMetadata2, IdentityZoneHolder.get().getId());
 
-        List<ClientMetadata> clientMetadatas = db.retrieveAll();
+        List<ClientMetadata> clientMetadatas = db.retrieveAll(IdentityZoneHolder.get().getId());
 
 
         assertThat(clientMetadatas, PredicateMatcher.<ClientMetadata>has(m -> m.getClientId().equals(clientId)));
@@ -95,7 +100,7 @@ public class JdbcClientMetadataProvisioningTest extends JdbcTestBase {
         jdbcTemplate.execute("insert into oauth_client_details(client_id, identity_zone_id) values ('" + clientId + "', '" + IdentityZone.getUaa().getId() + "')");
         ClientMetadata newClientMetadata = createTestClientMetadata(clientId, false, new URL("http://updated.app/launch/url"), base64EncodedImg);
 
-        ClientMetadata updatedClientMetadata = db.update(newClientMetadata);
+        ClientMetadata updatedClientMetadata = db.update(newClientMetadata, IdentityZoneHolder.get().getId());
 
         assertThat(updatedClientMetadata.getClientId(), is(clientId));
         assertThat(updatedClientMetadata.getIdentityZoneId(), is(IdentityZone.getUaa().getId()));
@@ -113,14 +118,10 @@ public class JdbcClientMetadataProvisioningTest extends JdbcTestBase {
                                                        null,
                                                        null);
         data.setClientName(CLIENT_NAME);
-        db.update(data);
-        data = db.retrieve(clientId);
+        db.update(data, IdentityZoneHolder.get().getId());
+        data = db.retrieve(clientId, IdentityZoneHolder.get().getId());
         assertEquals(CLIENT_NAME, data.getClientName());
     }
-
-
-
-
 
     private ClientMetadata createTestClientMetadata(String clientId, boolean showOnHomePage, URL appLaunchUrl, String appIcon) throws MalformedURLException {
         ClientMetadata clientMetadata = new ClientMetadata();
@@ -128,6 +129,7 @@ public class JdbcClientMetadataProvisioningTest extends JdbcTestBase {
         clientMetadata.setShowOnHomePage(showOnHomePage);
         clientMetadata.setAppLaunchUrl(appLaunchUrl);
         clientMetadata.setAppIcon(appIcon);
+        clientMetadata.setCreatedBy(randomGUID);
         return clientMetadata;
     }
 

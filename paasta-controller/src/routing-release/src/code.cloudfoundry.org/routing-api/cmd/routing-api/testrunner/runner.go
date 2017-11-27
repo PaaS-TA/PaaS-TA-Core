@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
+	"time"
 
 	"code.cloudfoundry.org/cf-tcp-router/utils"
 
@@ -59,9 +60,10 @@ func NewRoutingAPIArgs(ip string, port uint16, dbId, consulUrl string) (Args, er
 
 func New(binPath string, args Args) *ginkgomon.Runner {
 	return ginkgomon.New(ginkgomon.Config{
-		Name:       "routing-api",
-		Command:    exec.Command(binPath, args.ArgSlice()...),
-		StartCheck: "routing-api.started",
+		Name:              "routing-api",
+		Command:           exec.Command(binPath, args.ArgSlice()...),
+		StartCheck:        "routing-api.started",
+		StartCheckTimeout: 30 * time.Second,
 	})
 }
 

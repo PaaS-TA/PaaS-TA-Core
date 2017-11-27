@@ -6,9 +6,32 @@ module VCAP::CloudController
 
     add_association_dependencies service_plan_visibilities: :destroy
 
-    export_attributes :name, :free, :description, :service_guid, :extra, :unique_id, :public, :active
+    export_attributes :name,
+                      :free,
+                      :description,
+                      :service_guid,
+                      :extra,
+                      :unique_id,
+                      :public,
+                      :bindable,
+                      :active,
+                      :create_instance_schema,
+                      :update_instance_schema,
+                      :create_binding_schema
 
-    import_attributes :name, :free, :description, :service_guid, :extra, :unique_id, :public
+    export_attributes_from_methods bindable: :bindable?
+
+    import_attributes :name,
+                      :free,
+                      :description,
+                      :service_guid,
+                      :extra,
+                      :unique_id,
+                      :public,
+                      :bindable,
+                      :create_instance_schema,
+                      :update_instance_schema,
+                      :create_binding_schema
 
     strip_attributes :name
 
@@ -29,31 +52,77 @@ module VCAP::CloudController
       validate_private_broker_plan_not_public
     end
 
-    def_dataset_method(:organization_visible) do |organization|
-      filter(Sequel.|(
-        { public: true },
-        { id: ServicePlanVisibility.visible_private_plan_ids_for_organization(organization) }
-      ).&(active: true))
+    dataset_module do
+      def organization_visible(organization)
+        filter(Sequel.|(
+          { public: true },
+          { id: ServicePlanVisibility.visible_private_plan_ids_for_organization(organization) }
+        ).&(active: true))
+      end
+
+      def space_visible(space)
+        filter(Sequel.|(
+          { public: true },
+          { id: ServicePlanVisibility.visible_private_plan_ids_for_organization(space.organization) },
+          { id: ServicePlan.plan_ids_from_private_brokers_by_space(space) }
+        ).&(active: true))
+      end
     end
 
-    def self.user_visibility_filter(user)
+    def self.user_visible(user, admin_override=false, op=nil)
+      dataset.filter(user_visibility(user, admin_override, op))
+    end
+
+    def self.user_visibility(user, admin_override, op=nil)
+      if !admin_override && user
+        op == :read ? user_visibility_show_filter(user) : user_visibility_list_filter(user)
+      else
+        super(user, admin_override)
+      end
+    end
+
+    def self.user_visibility_for_read(user, admin_override)
+      user_visibility(user, admin_override, :read)
+    end
+
+    def self.user_visibility_list_filter(user)
       included_ids = ServicePlanVisibility.visible_private_plan_ids_for_user(user).
                      concat(plan_ids_from_private_brokers(user))
 
-      Sequel.or(
-        { public: true, id: included_ids }
-      ).&(active: true)
+      Sequel.or({ public: true, id: included_ids }).&(active: true)
+    end
+
+    def self.user_visibility_show_filter(user)
+      list_filter = self.user_visibility_list_filter(user)
+      Sequel.|(list_filter, { id: plan_ids_for_visible_service_instances(user) })
     end
 
     def self.plan_ids_from_private_brokers(user)
-      user.membership_spaces.
-        join(:service_brokers, space_id: :id).
-        join(:services, service_broker_id: :id).
+      plan_ids_from_brokers(user.membership_spaces.join(:service_brokers, space_id: :id))
+    end
+
+    def self.plan_ids_from_private_brokers_by_space(space)
+      plan_ids_from_brokers(ServiceBroker.where(space_id: space.id))
+    end
+
+    def self.plan_ids_from_brokers(broker_ds)
+      broker_ds.join(:services, service_broker_id: :id).
         join(:service_plans, service_id: :id).
         map(&:id).flatten.uniq
     end
 
+    def self.plan_ids_for_visible_service_instances(user)
+      plan_ids = []
+      user.spaces.each do |space|
+        space.service_instances.select(&:managed_instance?).each do |service_instance|
+          plan_ids << service_instance.service_plan.id
+        end
+      end
+      plan_ids.uniq
+    end
+
     def bindable?
+      return bindable unless bindable.nil?
       service.bindable?
     end
 

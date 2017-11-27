@@ -11,6 +11,24 @@ class RootController < ActionController::Base
           },
           apps: {
             href: build_api_uri(path: '/apps')
+          },
+          builds: {
+            href: build_api_uri(path: '/builds')
+          },
+          packages: {
+            href: build_api_uri(path: '/packages')
+          },
+          isolation_segments: {
+            href: build_api_uri(path: '/isolation_segments')
+          },
+          organizations: {
+            href: build_api_uri(path: '/organizations')
+          },
+          spaces: {
+            href: build_api_uri(path: '/spaces')
+          },
+          processes: {
+            href: build_api_uri(path: '/processes')
           }
         }
       }, pretty: true)

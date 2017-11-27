@@ -55,7 +55,7 @@ RSpec.describe 'Service Broker API integration' do
               auth_username: broker_auth_username,
               auth_password: broker_auth_password
             }.to_json,
-              json_headers(admin_headers))
+              admin_headers)
           end
 
           it 'handles the dashboard_client in the broker catalog' do
@@ -91,31 +91,13 @@ RSpec.describe 'Service Broker API integration' do
 
           after { delete_broker }
           before do
-            UAARequests.stub_all
             setup_broker(catalog)
-
-            # stub uaa token request
-            stub_request(:post, 'http://cc-service-dashboards:some-sekret@localhost:8080/uaa/oauth/token').to_return(
-              status: 200,
-              body: { token_type: 'token-type', access_token: 'access-token' }.to_json,
-              headers: { 'content-type' => 'application/json' })
-
-            # stub uaa client search request
-            stub_request(:get, 'http://localhost:8080/uaa/oauth/clients/dash-id').to_return(
-              status: 200,
-              body: { id: 'some-id', client_id: 'dash-id', redirect_uri: 'http://redirect.to.me.plz' }.to_json,
-              headers: { 'content-type' => 'application/json' })
-
-            # stub uaa client update request
-            stub_request(:post, 'http://localhost:8080/uaa/oauth/clients/tx/modify').to_return(
-              status:  200,
-              headers: { 'content-type' => 'application/json' })
-
             stub_catalog_fetch(broker_response_status, catalog_with_updated_secret)
+            UAARequests.stub_all
 
             put("/v2/service_brokers/#{@broker_guid}",
               {}.to_json,
-              json_headers(admin_headers))
+              admin_headers)
           end
 
           it 'handles the dashboard_client in the broker catalog' do

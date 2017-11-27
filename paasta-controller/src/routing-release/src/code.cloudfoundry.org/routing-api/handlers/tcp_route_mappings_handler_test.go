@@ -51,14 +51,99 @@ var _ = Describe("TcpRouteMappingsHandler", func() {
 
 	Describe("Upsert", func() {
 		Context("POST", func() {
-			var (
-				tcpMapping  models.TcpRouteMapping
-				tcpMappings []models.TcpRouteMapping
-			)
+			Context("when a unique TCP route exists in DB", func() {
+				var (
+					tcpMapping  *models.TcpRouteMapping
+					tcpMappings []models.TcpRouteMapping
+				)
+				BeforeEach(func() {
+					tcpMapping = &models.TcpRouteMapping{
+						TcpMappingEntity: models.TcpMappingEntity{
+							RouterGroupGuid: "router-group-guid-001",
+							ExternalPort:    52000,
+							HostIP:          "1.2.3.4",
+							HostPort:        60000,
+							TTL:             &maxTTL,
+						}}
+					tcpMappings = []models.TcpRouteMapping{*tcpMapping}
+					request = handlers.NewTestRequest(tcpMappings)
+
+					tcpRouteMappingsHandler.Upsert(responseRecorder, request)
+					Expect(responseRecorder.Code).To(Equal(http.StatusCreated))
+
+				})
+				Context("when that TCP route is upserted with an isolation segment", func() {
+					It("Updates the existing route", func() {
+						tcpMapping.IsolationSegment = "some-iso-seg"
+						tcpMappings = []models.TcpRouteMapping{*tcpMapping}
+						request = handlers.NewTestRequest(tcpMappings)
+
+						tcpRouteMappingsHandler.Upsert(responseRecorder, request)
+						Expect(responseRecorder.Code).To(Equal(http.StatusCreated))
+
+						data := map[string]interface{}{
+							"port":              float64(52000),
+							"router_group_guid": "router-group-guid-001",
+							"backend_ip":        "1.2.3.4",
+							"backend_port":      float64(60000),
+							"modification_tag":  map[string]interface{}{"guid": "", "index": float64(0)},
+							"ttl":               float64(120),
+							"isolation_segment": "some-iso-seg",
+						}
+						logData := map[string][]interface{}{"tcp_mapping_creation": []interface{}{data}}
+						Expect(len(logger.Logs())).To(BeNumerically(">", 0))
+						Expect(logger.Logs()[1].Message).To(ContainSubstring("request"))
+						Expect(logger.Logs()[1].Data["tcp_mapping_creation"]).To(Equal(logData["tcp_mapping_creation"]))
+					})
+				})
+			})
+			Context("when an isolation segment is present", func() {
+				It("sets the isolation segment", func() {
+					tcpMapping := models.TcpRouteMapping{
+						TcpMappingEntity: models.TcpMappingEntity{
+							RouterGroupGuid:  "router-group-guid-001",
+							ExternalPort:     52000,
+							HostIP:           "1.2.3.4",
+							HostPort:         60000,
+							TTL:              &maxTTL,
+							IsolationSegment: "some-iso-seg",
+						}}
+					tcpMappings := []models.TcpRouteMapping{tcpMapping}
+					request = handlers.NewTestRequest(tcpMappings)
+
+					tcpRouteMappingsHandler.Upsert(responseRecorder, request)
+					Expect(responseRecorder.Code).To(Equal(http.StatusCreated))
+
+					data := map[string]interface{}{
+						"port":              float64(52000),
+						"router_group_guid": "router-group-guid-001",
+						"backend_ip":        "1.2.3.4",
+						"backend_port":      float64(60000),
+						"modification_tag":  map[string]interface{}{"guid": "", "index": float64(0)},
+						"ttl":               float64(120),
+						"isolation_segment": "some-iso-seg",
+					}
+					logData := map[string][]interface{}{"tcp_mapping_creation": []interface{}{data}}
+
+					Expect(logger.Logs()[0].Message).To(ContainSubstring("request"))
+					Expect(logger.Logs()[0].Data["tcp_mapping_creation"]).To(Equal(logData["tcp_mapping_creation"]))
+				})
+
+				Context("when the isolation segment is something other than a string", func() {
+					It("returns http BadRequest", func() {
+						request = handlers.NewTestRequest(`[{"router_group_guid": "tcp-default", "port": 1024, "backend_ip": "10.1.1.12", "backend_port": 60000, "isolation_segment": ["foo", "bar"]}]`)
+						tcpRouteMappingsHandler.Upsert(responseRecorder, request)
+
+						Expect(responseRecorder.Code).To(Equal(http.StatusBadRequest))
+						Expect(responseRecorder.Body.String()).To(ContainSubstring("cannot unmarshal array"))
+						Expect(database.SaveRouteCallCount()).To(Equal(0))
+						Expect(logger.Logs()[0].Message).To(ContainSubstring("error"))
+					})
+				})
+			})
 
 			Context("when ttl is not present", func() {
-
-				BeforeEach(func() {
+				It("sets a default ttl", func() {
 					tcpMapping := models.TcpRouteMapping{
 						TcpMappingEntity: models.TcpMappingEntity{
 							RouterGroupGuid: "router-group-guid-001",
@@ -66,10 +151,7 @@ var _ = Describe("TcpRouteMappingsHandler", func() {
 							HostIP:          "1.2.3.4",
 							HostPort:        60000,
 						}}
-					tcpMappings = []models.TcpRouteMapping{tcpMapping}
-				})
-
-				It("sets a default ttl", func() {
+					tcpMappings := []models.TcpRouteMapping{tcpMapping}
 					request = handlers.NewTestRequest(tcpMappings)
 
 					tcpRouteMappingsHandler.Upsert(responseRecorder, request)
@@ -82,20 +164,22 @@ var _ = Describe("TcpRouteMappingsHandler", func() {
 						"backend_port":      float64(60000),
 						"modification_tag":  map[string]interface{}{"guid": "", "index": float64(0)},
 						"ttl":               float64(maxTTL),
+						"isolation_segment": "",
 					}
-					log_data := map[string][]interface{}{"tcp_mapping_creation": []interface{}{data}}
+					logData := map[string][]interface{}{"tcp_mapping_creation": []interface{}{data}}
 
 					Expect(logger.Logs()[0].Message).To(ContainSubstring("request"))
-					Expect(logger.Logs()[0].Data["tcp_mapping_creation"]).To(Equal(log_data["tcp_mapping_creation"]))
+					Expect(logger.Logs()[0].Data["tcp_mapping_creation"]).To(Equal(logData["tcp_mapping_creation"]))
 
 				})
 
 			})
 
 			Context("when ttl is present", func() {
+				var tcpMappings []models.TcpRouteMapping
 
 				BeforeEach(func() {
-					tcpMapping = models.NewTcpRouteMapping("router-group-guid-001", 52000, "1.2.3.4", 60000, 60)
+					tcpMapping := models.NewTcpRouteMapping("router-group-guid-001", 52000, "1.2.3.4", 60000, 60)
 					tcpMappings = []models.TcpRouteMapping{tcpMapping}
 				})
 
@@ -141,11 +225,12 @@ var _ = Describe("TcpRouteMappingsHandler", func() {
 							"backend_port":      float64(60000),
 							"modification_tag":  map[string]interface{}{"guid": "", "index": float64(0)},
 							"ttl":               float64(60),
+							"isolation_segment": "",
 						}
-						log_data := map[string][]interface{}{"tcp_mapping_creation": []interface{}{data}}
+						logData := map[string][]interface{}{"tcp_mapping_creation": []interface{}{data}}
 
 						Expect(logger.Logs()[0].Message).To(ContainSubstring("request"))
-						Expect(logger.Logs()[0].Data["tcp_mapping_creation"]).To(Equal(log_data["tcp_mapping_creation"]))
+						Expect(logger.Logs()[0].Data["tcp_mapping_creation"]).To(Equal(logData["tcp_mapping_creation"]))
 					})
 
 					Context("when database fails to save", func() {
@@ -183,7 +268,7 @@ var _ = Describe("TcpRouteMappingsHandler", func() {
 					request = handlers.NewTestRequest(`[{"router_group_guid": "tcp-default", "port": -1, "backend_ip": "10.1.1.12", "backend_port": 60000}]`)
 					tcpRouteMappingsHandler.Upsert(responseRecorder, request)
 					Expect(responseRecorder.Code).To(Equal(http.StatusBadRequest))
-					Expect(responseRecorder.Body.String()).To(ContainSubstring("cannot unmarshal number -1 into Go value of type uint16"))
+					Expect(responseRecorder.Body.String()).To(ContainSubstring("cannot unmarshal number -1"))
 					Expect(database.SaveRouteCallCount()).To(Equal(0))
 					Expect(logger.Logs()[0].Message).To(ContainSubstring("error"))
 				})
@@ -194,7 +279,7 @@ var _ = Describe("TcpRouteMappingsHandler", func() {
 					tcpRouteMappingsHandler.Upsert(responseRecorder, request)
 
 					Expect(responseRecorder.Code).To(Equal(http.StatusBadRequest))
-					Expect(responseRecorder.Body.String()).To(ContainSubstring("cannot unmarshal number 65537 into Go value of type uint16"))
+					Expect(responseRecorder.Body.String()).To(ContainSubstring("cannot unmarshal number 65537"))
 					Expect(database.SaveRouteCallCount()).To(Equal(0))
 					Expect(logger.Logs()[0].Message).To(ContainSubstring("error"))
 				})
@@ -204,7 +289,7 @@ var _ = Describe("TcpRouteMappingsHandler", func() {
 					tcpRouteMappingsHandler.Upsert(responseRecorder, request)
 
 					Expect(responseRecorder.Code).To(Equal(http.StatusBadRequest))
-					Expect(responseRecorder.Body.String()).To(ContainSubstring("cannot unmarshal number -1 into Go value of type uint16"))
+					Expect(responseRecorder.Body.String()).To(ContainSubstring("cannot unmarshal number -1"))
 					Expect(database.SaveRouteCallCount()).To(Equal(0))
 					Expect(logger.Logs()[0].Message).To(ContainSubstring("error"))
 
@@ -216,7 +301,7 @@ var _ = Describe("TcpRouteMappingsHandler", func() {
 					tcpRouteMappingsHandler.Upsert(responseRecorder, request)
 
 					Expect(responseRecorder.Code).To(Equal(http.StatusBadRequest))
-					Expect(responseRecorder.Body.String()).To(ContainSubstring("cannot unmarshal number 65537 into Go value of type uint16"))
+					Expect(responseRecorder.Body.String()).To(ContainSubstring("cannot unmarshal number 65537"))
 					Expect(database.SaveRouteCallCount()).To(Equal(0))
 					Expect(logger.Logs()[0].Message).To(ContainSubstring("error"))
 
@@ -242,8 +327,11 @@ var _ = Describe("TcpRouteMappingsHandler", func() {
 			Context("when the UAA token is not valid", func() {
 				var (
 					currentCount int64
+					tcpMappings  []models.TcpRouteMapping
 				)
 				BeforeEach(func() {
+					tcpMapping := models.NewTcpRouteMapping("router-group-guid-001", 52000, "1.2.3.4", 60000, 60)
+					tcpMappings = []models.TcpRouteMapping{tcpMapping}
 					currentCount = metrics.GetTokenErrors()
 					fakeClient.DecodeTokenReturns(errors.New("Not valid"))
 				})
@@ -287,6 +375,7 @@ var _ = Describe("TcpRouteMappingsHandler", func() {
 				request = handlers.NewTestRequest("")
 				tcpRouteMappingsHandler.List(responseRecorder, request)
 
+				Expect(database.ReadTcpRouteMappingsCallCount()).To(Equal(1))
 				Expect(responseRecorder.Code).To(Equal(http.StatusOK))
 				expectedJson := `[
 							{
@@ -298,7 +387,8 @@ var _ = Describe("TcpRouteMappingsHandler", func() {
 									"guid": "",
 									"index": 0
 								},
-								"ttl": 55
+								"ttl": 55,
+								"isolation_segment": ""
 							},
 							{
 								"router_group_guid": "router-group-guid-001",
@@ -309,7 +399,155 @@ var _ = Describe("TcpRouteMappingsHandler", func() {
 									"guid": "",
 									"index": 0
 								},
-								"ttl": 55
+								"ttl": 55,
+								"isolation_segment": ""
+							}]`
+				Expect(responseRecorder.Body.String()).To(MatchJSON(expectedJson))
+			})
+		})
+
+		Context("when filtering by isolation segments", func() {
+			var (
+				tcpRoutes []models.TcpRouteMapping
+			)
+
+			BeforeEach(func() {
+				mapping1 := models.NewTcpRouteMapping("router-group-guid-001", 52000, "1.2.3.4", 60000, 55)
+				mapping2 := models.NewTcpRouteMapping("router-group-guid-001", 52001, "1.2.3.5", 60001, 55)
+				mapping2.IsolationSegment = "is1"
+				tcpRoutes = []models.TcpRouteMapping{mapping1, mapping2}
+				database.ReadFilteredTcpRouteMappingsReturns(tcpRoutes, nil)
+			})
+
+			It("returns tcp route mappings for specified isolation segments", func() {
+				request = handlers.NewTestRequest("")
+				q := request.URL.Query()
+				q.Add("isolation_segment", "")
+				q.Add("isolation_segment", "is1")
+				q.Add("isolation_segment", "&isolation_segment=is2")
+				request.URL.RawQuery = q.Encode()
+				tcpRouteMappingsHandler.List(responseRecorder, request)
+				Expect(database.ReadFilteredTcpRouteMappingsCallCount()).To(Equal(1))
+				columnName, values := database.ReadFilteredTcpRouteMappingsArgsForCall(0)
+				Expect(columnName).To(Equal("isolation_segment"))
+				Expect(values).To(ConsistOf("", "is1", "&isolation_segment=is2"))
+
+				Expect(responseRecorder.Code).To(Equal(http.StatusOK))
+				expectedJson := `[
+							{
+								"router_group_guid": "router-group-guid-001",
+								"port": 52000,
+								"backend_ip": "1.2.3.4",
+								"backend_port": 60000,
+								"modification_tag": {
+									"guid": "",
+									"index": 0
+								},
+								"ttl": 55,
+								"isolation_segment": ""
+							},
+							{
+								"router_group_guid": "router-group-guid-001",
+								"port": 52001,
+								"backend_ip": "1.2.3.5",
+								"backend_port": 60001,
+								"modification_tag": {
+									"guid": "",
+									"index": 0
+								},
+								"ttl": 55,
+								"isolation_segment": "is1"
+							}]`
+				Expect(responseRecorder.Body.String()).To(MatchJSON(expectedJson))
+			})
+
+			It("returns all tcp route mappings for unspecified isolation segment", func() {
+				request = handlers.NewTestRequest("")
+				q := request.URL.Query()
+				q.Add("isolation_segment", "")
+				request.URL.RawQuery = q.Encode()
+				tcpRouteMappingsHandler.List(responseRecorder, request)
+				Expect(database.ReadFilteredTcpRouteMappingsCallCount()).To(Equal(1))
+				columnName, values := database.ReadFilteredTcpRouteMappingsArgsForCall(0)
+				Expect(columnName).To(Equal("isolation_segment"))
+				Expect(values).To(ConsistOf(""))
+
+				Expect(responseRecorder.Code).To(Equal(http.StatusOK))
+				expectedJson := `[
+							{
+								"router_group_guid": "router-group-guid-001",
+								"port": 52000,
+								"backend_ip": "1.2.3.4",
+								"backend_port": 60000,
+								"modification_tag": {
+									"guid": "",
+									"index": 0
+								},
+								"ttl": 55,
+								"isolation_segment": ""
+							},
+							{
+								"router_group_guid": "router-group-guid-001",
+								"port": 52001,
+								"backend_ip": "1.2.3.5",
+								"backend_port": 60001,
+								"modification_tag": {
+									"guid": "",
+									"index": 0
+								},
+								"ttl": 55,
+								"isolation_segment": "is1"
+							}]`
+				Expect(responseRecorder.Body.String()).To(MatchJSON(expectedJson))
+			})
+		})
+
+		Context("when providing unknown params", func() {
+			var (
+				tcpRoutes []models.TcpRouteMapping
+			)
+
+			BeforeEach(func() {
+				mapping1 := models.NewTcpRouteMapping("router-group-guid-001", 52000, "1.2.3.4", 60000, 55)
+				mapping2 := models.NewTcpRouteMapping("router-group-guid-001", 52001, "1.2.3.5", 60001, 55)
+				mapping2.IsolationSegment = "is1"
+				tcpRoutes = []models.TcpRouteMapping{mapping1, mapping2}
+				database.ReadTcpRouteMappingsReturns(tcpRoutes, nil)
+			})
+
+			It("ignores the params and returns all tcp route mappings", func() {
+				request = handlers.NewTestRequest("")
+				q := request.URL.Query()
+				q.Add("something", "blah")
+				request.URL.RawQuery = q.Encode()
+				tcpRouteMappingsHandler.List(responseRecorder, request)
+				Expect(database.ReadTcpRouteMappingsCallCount()).To(Equal(1))
+
+				Expect(responseRecorder.Code).To(Equal(http.StatusOK))
+				expectedJson := `[
+							{
+								"router_group_guid": "router-group-guid-001",
+								"port": 52000,
+								"backend_ip": "1.2.3.4",
+								"backend_port": 60000,
+								"modification_tag": {
+									"guid": "",
+									"index": 0
+								},
+								"ttl": 55,
+								"isolation_segment": ""
+							},
+							{
+								"router_group_guid": "router-group-guid-001",
+								"port": 52001,
+								"backend_ip": "1.2.3.5",
+								"backend_port": 60001,
+								"modification_tag": {
+									"guid": "",
+									"index": 0
+								},
+								"ttl": 55,
+								"isolation_segment": "is1"
 							}]`
 				Expect(responseRecorder.Body.String()).To(MatchJSON(expectedJson))
 			})
@@ -415,11 +653,12 @@ var _ = Describe("TcpRouteMappingsHandler", func() {
 						"backend_port":      float64(60000),
 						"modification_tag":  map[string]interface{}{"guid": "", "index": float64(0)},
 						"ttl":               float64(60),
+						"isolation_segment": "",
 					}
-					log_data := map[string][]interface{}{"tcp_mapping_deletion": []interface{}{data}}
+					logData := map[string][]interface{}{"tcp_mapping_deletion": []interface{}{data}}
 
 					Expect(logger.Logs()[0].Message).To(ContainSubstring("request"))
-					Expect(logger.Logs()[0].Data["tcp_mapping_deletion"]).To(Equal(log_data["tcp_mapping_deletion"]))
+					Expect(logger.Logs()[0].Data["tcp_mapping_deletion"]).To(Equal(logData["tcp_mapping_deletion"]))
 				})
 
 				Context("when database fails to delete", func() {
@@ -454,7 +693,7 @@ var _ = Describe("TcpRouteMappingsHandler", func() {
 					request = handlers.NewTestRequest(`[{"router_group_guid": "tcp-default", "port": -1, "backend_ip": "10.1.1.12", "backend_port": 60000}]`)
 					tcpRouteMappingsHandler.Delete(responseRecorder, request)
 					Expect(responseRecorder.Code).To(Equal(http.StatusBadRequest))
-					Expect(responseRecorder.Body.String()).To(ContainSubstring("cannot unmarshal number -1 into Go value of type uint16"))
+					Expect(responseRecorder.Body.String()).To(ContainSubstring("cannot unmarshal number -1"))
 					Expect(database.SaveRouteCallCount()).To(Equal(0))
 					Expect(logger.Logs()[0].Message).To(ContainSubstring("error"))
 				})
@@ -465,7 +704,7 @@ var _ = Describe("TcpRouteMappingsHandler", func() {
 					tcpRouteMappingsHandler.Delete(responseRecorder, request)
 
 					Expect(responseRecorder.Code).To(Equal(http.StatusBadRequest))
-					Expect(responseRecorder.Body.String()).To(ContainSubstring("cannot unmarshal number 65537 into Go value of type uint16"))
+					Expect(responseRecorder.Body.String()).To(ContainSubstring("cannot unmarshal number 65537"))
 					Expect(database.SaveRouteCallCount()).To(Equal(0))
 					Expect(logger.Logs()[0].Message).To(ContainSubstring("error"))
 				})
@@ -475,7 +714,7 @@ var _ = Describe("TcpRouteMappingsHandler", func() {
 					tcpRouteMappingsHandler.Delete(responseRecorder, request)
 
 					Expect(responseRecorder.Code).To(Equal(http.StatusBadRequest))
-					Expect(responseRecorder.Body.String()).To(ContainSubstring("cannot unmarshal number -1 into Go value of type uint16"))
+					Expect(responseRecorder.Body.String()).To(ContainSubstring("cannot unmarshal number -1"))
 					Expect(database.SaveRouteCallCount()).To(Equal(0))
 					Expect(logger.Logs()[0].Message).To(ContainSubstring("error"))
 
@@ -487,7 +726,7 @@ var _ = Describe("TcpRouteMappingsHandler", func() {
 					tcpRouteMappingsHandler.Delete(responseRecorder, request)
 
 					Expect(responseRecorder.Code).To(Equal(http.StatusBadRequest))
-					Expect(responseRecorder.Body.String()).To(ContainSubstring("cannot unmarshal number 65537 into Go value of type uint16"))
+					Expect(responseRecorder.Body.String()).To(ContainSubstring("cannot unmarshal number 65537"))
 					Expect(database.SaveRouteCallCount()).To(Equal(0))
 					Expect(logger.Logs()[0].Message).To(ContainSubstring("error"))
 

@@ -52,7 +52,7 @@ type FakeAgentOutputData struct {
 	UseKeyCallCount     int
 	InstallKeyCallCount int
 	ConsulConfig        ConsulConfig
-	StatsCallCount      int
+	SelfCallCount       int
 }
 
 type ConsulConfig struct {

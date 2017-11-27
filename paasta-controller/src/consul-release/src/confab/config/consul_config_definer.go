@@ -31,10 +31,14 @@ type ConsulConfig struct {
 	DnsConfig            ConsulConfigDnsConfig   `json:"dns_config"`
 	Bootstrap            *bool                   `json:"bootstrap,omitempty"`
 	Performance          ConsulConfigPerformance `json:"performance"`
+	Telemetry            *ConsulConfigTelemetry  `json:"telemetry,omitempty"`
+	TLSMinVersion        string                  `json:"tls_min_version"`
 }
 
 type ConsulConfigPorts struct {
-	DNS int `json:"dns,omitempty"`
+	DNS   int `json:"dns,omitempty"`
+	HTTP  int `json:"http,omitempty"`
+	HTTPS int `json:"https,omitempty"`
 }
 
 type ConsulConfigDnsConfig struct {
@@ -45,6 +49,10 @@ type ConsulConfigDnsConfig struct {
 
 type ConsulConfigPerformance struct {
 	RaftMultiplier int `json:"raft_multiplier"`
+}
+
+type ConsulConfigTelemetry struct {
+	StatsdAddress string `json:"statsd_address,omitempty"`
 }
 
 func GenerateConfiguration(config Config, configDir, nodeName string) ConsulConfig {
@@ -60,6 +68,11 @@ func GenerateConfiguration(config Config, configDir, nodeName string) ConsulConf
 
 	isServer := config.Consul.Agent.Mode == "server"
 
+	dns := config.Consul.Agent.Ports.DNS
+	if dns == 0 {
+		dns = 53
+	}
+
 	consulConfig := ConsulConfig{
 		Server:             isServer,
 		Domain:             config.Consul.Agent.Domain,
@@ -73,7 +86,7 @@ func GenerateConfiguration(config Config, configDir, nodeName string) ConsulConf
 		DisableUpdateCheck: true,
 		Protocol:           config.Consul.Agent.ProtocolVersion,
 		Ports: ConsulConfigPorts{
-			DNS: 53,
+			DNS: dns,
 		},
 		DnsConfig: ConsulConfigDnsConfig{
 			AllowStale:      config.Consul.Agent.DnsConfig.AllowStale,
@@ -83,6 +96,18 @@ func GenerateConfiguration(config Config, configDir, nodeName string) ConsulConf
 		Performance: ConsulConfigPerformance{
 			RaftMultiplier: 1,
 		},
+		TLSMinVersion: "tls12",
+	}
+
+	if config.Consul.Agent.Telemetry.StatsdAddress != "" {
+		consulConfig.Telemetry = &ConsulConfigTelemetry{
+			StatsdAddress: config.Consul.Agent.Telemetry.StatsdAddress,
+		}
+	}
+
+	if config.Consul.Agent.RequireSSL {
+		consulConfig.Ports.HTTP = -1
+		consulConfig.Ports.HTTPS = 8500
 	}
 
 	consulConfig.VerifyOutgoing = boolPtr(true)

@@ -58,7 +58,7 @@ passing `ginkgo watch` the `-r` flag will recursively detect all test suites und
 `watch` does not detect *new* packages. Moreover, changes in package X only rerun the tests for package X, tests for packages
 that depend on X are not rerun.
 
-[OSX only] To receive (desktop) notifications when a test run completes:
+[OSX & Linux only] To receive (desktop) notifications when a test run completes:
 
 	ginkgo -notify
 
@@ -234,7 +234,7 @@ func complainAndQuit(complaint string) {
 	os.Exit(1)
 }
 
-func findSuites(args []string, recurse bool, skipPackage string, allowPrecompiled bool) ([]testsuite.TestSuite, []string) {
+func findSuites(args []string, recurseForAll bool, skipPackage string, allowPrecompiled bool) ([]testsuite.TestSuite, []string) {
 	suites := []testsuite.TestSuite{}
 
 	if len(args) > 0 {
@@ -246,10 +246,15 @@ func findSuites(args []string, recurse bool, skipPackage string, allowPrecompile
 					continue
 				}
 			}
-			suites = append(suites, testsuite.SuitesInDir(arg, recurse)...)
+			recurseForSuite := recurseForAll
+			if strings.HasSuffix(arg, "/...") && arg != "/..." {
+				arg = arg[:len(arg)-4]
+				recurseForSuite = true
+			}
+			suites = append(suites, testsuite.SuitesInDir(arg, recurseForSuite)...)
 		}
 	} else {
-		suites = testsuite.SuitesInDir(".", recurse)
+		suites = testsuite.SuitesInDir(".", recurseForAll)
 	}
 
 	skippedPackages := []string{}

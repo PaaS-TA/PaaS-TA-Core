@@ -3,28 +3,22 @@
 preflight_check() {
   set +x
   test -n "${BOSH_DIRECTOR}"
-  test -n "${BOSH_USER}"
-  test -n "${BOSH_PASSWORD}"
+  test -n "${BOSH_PUBLIC_IP}"
+  test -n "${BOSH_CLIENT}"
+  test -n "${BOSH_CLIENT_SECRET}"
+  test -n "${BOSH_CA_CERT}"
+  test -n "${OLD_CF_RELEASE}"
+  test -n "${CF_DEPLOYMENT}"
+  test -n "${API_USER}"
+  test -n "${API_PASSWORD}"
+  test -n "${STEMCELL_VERSION}"
   set -x
-}
-
-deploy() {
-  bosh \
-    -n \
-    -t "${1}" \
-    -d "${2}" \
-    deploy
-}
-
-function upload_stemcell() {
-  wget --quiet 'https://bosh.io/d/stemcells/bosh-softlayer-xen-ubuntu-trusty-go_agent' --output-document=stemcell.tgz
-  bosh upload stemcell stemcell.tgz --skip-if-exists
 }
 
 function upload_remote_release() {
   local release_url=$1
   wget --quiet "${release_url}" -O remote_release.tgz
-  bosh upload release remote_release.tgz
+  bosh upload-release remote_release.tgz
 }
 
 generate_stub() {
@@ -44,19 +38,21 @@ common_data:
   apps_domain: ${apps_domain}
   api_user: ${API_USER}
   api_password: ${API_PASSWORD}
+  Bosh_ip: ${BOSH_DIRECTOR}
+  Bosh_public_ip: ${BOSH_PUBLIC_IP}
+  stemcell_version: ${STEMCELL_VERSION}
   default_env:
     bosh:
       password: ~
+      keep_root_password: true
   cf_version: ${OLD_CF_RELEASE}
 EOF
 }
 
 function main(){
   local root="${1}"
-	set +x
-  bosh target https://${BOSH_DIRECTOR}:25555
-  bosh login ${BOSH_USER} ${BOSH_PASSWORD}
-	set -x
+  preflight_check
+  export BOSH_ENVIRONMENT="https://${BOSH_DIRECTOR}:25555"
 
   mkdir ${root}/stubs
 
@@ -66,16 +62,13 @@ function main(){
 
   spiff merge \
     "${root}/postgres-ci-env/deployments/cf/pgci-cf${OLD_CF_RELEASE}.yml" \
+    "${root}/postgres-ci-env/deployments/common/properties.yml" \
     "${root}/stubs/data.yml" \
     "${root}/postgres-ci-env/deployments/common/common.yml" > "${root}/${CF_DEPLOYMENT}.yml"
 
-  upload_stemcell
   upload_remote_release "https://bosh.io/d/github.com/cloudfoundry/cf-release?v=${OLD_CF_RELEASE}"
 
-  deploy \
-    "${BOSH_DIRECTOR}" \
-    "${root}/${CF_DEPLOYMENT}.yml"
-
+  bosh -n deploy -d "${CF_DEPLOYMENT}" "${root}/${CF_DEPLOYMENT}.yml"
 }
 
 

@@ -1,5 +1,5 @@
 /*******************************************************************************
- *     Cloud Foundry 
+ *     Cloud Foundry
  *     Copyright (c) [2009-2016] Pivotal Software, Inc. All Rights Reserved.
  *
  *     This product is licensed to you under the Apache License, Version 2.0 (the "License").
@@ -12,23 +12,28 @@
  *******************************************************************************/
 package org.cloudfoundry.identity.uaa.audit;
 
-import java.sql.Timestamp;
+import org.cloudfoundry.identity.uaa.util.TimeService;
+import org.cloudfoundry.identity.uaa.util.TimeServiceImpl;
+import org.springframework.jdbc.core.JdbcTemplate;
 
-import javax.sql.DataSource;
+import java.sql.Timestamp;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * An audit service that subscribes to audit events but only saves enough data
  * to answer queries about consecutive
  * failed logins.
- * 
- * @author Dave Syer
  */
 public class JdbcFailedLoginCountingAuditService extends JdbcAuditService {
 
     private int saveDataPeriodMillis = 24 * 3600 * 1000; // 24hr
+    private long timeBetweenDeleteMillis = 1000*30;
 
-    public JdbcFailedLoginCountingAuditService(DataSource dataSource) {
-        super(dataSource);
+    private AtomicLong lastDelete = new AtomicLong(0);
+    private TimeService timeService = new TimeServiceImpl();
+
+    public JdbcFailedLoginCountingAuditService(JdbcTemplate template) {
+        super(template);
     }
 
     /**
@@ -38,32 +43,34 @@ public class JdbcFailedLoginCountingAuditService extends JdbcAuditService {
         this.saveDataPeriodMillis = saveDataPeriodMillis;
     }
 
+    public void setTimeService(TimeService timeService) {
+        this.timeService = timeService;
+    }
+
     @Override
-    public void log(AuditEvent auditEvent) {
+    public void log(AuditEvent auditEvent, String zoneId) {
         switch (auditEvent.getType()) {
             case UserAuthenticationSuccess:
             case PasswordChangeSuccess:
             case UserAccountUnlockedEvent:
-                getJdbcTemplate().update("delete from sec_audit where principal_id=?", auditEvent.getPrincipalId());
+                getJdbcTemplate().update("delete from sec_audit where principal_id=? and identity_zone_id=?", auditEvent.getPrincipalId(), zoneId);
                 break;
             case UserAuthenticationFailure:
-                getJdbcTemplate().update("delete from sec_audit where created < ?",
-                                new Timestamp(System.currentTimeMillis()
-                                                - saveDataPeriodMillis));
-                super.log(auditEvent);
-                break;
-            case ClientAuthenticationSuccess:
-            case SecretChangeSuccess:
-                getJdbcTemplate().update("delete from sec_audit where principal_id=?", auditEvent.getPrincipalId());
-                break;
-            case ClientAuthenticationFailure:
-                super.log(auditEvent);
-                getJdbcTemplate().update("delete from sec_audit where created < ?",
-                                new Timestamp(System.currentTimeMillis()
-                                                - saveDataPeriodMillis));
+                periodicDelete();
+                super.log(auditEvent, zoneId);
                 break;
             default:
                 break;
+        }
+    }
+
+    protected void periodicDelete() {
+        long now = timeService.getCurrentTimeMillis();
+        long lastCheck = lastDelete.get();
+        if (now - lastCheck > timeBetweenDeleteMillis && lastDelete.compareAndSet(lastCheck, now)) {
+            getJdbcTemplate().update("delete from sec_audit where created < ?",
+                                     new Timestamp(System.currentTimeMillis()
+                                                       - saveDataPeriodMillis));
         }
     }
 

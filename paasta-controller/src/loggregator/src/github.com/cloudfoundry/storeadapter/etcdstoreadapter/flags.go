@@ -9,18 +9,20 @@ import (
 )
 
 type ETCDFlags struct {
-	certFile    string
-	keyFile     string
-	caFile      string
-	clusterUrls string
+	certFile     string
+	keyFile      string
+	caFile       string
+	clusterUrls  string
+	maxIdleConns int
 }
 
 type ETCDOptions struct {
-	CertFile    string
-	KeyFile     string
-	CAFile      string
-	ClusterUrls []string
-	IsSSL       bool
+	CertFile     string
+	KeyFile      string
+	CAFile       string
+	ClusterUrls  []string
+	IsSSL        bool
+	MaxIdleConns int
 }
 
 func AddFlags(flagSet *flag.FlagSet) *ETCDFlags {
@@ -50,6 +52,12 @@ func AddFlags(flagSet *flag.FlagSet) *ETCDFlags {
 		"etcdCaFile",
 		"",
 		"Location of the CA certificate for mutual auth",
+	)
+	flagSet.IntVar(
+		&flags.maxIdleConns,
+		"etcdMaxIdleConns",
+		0,
+		"Maxiumum number of idle connections",
 	)
 	return flags
 }
@@ -86,10 +94,11 @@ func (flags *ETCDFlags) Validate() (*ETCDOptions, error) {
 	}
 
 	return &ETCDOptions{
-		CertFile:    flags.certFile,
-		KeyFile:     flags.keyFile,
-		CAFile:      flags.caFile,
-		ClusterUrls: clusterUrls,
-		IsSSL:       isSSL,
+		CertFile:     flags.certFile,
+		KeyFile:      flags.keyFile,
+		CAFile:       flags.caFile,
+		ClusterUrls:  clusterUrls,
+		IsSSL:        isSSL,
+		MaxIdleConns: flags.maxIdleConns,
 	}, nil
 }

@@ -1,0 +1,30 @@
+<%
+conf_dir = "/var/vcap/jobs/tps/config"
+config = {}
+
+if p("capi.tps.bbs.require_ssl")
+  config[:bbs_client_cert] = "#{conf_dir}/certs/bbs/client.crt"
+  config[:bbs_client_key] = "#{conf_dir}/certs/bbs/client.key"
+  config[:bbs_ca_cert] = "#{conf_dir}/certs/bbs/ca.crt"
+  config[:bbs_api_url] = "https://" + p("capi.tps.bbs.api_location")
+else
+  config[:bbs_api_url] = "http://" + p("capi.tps.bbs.api_location")
+end
+
+if_p("capi.tps.bbs.max_idle_conns_per_host") do |value|
+  config[:bbs_max_idle_conns_per_host] = value
+end
+if_p("capi.tps.bbs.client_session_cache_size") do |value|
+  config[:bbs_client_cache_size] = value
+end
+
+config[:consul_cluster] = "http://127.0.0.1:" + p("capi.tps.consul_agent_port").to_s
+config[:debug_server_config] = { debug_address:  p("capi.tps.listener.debug_addr") }
+config[:dropsonde_port] = p("capi.tps.dropsonde_port")
+config[:lager_config] = { log_level: p("capi.tps.log_level") }
+config[:listen_addr] = p("capi.tps.listener.listen_addr")
+config[:max_in_flight_requests] = p("capi.tps.max_in_flight_requests")
+config[:skip_cert_verify] = p("diego.ssl.skip_cert_verify")
+config[:traffic_controller_url] = p("capi.tps.traffic_controller_url")
+%>
+<%= config.to_json %>

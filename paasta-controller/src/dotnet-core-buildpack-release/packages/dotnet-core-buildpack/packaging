@@ -1,2 +1,2 @@
     set -e -x
-    cp dotnet-core-buildpack/dotnet-core_buildpack-cached-*.zip ${BOSH_INSTALL_TARGET}
+    cp dotnet-core-buildpack/dotnet-core?buildpack-v*.zip ${BOSH_INSTALL_TARGET}

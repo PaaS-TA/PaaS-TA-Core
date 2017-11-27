@@ -1,0 +1,8 @@
+---
+name: etcdfab
+
+dependencies:
+  - golang1.8
+
+files:
+  - etcdfab/**/*

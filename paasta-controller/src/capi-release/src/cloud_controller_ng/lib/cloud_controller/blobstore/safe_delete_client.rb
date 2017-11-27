@@ -30,7 +30,9 @@ module CloudController
         :delete,
         :delete_blob,
         :download_uri,
-        :blob
+        :blob,
+        :files_for,
+        :root_dir
     end
   end
 end

@@ -1,0 +1,11 @@
+---
+name: monit_agent
+templates:
+  monit_agent_ctl.erb: bin/monit_agent_ctl
+  pre-start.erb: bin/pre-start
+
+packages:
+  - acceptance-tests
+
+properties: {}
+

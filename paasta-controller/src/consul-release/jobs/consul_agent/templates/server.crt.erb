@@ -1,3 +1,13 @@
 <%=
-  p("consul.server_cert") if p("consul.agent.mode") == "server"
+  if p("consul.agent.mode") == "server"
+    server_cert = nil
+
+    respond_to?(:if_link) && if_link("consul_server") do |link|
+      server_cert = link.p("consul.server_cert")
+    end.else do
+      server_cert = p("consul.server_cert")
+    end
+
+    server_cert
+  end
 %>

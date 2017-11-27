@@ -1,6 +1,0 @@
----
-final_name: java-offline-buildpack
-blobstore:
-  provider: s3
-  options:
-    bucket_name: pivotal-buildpacks

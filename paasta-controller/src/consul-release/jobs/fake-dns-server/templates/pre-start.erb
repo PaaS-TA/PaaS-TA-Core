@@ -27,9 +27,25 @@ function setup_resolvconf() {
   resolvconf -u
 }
 
+function add_entry_to_hosts() {
+  local hosts_file
+  hosts_file="/etc/hosts"
+
+  local host_to_add
+  host_to_add="<%= p("fake_dns_server.host_to_add.name") %>"
+
+  local address_to_add
+  address_to_add="<%= p("fake_dns_server.host_to_add.address") %>"
+
+  if [[ -n "${host_to_add}" && -n "${address_to_add}" ]]; then
+    echo "${address_to_add} ${host_to_add}" >> "${hosts_file}"
+  fi
+}
+
 function main() {
   create_directories
   setup_resolvconf
+  add_entry_to_hosts
 
   setcap cap_net_bind_service=+ep ${PKG_DIR}/bin/fake-dns-server
 }

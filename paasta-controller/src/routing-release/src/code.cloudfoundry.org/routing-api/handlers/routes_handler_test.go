@@ -1,9 +1,11 @@
 package handlers_test
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 
 	"code.cloudfoundry.org/lager/lagertest"
 	"code.cloudfoundry.org/routing-api"
@@ -75,6 +77,26 @@ var _ = Describe("RoutesHandler", func() {
 			})
 		})
 
+		Context("when token does not have necessary permissions", func() {
+			BeforeEach(func() {
+				fakeClient.DecodeTokenReturns(errors.New("Token does not have 'routing.router_groups.read' scope"))
+			})
+			It("returns an UnauthorizedError", func() {
+				type authorization struct {
+					Name, Message string
+				}
+				request = handlers.NewTestRequest("")
+				routesHandler.List(responseRecorder, request)
+				Expect(responseRecorder.Code).To(Equal(http.StatusUnauthorized))
+				// convert body from json and get message part alone
+				dec := json.NewDecoder(strings.NewReader(responseRecorder.Body.String()))
+				var responseBody authorization
+				err := dec.Decode(&responseBody)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(responseBody.Message).To(Equal("You are not authorized to perform the requested action"))
+			})
+		})
+
 		Context("when the database is empty", func() {
 			var (
 				routes []models.Route
@@ -142,7 +164,7 @@ var _ = Describe("RoutesHandler", func() {
 				database.ReadRoutesReturns(routes, nil)
 			})
 
-			It("returns a single route", func() {
+			It("returns many routes", func() {
 				request = handlers.NewTestRequest("")
 
 				routesHandler.List(responseRecorder, request)
@@ -442,7 +464,7 @@ var _ = Describe("RoutesHandler", func() {
 					routesHandler.Upsert(responseRecorder, request)
 
 					Expect(responseRecorder.Code).To(Equal(http.StatusBadRequest))
-					Expect(responseRecorder.Body.String()).To(ContainSubstring("cannot unmarshal number 65537 into Go value of type uint16"))
+					Expect(responseRecorder.Body.String()).To(ContainSubstring("cannot unmarshal number 65537"))
 				})
 
 				It("does not write to the key-value store backend", func() {

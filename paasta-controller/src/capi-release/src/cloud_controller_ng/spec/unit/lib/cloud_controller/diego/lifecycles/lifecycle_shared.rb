@@ -11,12 +11,8 @@ RSpec.shared_examples_for 'a lifecycle' do
     expect(subject.staging_environment_variables).to be_a(Hash)
   end
 
-  it 'provides pre-known receipt information' do
-    expect(subject.pre_known_receipt_information).to be_a(Hash)
-  end
-
   it 'provides a staging message' do
-    expect(subject.staging_message).to be_a(VCAP::CloudController::DropletCreateMessage)
+    expect(subject.staging_message).to be_a(VCAP::CloudController::BuildCreateMessage)
   end
 
   it 'provides validations' do

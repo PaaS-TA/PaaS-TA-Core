@@ -251,12 +251,13 @@ func (etcd *ETCDClusterRunner) start(nuke bool) {
 		client = etcdclient.NewClient(etcd.NodeURLS())
 	} else {
 		var err error
-		client, err = etcdstoreadapter.NewETCDTLSClient(
-			etcd.NodeURLS(),
-			etcd.serverSSL.CertFile,
-			etcd.serverSSL.KeyFile,
-			etcd.serverSSL.CAFile,
-		)
+		opts := etcdstoreadapter.ETCDOptions{
+			ClusterUrls: etcd.NodeURLS(),
+			CertFile:    etcd.serverSSL.CertFile,
+			KeyFile:     etcd.serverSSL.KeyFile,
+			CAFile:      etcd.serverSSL.CAFile,
+		}
+		client, err = etcdstoreadapter.NewETCDTLSClient(&opts)
 		Expect(err).NotTo(HaveOccurred())
 	}
 	etcd.client = client
@@ -305,12 +306,13 @@ func (etcd *ETCDClusterRunner) detectRunningEtcd(index int) bool {
 		client = etcdclient.NewClient([]string{})
 	} else {
 		var err error
-		client, err = etcdstoreadapter.NewETCDTLSClient(
-			[]string{etcd.clientURL(index)},
-			etcd.serverSSL.CertFile,
-			etcd.serverSSL.KeyFile,
-			etcd.serverSSL.CAFile,
-		)
+		opts := etcdstoreadapter.ETCDOptions{
+			ClusterUrls: []string{etcd.clientURL(index)},
+			CertFile:    etcd.serverSSL.CertFile,
+			KeyFile:     etcd.serverSSL.KeyFile,
+			CAFile:      etcd.serverSSL.CAFile,
+		}
+		client, err = etcdstoreadapter.NewETCDTLSClient(&opts)
 		Expect(err).NotTo(HaveOccurred())
 	}
 	return client.SetCluster([]string{etcd.clientURL(index)})

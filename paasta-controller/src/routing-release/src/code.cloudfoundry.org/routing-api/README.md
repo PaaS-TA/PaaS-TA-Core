@@ -1,6 +1,4 @@
-# CF Routing API Server (Experimental)
-
-The initial release of this API server is currently in development and subject to backward incompatible changes.
+# CF Routing API Server
 
 The purpose of the Routing API is to present a RESTful interface for registering and deregistering routes for both internal and external clients. This allows easier consumption by different clients as well as the ability to register routes from outside of the CF deployment.
 
@@ -20,9 +18,19 @@ Refer to routing-release [README](https://github.com/cloudfoundry-incubator/rout
 
 ## Development
 
+To run the tests you need a running etcd cluster on version 2.1.1 and RDB(either Postgres or MySQL). Currently there is a helper script under routing-release which runs tests in [docker container](https://github.com/cloudfoundry-incubator/routing-release/blob/develop/scripts/unit-tests-in-docker). `cf-routing-pipeline` docker image used in the below script is configured with correct version of `etcd`, `MySQL` and `Postgres` for testing purposes. To run the tests for routing-api
+
+```sh
+./scripts/unit-tests-in-docker routing-api
+```
+
+If you choose to run unit-tests without docker(mentioned above), you will need to run etcd and SQL locally with the below configuration:
+[MySQL](https://github.com/cloudfoundry-incubator/routing-api/blob/5e1c34582d6c5a288e0bfd18968dab98f2dfbb29/cmd/routing-api/testrunner/runner.go#L174-L180)
+[Postgres](https://github.com/cloudfoundry-incubator/routing-api/blob/5e1c34582d6c5a288e0bfd18968dab98f2dfbb29/cmd/routing-api/testrunner/runner.go#L138-L143)
+
 ### etcd
 
-To run the tests you need a running etcd cluster on version 2.1.1. To get that do:
+To get etcd cluster running, do the following commands:
 
 ```sh
 go get github.com/coreos/etcd
@@ -120,25 +128,16 @@ uaa:
 
 ### Starting the Server
 
-To run the API server you need to provide all the urls for the etcd cluster, a configuration file containg the public uaa jwt key, plus some optional flags.
+To run the API server you need to provide RDB configuration for the Postgres or MySQL, a configuration file containing the public UAA jwt key, plus some optional flags.
 
 Example 1:
 
 ```sh
-routing-api -ip 127.0.0.1 -systemDomain 127.0.0.1.xip.io -config example_config/example.yml -port 3000 -maxTTL 60 http://etcd.127.0.0.1.xip.io:4001
+routing-api -ip 127.0.0.1 -systemDomain 127.0.0.1.xip.io -config example_config/example.yml -port 3000 -maxTTL 60
 ```
 
-Where `http://etcd.127.0.0.1.xip.io:4001` is the single etcd member.
+>Note: If you already have Routing API server with `etcd` as backend, update the config file to include both etcd and SQL configuration for backend migration process. For sample configuration take a look at example_config/example.yml
 
-Example 2:
-
-```sh
-routing-api http://etcd.127.0.0.1.xip.io:4001 http://etcd.127.0.0.1.xip.io:4002
-```
-
-Where `http://etcd.127.0.0.1.xip.io:4001` is one member of the cluster and `http://etcd.127.0.0.1.xip.io:4002` is another.
-
-Note that flags have to come before the etcd addresses.
 
 ### Profiling the Server
 
@@ -151,11 +150,11 @@ ssh -L localhost:8080:[INTERNAL_SERVER_IP]:17002 vcap@[BOSH_DIRECTOR]
 go tool pprof http://localhost:8080/debug/pprof/profile
 ```
 
+> Note: Debug server should run on loopback interface i.e., 0.0.0.0 for the SSH tunnel to work. Current default value for interface is set to [localhost](https://github.com/cloudfoundry-incubator/routing-release/blob/master/jobs/gorouter/spec#L52)
+
 ## Using the API
 
 The Routing API uses OAuth tokens to authenticate clients. To obtain a token from UAA an OAuth client must first be created for the API client in UAA. For instructions on registering OAuth clients, see [Server Configuration](#oauth-clients).
-
-Additional API documentation can be found [here](docs/README.md).
 
 ### Using the API with the `rtr` CLI
 

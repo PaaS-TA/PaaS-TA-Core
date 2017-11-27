@@ -3,7 +3,8 @@ package gomegamatchers
 import (
 	"fmt"
 
-	"github.com/cloudfoundry-incubator/candiedyaml"
+	"gopkg.in/yaml.v2"
+
 	"github.com/onsi/gomega/format"
 	"github.com/onsi/gomega/types"
 	"github.com/pivotal-cf-experimental/gomegamatchers/internal/deepequal"
@@ -59,8 +60,8 @@ func (matcher *MatchYAMLMatcher) equal(expected interface{}, actual interface{})
 	var expectedValue interface{}
 
 	// this is guarded by prettyPrint
-	candiedyaml.Unmarshal([]byte(actualString), &actualValue)
-	candiedyaml.Unmarshal([]byte(expectedString), &expectedValue)
+	yaml.Unmarshal([]byte(actualString), &actualValue)
+	yaml.Unmarshal([]byte(expectedString), &expectedValue)
 
 	equal, difference := deepequal.Compare(expectedValue, actualValue)
 
@@ -74,10 +75,10 @@ func (matcher *MatchYAMLMatcher) prettyPrint(input interface{}) (formatted strin
 	}
 
 	var data interface{}
-	if err := candiedyaml.Unmarshal([]byte(inputString), &data); err != nil {
+	if err := yaml.Unmarshal([]byte(inputString), &data); err != nil {
 		return "", err
 	}
-	buf, _ := candiedyaml.Marshal(data)
+	buf, _ := yaml.Marshal(data)
 
 	return string(buf), nil
 }

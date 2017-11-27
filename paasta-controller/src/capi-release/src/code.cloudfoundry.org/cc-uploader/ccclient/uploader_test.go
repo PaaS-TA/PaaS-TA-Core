@@ -2,6 +2,7 @@ package ccclient_test
 
 import (
 	"bytes"
+	"fmt"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -42,7 +43,9 @@ var _ = Describe("Uploader", func() {
 				httpClient := &http.Client{
 					Transport: transport,
 				}
+
 				u = ccclient.NewUploader(lagertest.NewTestLogger("test"), httpClient)
+				fmt.Fprintf(GinkgoWriter, "Uploading to URL %s\n", uploadURL.String())
 				response, uploadErr = u.Upload(uploadURL, filename, incomingRequest, make(chan struct{}))
 			})
 
@@ -216,6 +219,8 @@ func createValidRequest() *http.Request {
 
 	request.Header.Set("Content-MD5", "the-md5")
 	request.Body = ioutil.NopCloser(bytes.NewBufferString(""))
+
+	fmt.Fprintf(GinkgoWriter, "Content-length %d\n", request.ContentLength)
 
 	return request
 }

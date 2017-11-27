@@ -23,14 +23,6 @@ import (
 const watcherLockName = "tps_watcher_lock"
 
 var _ = Describe("TPS", func() {
-	startWatcher := func(check bool) (ifrit.Process, *ginkgomon.Runner) {
-		if !check {
-			runner.StartCheck = ""
-		}
-
-		return ginkgomon.Invoke(runner), runner
-	}
-
 	var (
 		domain string
 	)
@@ -53,7 +45,7 @@ var _ = Describe("TPS", func() {
 
 		BeforeEach(func() {
 			ready = make(chan struct{})
-			fakeCC.RouteToHandler("POST", "/internal/apps/some-process-guid/crashed", func(res http.ResponseWriter, req *http.Request) {
+			fakeCC.RouteToHandler("POST", "/internal/v4/apps/some-process-guid/crashed", func(res http.ResponseWriter, req *http.Request) {
 				var appCrashed cc_messages.AppCrashedRequest
 
 				bytes, err := ioutil.ReadAll(req.Body)
@@ -98,7 +90,7 @@ var _ = Describe("TPS", func() {
 					flusher := w.(http.Flusher)
 					flusher.Flush()
 					closeNotifier := w.(http.CloseNotifier).CloseNotify()
-					event := models.NewActualLRPCrashedEvent(&afterActualLRP)
+					event := models.NewActualLRPCrashedEvent(&beforeActualLRP, &afterActualLRP)
 
 					sseEvent, err := events.NewEventFromModelEvent(0, event)
 					Expect(err).NotTo(HaveOccurred())
@@ -111,10 +103,6 @@ var _ = Describe("TPS", func() {
 					<-closeNotifier
 				},
 			)
-		})
-
-		JustBeforeEach(func() {
-			watcher, _ = startWatcher(true)
 		})
 
 		It("POSTs to the CC that the application has crashed", func() {
@@ -137,8 +125,6 @@ var _ = Describe("TPS", func() {
 					<-closeNotifier
 				},
 			)
-
-			watcher, _ = startWatcher(true)
 		})
 
 		JustBeforeEach(func() {
@@ -155,7 +141,6 @@ var _ = Describe("TPS", func() {
 	})
 
 	Context("when the watcher initially does not have the lock", func() {
-		var runner *ginkgomon.Runner
 		var competingWatcherProcess ifrit.Process
 
 		BeforeEach(func() {
@@ -173,12 +158,18 @@ var _ = Describe("TPS", func() {
 				},
 			)
 
-			competingWatcher := locket.NewLock(logger, consulRunner.NewClient(), locket.LockSchemaPath(watcherLockName), []byte("something-else"), clock.NewClock(), locket.RetryInterval, locket.LockTTL)
+			competingWatcher := locket.NewLock(
+				logger,
+				consulRunner.NewClient(),
+				locket.LockSchemaPath(watcherLockName),
+				[]byte("something-else"),
+				clock.NewClock(),
+				locket.RetryInterval,
+				locket.DefaultSessionTTL,
+			)
 			competingWatcherProcess = ifrit.Invoke(competingWatcher)
-		})
 
-		JustBeforeEach(func() {
-			watcher, runner = startWatcher(false)
+			disableStartCheck = true
 		})
 
 		AfterEach(func() {

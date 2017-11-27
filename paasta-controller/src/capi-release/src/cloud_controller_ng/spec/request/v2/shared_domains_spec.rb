@@ -8,11 +8,7 @@ RSpec.describe 'SharedDomains' do
     space.organization.add_user(user)
     space.add_developer(user)
 
-    stub_request(:post, 'http://routing-client:routing-secret@localhost:8080/uaa/oauth/token').
-      with(body: 'grant_type=client_credentials').
-      to_return(status: 200,
-                body:           '{"token_type": "monkeys", "access_token": "banana"}',
-                headers:        { 'content-type' => 'application/json' })
+    UAARequests.stub_all
 
     stub_request(:get, 'http://localhost:3000/routing/v1/router_groups').
       to_return(status: 200, body: '{}', headers: {})
@@ -127,6 +123,69 @@ RSpec.describe 'SharedDomains' do
           'router_group_type' => nil
         }
       })
+    end
+    context 'router groups' do
+      before do
+        stub_request(:get, 'http://localhost:3000/routing/v1/router_groups').
+          to_return(status: 200, body:
+            '[{ "guid": "abc123",
+                "name": "default-tcp",
+                "reservable_ports":"1024-65535",
+                "type": "http"
+              },
+              { "guid": "9876",
+                "name": "default-tcp",
+                "reservable_ports":"1024-65535",
+                "type": "tcp"
+              }]',
+                    headers: {})
+      end
+
+      it 'makes a shared domain with HTTP router group' do
+        post '/v2/shared_domains', '{"name": "meow.mc.meowerson.com", "router_group_guid": "abc123"}', admin_headers_for(user)
+
+        expect(last_response.status).to be(201)
+
+        domain = VCAP::CloudController::SharedDomain.last
+
+        parsed_response = MultiJson.load(last_response.body)
+        expect(parsed_response).to be_a_response_like({
+          'metadata' => {
+            'guid' => domain.guid,
+            'url' => "/v2/shared_domains/#{domain.guid}",
+            'created_at' => iso8601,
+            'updated_at' => iso8601
+          },
+          'entity' => {
+            'name' => 'meow.mc.meowerson.com',
+            'router_group_guid' => 'abc123',
+            'router_group_type' => 'http'
+          }
+        })
+      end
+
+      it 'makes a TCP shared domain with TCP router group' do
+        post '/v2/shared_domains', '{"name": "meow.mc.meowerson.com", "router_group_guid": "9876"}', admin_headers_for(user)
+
+        expect(last_response.status).to be(201)
+
+        domain = VCAP::CloudController::SharedDomain.last
+
+        parsed_response = MultiJson.load(last_response.body)
+        expect(parsed_response).to be_a_response_like({
+          'metadata' => {
+            'guid' => domain.guid,
+            'url' => "/v2/shared_domains/#{domain.guid}",
+            'created_at' => iso8601,
+            'updated_at' => iso8601
+          },
+          'entity' => {
+            'name' => 'meow.mc.meowerson.com',
+            'router_group_guid' => '9876',
+            'router_group_type' => 'tcp'
+          }
+        })
+      end
     end
   end
 

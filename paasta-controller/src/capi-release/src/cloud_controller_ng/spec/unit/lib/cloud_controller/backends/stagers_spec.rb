@@ -2,83 +2,34 @@ require 'spec_helper'
 
 module VCAP::CloudController
   RSpec.describe Stagers do
-    subject(:stagers) { Stagers.new(config, message_bus, dea_pool) }
+    subject(:stagers) { Stagers.new(config) }
     let(:config) { TestConfig.config }
-    let(:message_bus) { instance_double(CfMessageBus::MessageBus) }
-    let(:dea_pool) { instance_double(Dea::Pool) }
 
     describe '#validate_app' do
-      let(:app) do
-        instance_double(App,
-          docker?:                    docker,
-          package_hash:               package_hash,
-          buildpack:                  buildpack,
-          custom_buildpacks_enabled?: custom_buildpacks_enabled?,
-          buildpack_specified?:       false,
-        )
+      let!(:admin_buildpack) { Buildpack.make(name: 'admin-buildpack') }
+      let(:buildpack_lifecycle_data) { BuildpackLifecycleDataModel.make(buildpacks: ['admin-buildpack']) }
+      let(:app_model) { AppModel.make }
+      let(:process_model) { AppFactory.make(:buildpack, app: app_model) }
+
+      before do
+        app_model.update(buildpack_lifecycle_data: buildpack_lifecycle_data)
       end
 
-      let(:package_hash) { 'fake-package-hash' }
-      let(:buildpack) { instance_double(AutoDetectionBuildpack, custom?: false) }
-      let(:docker) { false }
-      let(:custom_buildpacks_enabled?) { true }
-
       context 'when the app package hash is blank' do
-        let(:package_hash) { '' }
+        before { PackageModel.make(package_hash: nil, app: process_model) }
 
         it 'raises' do
           expect {
-            subject.validate_app(app)
+            subject.validate_process(process_model)
           }.to raise_error(CloudController::Errors::ApiError, /app package is invalid/)
         end
       end
 
-      context 'when a custom buildpack is specified' do
-        let(:buildpack) do
-          instance_double(CustomBuildpack, custom?: true)
-        end
-
-        before do
-          allow(app).to receive(:buildpack_specified?).and_return(true)
-        end
-
-        context 'and custom buildpacks are disabled' do
-          let(:custom_buildpacks_enabled?) do
-            false
-          end
-
-          it 'raises' do
-            expect {
-              subject.validate_app(app)
-            }.to raise_error(CloudController::Errors::ApiError, /Custom buildpacks are disabled/)
-          end
-        end
-      end
-
-      context 'when an admin buildpack is specified' do
-        let(:buildpack) { instance_double(Buildpack, custom?: false) }
-
-        before do
-          allow(app).to receive(:buildpack_specified?).and_return(true)
-          allow(Buildpack).to receive(:count).and_return(1)
-        end
-
-        context 'and custom buildpacks are disabled' do
-          let(:custom_buildpacks_enabled?) do
-            false
-          end
-
-          it 'does not raise' do
-            expect {
-              subject.validate_app(app)
-            }.to_not raise_error
-          end
-        end
-      end
-
       context 'with a docker app' do
-        let(:buildpack) { instance_double(AutoDetectionBuildpack, custom?: true) }
-        let(:docker) { true }
+        let(:app_model) { AppModel.make(:docker) }
+        let(:app) { AppFactory.make(app: app_model, docker_image: 'docker/image') }
+
+        before { app_model.update(buildpack_lifecycle_data: nil) }
 
         context 'and Docker disabled' do
           before do
@@ -87,7 +38,7 @@ module VCAP::CloudController
 
           it 'raises' do
             expect {
-              subject.validate_app(app)
+              subject.validate_process(process_model)
             }.to raise_error(CloudController::Errors::ApiError, /Docker support has not been enabled/)
           end
         end
@@ -98,7 +49,7 @@ module VCAP::CloudController
           end
 
           it 'does not raise' do
-            expect { subject.validate_app(app) }.not_to raise_error
+            expect { subject.validate_process(process_model) }.not_to raise_error
           end
         end
       end
@@ -106,22 +57,26 @@ module VCAP::CloudController
       context 'when there are no buildpacks installed on the system' do
         before { Buildpack.dataset.delete }
 
-        context 'and a custom buildpack is NOT specified' do
-          it 'raises NoBuildpacksFound' do
+        context 'and an admin buildpack is specified' do
+          let(:buildpack_lifecycle_data) do
+            BuildpackLifecycleDataModel.make(buildpacks: %w(https://buildpacks.gov admin-buildpack))
+          end
+
+          it 'raises an error' do
             expect {
-              subject.validate_app(app)
+              subject.validate_process(process_model)
             }.to raise_error(CloudController::Errors::ApiError, /There are no buildpacks available/)
           end
         end
 
-        context 'and a custom buildpack is specified' do
-          let(:buildpack) do
-            instance_double(CustomBuildpack, custom?: true)
+        context 'and custom buildpacks are specified' do
+          let(:buildpack_lifecycle_data) do
+            BuildpackLifecycleDataModel.make(buildpacks: %w(https://buildpacks.gov http://custom-buildpack.example.com))
           end
 
           it 'does not raise' do
             expect {
-              subject.validate_app(app)
+              subject.validate_process(process_model)
             }.not_to raise_error
           end
         end
@@ -134,29 +89,18 @@ module VCAP::CloudController
 
       context 'when the app has diego processes' do
         before do
-          App.make(app: app, diego: true)
+          ProcessModel.make(app: app, diego: true)
         end
 
         it 'finds a diego stager' do
-          stager = stagers.stager_for_app(app)
+          stager = stagers.stager_for_app
           expect(stager).to be_a(Diego::Stager)
-        end
-      end
-
-      context 'when the app has dea processes' do
-        before do
-          App.make(app: app, diego: false)
-        end
-
-        it 'finds a DEA backend' do
-          stager = stagers.stager_for_app(app)
-          expect(stager).to be_a(Dea::Stager)
         end
       end
 
       context 'when there are no processes' do
         it 'finds a diego stager' do
-          stager = stagers.stager_for_app(app)
+          stager = stagers.stager_for_app
           expect(stager).to be_a(Diego::Stager)
         end
       end

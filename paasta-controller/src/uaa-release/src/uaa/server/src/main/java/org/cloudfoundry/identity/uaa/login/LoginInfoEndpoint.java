@@ -12,6 +12,8 @@
  *******************************************************************************/
 package org.cloudfoundry.identity.uaa.login;
 
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.cloudfoundry.identity.uaa.authentication.AuthzAuthenticationRequest;
 import org.cloudfoundry.identity.uaa.authentication.UaaAuthentication;
 import org.cloudfoundry.identity.uaa.authentication.UaaPrincipal;
@@ -26,6 +28,7 @@ import org.cloudfoundry.identity.uaa.provider.IdentityProvider;
 import org.cloudfoundry.identity.uaa.provider.IdentityProviderProvisioning;
 import org.cloudfoundry.identity.uaa.provider.SamlIdentityProviderDefinition;
 import org.cloudfoundry.identity.uaa.provider.UaaIdentityProviderDefinition;
+import org.cloudfoundry.identity.uaa.provider.oauth.XOAuthProviderConfigurator;
 import org.cloudfoundry.identity.uaa.provider.saml.LoginSamlAuthenticationToken;
 import org.cloudfoundry.identity.uaa.provider.saml.SamlIdentityProviderConfigurator;
 import org.cloudfoundry.identity.uaa.provider.saml.SamlRedirectUtils;
@@ -35,9 +38,11 @@ import org.cloudfoundry.identity.uaa.util.JsonUtils;
 import org.cloudfoundry.identity.uaa.util.MapCollector;
 import org.cloudfoundry.identity.uaa.util.UaaStringUtils;
 import org.cloudfoundry.identity.uaa.util.UaaUrlUtils;
+import org.cloudfoundry.identity.uaa.zone.ClientServicesExtension;
 import org.cloudfoundry.identity.uaa.zone.IdentityZone;
 import org.cloudfoundry.identity.uaa.zone.IdentityZoneConfiguration;
 import org.cloudfoundry.identity.uaa.zone.IdentityZoneHolder;
+import org.cloudfoundry.identity.uaa.zone.Links;
 import org.springframework.core.io.support.PropertiesLoaderUtils;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.http.HttpStatus;
@@ -46,7 +51,6 @@ import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.codec.Base64;
 import org.springframework.security.oauth2.provider.ClientDetails;
-import org.springframework.security.oauth2.provider.ClientDetailsService;
 import org.springframework.security.oauth2.provider.NoSuchClientException;
 import org.springframework.security.web.savedrequest.SavedRequest;
 import org.springframework.stereotype.Controller;
@@ -69,7 +73,6 @@ import java.io.UnsupportedEncodingException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URLDecoder;
-import java.nio.charset.Charset;
 import java.security.NoSuchAlgorithmException;
 import java.security.Principal;
 import java.sql.Timestamp;
@@ -88,9 +91,10 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
+import static java.util.Collections.emptyMap;
 import static java.util.Objects.isNull;
-import static org.cloudfoundry.identity.uaa.constants.OriginKeys.OAUTH20;
-import static org.cloudfoundry.identity.uaa.constants.OriginKeys.OIDC10;
+import static java.util.Optional.ofNullable;
 import static org.cloudfoundry.identity.uaa.constants.OriginKeys.UAA;
 import static org.cloudfoundry.identity.uaa.util.UaaUrlUtils.addSubdomainToUrl;
 import static org.cloudfoundry.identity.uaa.web.UaaSavedRequestAwareAuthenticationSuccessHandler.SAVED_REQUEST_SESSION_ATTRIBUTE;
@@ -105,6 +109,8 @@ import static org.springframework.web.bind.annotation.RequestMethod.GET;
  */
 @Controller
 public class LoginInfoEndpoint {
+
+    private static Log logger = LogFactory.getLog(LoginInfoEndpoint.class);
 
     public static final String NotANumber = OriginKeys.NotANumber;
     public static final String CREATE_ACCOUNT_LINK = "createAccountLink";
@@ -122,7 +128,7 @@ public class LoginInfoEndpoint {
     public static final String ZONE_NAME = "zone_name";
     public static final String ENTITY_ID = "entityID";
     public static final String IDP_DEFINITIONS = "idpDefinitions";
-    public static final String OAUTH_DEFINITIONS = "oauthDefinitions";
+    public static final String OAUTH_LINKS = "oauthLinks";
 
     private Properties gitProperties = new Properties();
 
@@ -143,10 +149,27 @@ public class LoginInfoEndpoint {
     private AuthenticationManager authenticationManager;
 
     private ExpiringCodeStore expiringCodeStore;
-    private ClientDetailsService clientDetailsService;
+    private ClientServicesExtension clientDetailsService;
 
     private IdentityProviderProvisioning providerProvisioning;
-    private static MapCollector<IdentityProvider, String, AbstractXOAuthIdentityProviderDefinition> idpsMapCollector = new MapCollector<>(idp -> idp.getOriginKey(), idp -> (AbstractXOAuthIdentityProviderDefinition) idp.getConfig());
+    private MapCollector<IdentityProvider, String, AbstractXOAuthIdentityProviderDefinition> idpsMapCollector =
+        new MapCollector<>(
+            idp -> idp.getOriginKey(),
+            idp ->  (AbstractXOAuthIdentityProviderDefinition) idp.getConfig()
+        );
+
+    private XOAuthProviderConfigurator xoAuthProviderConfigurator;
+
+    private Links globalLinks = new Links().setSelfService(new Links.SelfService().setPasswd(null).setSignup(null));
+
+    public void setGlobalLinks(Links globalLinks) {
+        this.globalLinks = globalLinks;
+    }
+
+    public LoginInfoEndpoint setXoAuthProviderConfigurator(XOAuthProviderConfigurator xoAuthProviderConfigurator) {
+        this.xoAuthProviderConfigurator = xoAuthProviderConfigurator;
+        return this;
+    }
 
     public void setExpiringCodeStore(ExpiringCodeStore expiringCodeStore) {
         this.expiringCodeStore = expiringCodeStore;
@@ -192,18 +215,18 @@ public class LoginInfoEndpoint {
     }
 
     @RequestMapping(value = {"/login"}, headers = "Accept=application/json")
-    public String loginForJson(Model model, Principal principal) {
-        return login(model, principal, Collections.<String>emptyList(), true);
+    public String loginForJson(Model model, Principal principal, HttpServletRequest request) {
+        return login(model, principal, Collections.emptyList(), true, request);
     }
 
     @RequestMapping(value = {"/info"}, headers = "Accept=application/json")
-    public String infoForJson(Model model, Principal principal) {
-        return login(model, principal, Collections.<String>emptyList(), true);
+    public String infoForJson(Model model, Principal principal, HttpServletRequest request) {
+        return login(model, principal, Collections.emptyList(), true, request);
     }
 
     @RequestMapping(value = {"/info"}, headers = "Accept=text/html, */*")
-    public String infoForHtml(Model model, Principal principal) {
-        return login(model, principal, Arrays.asList(PASSCODE), false);
+    public String infoForHtml(Model model, Principal principal, HttpServletRequest request) {
+        return login(model, principal, Arrays.asList(PASSCODE), false, request);
     }
 
     static class SavedAccountOptionModel extends SavedAccountOption {
@@ -231,11 +254,22 @@ public class LoginInfoEndpoint {
     }
 
     private static <T extends SavedAccountOption> List<T> getSavedAccounts(Cookie[] cookies, Class<T> clazz) {
-        return Arrays.asList(Optional.ofNullable(cookies).orElse(new Cookie[]{}))
+        return Arrays.asList(ofNullable(cookies).orElse(new Cookie[]{}))
                 .stream()
                 .filter(c -> c.getName().startsWith("Saved-Account"))
-                .map(c -> JsonUtils.readValue(c.getValue(), clazz))
+                .map(c -> JsonUtils.readValue(decodeCookieValue(c.getValue()), clazz))
                 .collect(Collectors.toList());
+    }
+
+    private static String decodeCookieValue(String inValue) {
+        String out = null;
+        try {
+            out = URLDecoder.decode(inValue, UTF_8.name());
+        } catch (Exception e) {
+            logger.debug("URLDecoder.decode failed for " + inValue, e);
+            return "";
+        }
+        return out;
     }
 
     @RequestMapping(value = {"/invalid_request"})
@@ -245,10 +279,6 @@ public class LoginInfoEndpoint {
 
     protected String getZonifiedEntityId() {
         return SamlRedirectUtils.getZonifiedEntityId(entityID);
-    }
-
-    private String login(Model model, Principal principal, List<String> excludedPrompts, boolean jsonResponse) {
-        return login(model, principal, excludedPrompts, jsonResponse, null);
     }
 
     private String login(Model model, Principal principal, List<String> excludedPrompts, boolean jsonResponse, HttpServletRequest request) {
@@ -297,10 +327,10 @@ public class LoginInfoEndpoint {
 
         Map.Entry<String, AbstractIdentityProviderDefinition> idpForRedirect = null;
 
-        Optional<String> loginHintParam = Optional
-            .ofNullable(session)
-            .flatMap(s -> Optional.ofNullable((SavedRequest) s.getAttribute(SAVED_REQUEST_SESSION_ATTRIBUTE)))
-            .flatMap(sr -> Optional.ofNullable(sr.getParameterValues("login_hint")))
+        Optional<String> loginHintParam =
+            ofNullable(session)
+            .flatMap(s -> ofNullable((SavedRequest) s.getAttribute(SAVED_REQUEST_SESSION_ATTRIBUTE)))
+            .flatMap(sr -> ofNullable(sr.getParameterValues("login_hint")))
             .flatMap(lhValues -> Arrays.asList(lhValues).stream().findFirst());
 
         if(loginHintParam.isPresent()) {
@@ -351,7 +381,19 @@ public class LoginInfoEndpoint {
             model.addAttribute(LINK_CREATE_ACCOUNT_SHOW, linkCreateAccountShow);
             model.addAttribute(FIELD_USERNAME_SHOW, fieldUsernameShow);
             model.addAttribute(IDP_DEFINITIONS, samlIdps.values());
-            model.addAttribute(OAUTH_DEFINITIONS, oauthIdentityProviderDefinitions);
+            Map<String, String> oauthLinks = new HashMap<>();
+            ofNullable(oauthIdentityProviderDefinitions).orElse(emptyMap()).entrySet().stream()
+                .filter(e -> e.getValue().isShowLinkText() == true)
+                .forEach(e ->
+                    oauthLinks.put(
+                        xoAuthProviderConfigurator.getCompleteAuthorizationURI(
+                            e.getKey(),
+                            UaaUrlUtils.getBaseURL(request),
+                            e.getValue()),
+                        e.getValue().getLinkText()
+                    )
+                );
+            model.addAttribute(OAUTH_LINKS, oauthLinks);
             model.addAttribute("clientName", clientName);
         }
         model.addAttribute(LINKS, links);
@@ -438,7 +480,7 @@ public class LoginInfoEndpoint {
     }
 
     private String getRedirectUrlForXOAuthIDP(HttpServletRequest request, String alias, AbstractXOAuthIdentityProviderDefinition definition) throws UnsupportedEncodingException {
-        return definition.getCompleteAuthorizationURI(UaaUrlUtils.getBaseURL(request), alias);
+        return xoAuthProviderConfigurator.getCompleteAuthorizationURI(alias, UaaUrlUtils.getBaseURL(request), definition);
     }
 
     protected Map<String, SamlIdentityProviderDefinition> getSamlIdentityProviderDefinitions(List<String> allowedIdps) {
@@ -447,11 +489,11 @@ public class LoginInfoEndpoint {
     }
 
     protected Map<String, AbstractXOAuthIdentityProviderDefinition> getOauthIdentityProviderDefinitions(List<String> allowedIdps) {
-        final List<String> types = Arrays.asList(OAUTH20, OIDC10);
-        List<IdentityProvider> identityProviders = providerProvisioning.retrieveAll(true, IdentityZoneHolder.get().getId());
+
+        List<IdentityProvider> identityProviders =
+            xoAuthProviderConfigurator.retrieveAll(true, IdentityZoneHolder.get().getId());
 
         Map<String, AbstractXOAuthIdentityProviderDefinition> identityProviderDefinitions = identityProviders.stream()
-                .filter(p -> (types.contains(p.getType())))
                 .filter(p -> allowedIdps==null || allowedIdps.contains(p.getOriginKey()))
                 .collect(idpsMapCollector);
         return identityProviderDefinitions;
@@ -477,7 +519,7 @@ public class LoginInfoEndpoint {
         SavedRequest savedRequest = (SavedRequest) session.getAttribute(SAVED_REQUEST_SESSION_ATTRIBUTE);
         String[] client_ids = savedRequest.getParameterValues("client_id");
         try {
-            ClientDetails clientDetails = clientDetailsService.loadClientByClientId(client_ids[0]);
+            ClientDetails clientDetails = clientDetailsService.loadClientByClientId(client_ids[0], IdentityZoneHolder.get().getId());
             return clientDetails.getAdditionalInformation();
         } catch (NoSuchClientException x) {
             return null;
@@ -542,7 +584,7 @@ public class LoginInfoEndpoint {
             SavedRequest savedRequest = (SavedRequest) session.getAttribute(SAVED_REQUEST_SESSION_ATTRIBUTE);
             String[] client_ids = savedRequest.getParameterValues("client_id");
             try {
-                clientDetails = clientDetailsService.loadClientByClientId(client_ids[0]);
+                clientDetails = clientDetailsService.loadClientByClientId(client_ids[0], IdentityZoneHolder.get().getId());
             } catch (NoSuchClientException e) {
             }
         }
@@ -593,7 +635,7 @@ public class LoginInfoEndpoint {
         }
 
         String base64Credentials = auth.substring("Basic".length()).trim();
-        String credentials = new String(new Base64().decode(base64Credentials.getBytes()), Charset.forName("UTF-8"));
+        String credentials = new String(new Base64().decode(base64Credentials.getBytes()), UTF_8.name());
         // credentials = username:password
         final String[] values = credentials.split(":", 2);
         if (values == null || values.length == 0) {
@@ -610,7 +652,7 @@ public class LoginInfoEndpoint {
                 codeData.put(OriginKeys.ORIGIN, p.getOrigin());
             }
         }
-        ExpiringCode expiringCode = expiringCodeStore.generateCode(JsonUtils.writeValueAsString(codeData), new Timestamp(System.currentTimeMillis() + 5 * 60 * 1000), ExpiringCodeType.AUTOLOGIN.name());
+        ExpiringCode expiringCode = expiringCodeStore.generateCode(JsonUtils.writeValueAsString(codeData), new Timestamp(System.currentTimeMillis() + 5 * 60 * 1000), ExpiringCodeType.AUTOLOGIN.name(), IdentityZoneHolder.get().getId());
 
         return new AutologinResponse(expiringCode.getCode());
     }
@@ -675,12 +717,12 @@ public class LoginInfoEndpoint {
 
         String intent = ExpiringCodeType.PASSCODE + " " + pi.getUserId();
 
-        expiringCodeStore.expireByIntent(intent);
+        expiringCodeStore.expireByIntent(intent, IdentityZoneHolder.get().getId());
 
         ExpiringCode code = expiringCodeStore.generateCode(
             JsonUtils.writeValueAsString(pi),
             new Timestamp(System.currentTimeMillis() + (getCodeExpirationMillis())),
-            intent);
+            intent, IdentityZoneHolder.get().getId());
 
         model.put(PASSCODE, code.getCode());
 
@@ -702,21 +744,36 @@ public class LoginInfoEndpoint {
         return model;
     }
 
-    private Map<String,String> getSelfServiceLinks() {
+    protected Map<String,String> getSelfServiceLinks() {
         Map<String, String> selfServiceLinks = new HashMap<>();
         IdentityZone zone = IdentityZoneHolder.get();
         IdentityProvider<UaaIdentityProviderDefinition> uaaIdp = providerProvisioning.retrieveByOrigin(OriginKeys.UAA, IdentityZoneHolder.get().getId());
         boolean disableInternalUserManagement = (uaaIdp.getConfig()!=null) ? uaaIdp.getConfig().isDisableInternalUserManagement() : false;
+
         boolean selfServiceLinksEnabled = (zone.getConfig()!=null) ? zone.getConfig().getLinks().getSelfService().isSelfServiceLinksEnabled() : true;
-        String signup = zone.getConfig()!=null ? zone.getConfig().getLinks().getSelfService().getSignup() : "/create_account";
-        String passwd = zone.getConfig()!=null ? zone.getConfig().getLinks().getSelfService().getPasswd() : "/forgot_password";
+
+        final String defaultSignup = "/create_account";
+        final String defaultPasswd = "/forgot_password";
+        Links.SelfService service = zone.getConfig()!=null ? zone.getConfig().getLinks().getSelfService() : null;
+        String signup = UaaStringUtils.nonNull(
+            service!=null ? service.getSignup() : null,
+            globalLinks.getSelfService().getSignup(),
+            defaultSignup);
+
+        String passwd = UaaStringUtils.nonNull(
+            service!=null ? service.getPasswd() : null,
+            globalLinks.getSelfService().getPasswd(),
+            defaultPasswd);
+
 
         if (selfServiceLinksEnabled && !disableInternalUserManagement) {
             if (hasText(signup)) {
+                signup = UaaStringUtils.replaceZoneVariables(signup, IdentityZoneHolder.get());
                 selfServiceLinks.put(CREATE_ACCOUNT_LINK, signup);
                 selfServiceLinks.put("register", signup);
             }
             if (hasText(passwd)) {
+                passwd = UaaStringUtils.replaceZoneVariables(passwd, IdentityZoneHolder.get());
                 selfServiceLinks.put(FORGOT_PASSWORD_LINK, passwd);
                 selfServiceLinks.put("passwd", passwd);
             }
@@ -777,7 +834,7 @@ public class LoginInfoEndpoint {
     protected String extractPath(HttpServletRequest request) {
         String query = request.getQueryString();
         try {
-            query = query == null ? "" : "?" + URLDecoder.decode(query, "UTF-8");
+            query = query == null ? "" : "?" + URLDecoder.decode(query, UTF_8.name());
         } catch (UnsupportedEncodingException e) {
             throw new IllegalStateException("Cannot decode query string: " + query);
         }
@@ -791,7 +848,7 @@ public class LoginInfoEndpoint {
         return path;
     }
 
-    public void setClientDetailsService(ClientDetailsService clientDetailsService) {
+    public void setClientDetailsService(ClientServicesExtension clientDetailsService) {
         this.clientDetailsService = clientDetailsService;
     }
 

@@ -6,20 +6,16 @@ module VCAP::CloudController::Presenters::V3
     let(:droplet) do
       VCAP::CloudController::DropletModel.make(
         :buildpack,
-        state:                 VCAP::CloudController::DropletModel::STAGED_STATE,
-        error_id:              'FAILED',
-        error_description:     'things went all sorts of bad',
-        process_types:         { 'web' => 'npm start', 'worker' => 'start worker' },
-        environment_variables: { 'elastic' => 'runtime' },
-        staging_memory_in_mb:  234,
-        staging_disk_in_mb:    934,
-        execution_metadata:    'black-box-string',
-        package_guid:          'abcdefabcdef12345'
+        state:              VCAP::CloudController::DropletModel::STAGED_STATE,
+        error_id:           'FAILED',
+        error_description:  'things went all sorts of bad',
+        process_types:      { 'web' => 'npm start', 'worker' => 'start worker' },
+        execution_metadata: 'black-box-string',
+        package_guid:       'abcdefabcdef12345',
+        droplet_hash:       'droplet-sha1-checksum',
+        sha256_checksum:    'droplet-sha256-checksum',
       )
     end
-    let(:scheme) { TestConfig.config[:external_protocol] }
-    let(:host) { TestConfig.config[:external_domain] }
-    let(:link_prefix) { "#{scheme}://#{host}" }
 
     describe '#to_hash' do
       let(:result) { DropletPresenter.new(droplet).to_hash }
@@ -28,20 +24,19 @@ module VCAP::CloudController::Presenters::V3
 
       context 'buildpack lifecycle' do
         before do
-          droplet.lifecycle_data.buildpack        = buildpack
+          droplet.lifecycle_data.buildpacks       = [buildpack]
           droplet.lifecycle_data.stack            = 'the-happiest-stack'
           droplet.buildpack_receipt_buildpack     = buildpack_receipt_buildpack
           droplet.buildpack_receipt_detect_output = 'the-happiest-buildpack-detect-output'
-          droplet.buildpack_receipt_stack_name    = 'the-happiest-stack'
           droplet.save
         end
 
         it 'presents the droplet as a hash' do
           links = {
-            self: { href: "#{link_prefix}/v3/droplets/#{droplet.guid}" },
-            package: { href: "#{link_prefix}/v3/packages/#{droplet.package_guid}" },
-            app: { href: "#{link_prefix}/v3/apps/#{droplet.app_guid}" },
-            assign_current_droplet: { href: "#{link_prefix}/v3/apps/#{droplet.app_guid}/droplets/current", method: 'PUT' }
+            self:                   { href: "#{link_prefix}/v3/droplets/#{droplet.guid}" },
+            package:                { href: "#{link_prefix}/v3/packages/#{droplet.package_guid}" },
+            app:                    { href: "#{link_prefix}/v3/apps/#{droplet.app_guid}" },
+            assign_current_droplet: { href: "#{link_prefix}/v3/apps/#{droplet.app_guid}/relationships/current_droplet", method: 'PATCH' }
           }
 
           expect(result[:guid]).to eq(droplet.guid)
@@ -49,15 +44,20 @@ module VCAP::CloudController::Presenters::V3
           expect(result[:error]).to eq('FAILED - things went all sorts of bad')
 
           expect(result[:lifecycle][:type]).to eq('buildpack')
-          expect(result[:lifecycle][:data]['stack']).to eq('the-happiest-stack')
-          expect(result[:lifecycle][:data]['buildpack']).to eq('the-happiest-buildpack')
-          expect(result[:environment_variables]).to eq({ 'elastic' => 'runtime' })
-          expect(result[:staging_memory_in_mb]).to eq(234)
-          expect(result[:staging_disk_in_mb]).to eq(934)
+          expect(result[:lifecycle][:data]).to eq({})
+
+          expect(result[:checksum]).to eq(type: 'sha256', value: 'droplet-sha256-checksum')
+          expect(result[:stack]).to eq('the-happiest-stack')
+          expect(result[:buildpacks]).to eq([{ name: 'the-happiest-buildpack', detect_output: 'the-happiest-buildpack-detect-output' }])
 
           expect(result[:created_at]).to be_a(Time)
           expect(result[:updated_at]).to be_a(Time)
           expect(result[:links]).to eq(links)
+        end
+
+        it 'does not redacts the process_types and execution_metadata by default' do
+          expect(result[:process_types]).to eq({ 'web' => 'npm start', 'worker' => 'start worker' })
+          expect(result[:execution_metadata]).to eq('black-box-string')
         end
 
         context 'when buildpack contains username and password' do
@@ -65,50 +65,32 @@ module VCAP::CloudController::Presenters::V3
           let(:buildpack_receipt_buildpack) { 'https://amelia:meow@neopets.com' }
 
           it 'obfuscates the username and password' do
-            expect(result[:lifecycle][:data]['buildpack']).to eq('https://***:***@neopets.com')
-            expect(result[:result][:buildpack][:name]).to eq('https://***:***@neopets.com')
+            expect(result[:buildpacks]).to eq([{ name: 'https://***:***@neopets.com', detect_output: 'the-happiest-buildpack-detect-output' }])
           end
         end
 
         context 'when show_secrets is false' do
           let(:result) { DropletPresenter.new(droplet, show_secrets: false).to_hash }
 
-          it 'redacts the environment_variables, process_types, and execution_metadata' do
-            expect(result[:environment_variables]).to eq({ 'redacted_message' => '[PRIVATE DATA HIDDEN]' })
-            expect(result[:result][:process_types]).to eq({ 'redacted_message' => '[PRIVATE DATA HIDDEN]' })
-            expect(result[:result][:execution_metadata]).to eq('[PRIVATE DATA HIDDEN]')
+          it 'redacts the process_types and execution_metadata' do
+            expect(result[:process_types]).to eq({ 'redacted_message' => '[PRIVATE DATA HIDDEN]' })
+            expect(result[:execution_metadata]).to eq('[PRIVATE DATA HIDDEN]')
           end
         end
 
-        describe 'result' do
-          context 'when droplet is in a "final" state' do
-            before do
-              droplet.state = VCAP::CloudController::DropletModel::FINAL_STATES.first
-              droplet.save
-            end
+        context 'when droplet has no checksum' do
+          before { droplet.update(droplet_hash: nil, sha256_checksum: nil) }
 
-            it 'returns the result' do
-              expect(result[:result][:process_types]).to eq({ 'web' => 'npm start', 'worker' => 'start worker' })
-              expect(result[:result][:execution_metadata]).to eq('black-box-string')
-            end
+          it 'sets checksum to nil' do
+            expect(result[:checksum]).to eq(nil)
           end
+        end
 
-          context 'when droplet is NOT in a "complete" state' do
-            before do
-              droplet.state = VCAP::CloudController::DropletModel::STAGING_STATE
-              droplet.save
-            end
+        context 'when the droplet does not have a sha256 checksum calculated' do
+          before { droplet.update(sha256_checksum: nil) }
 
-            it 'returns nil for the result' do
-              expect(result[:result]).to be_nil
-            end
-          end
-
-          it 'has the correct result' do
-            expect(result[:result][:hash]).to eq(type: 'sha1', value: nil)
-            expect(result[:result][:stack]).to eq('the-happiest-stack')
-            expect(result[:result][:buildpack][:name]).to eq('the-happiest-buildpack')
-            expect(result[:result][:buildpack][:detect_output]).to eq('the-happiest-buildpack-detect-output')
+          it 'presents the sha1 checksum' do
+            expect(result[:checksum]).to eq(type: 'sha1', value: 'droplet-sha1-checksum')
           end
         end
 
@@ -152,17 +134,16 @@ module VCAP::CloudController::Presenters::V3
           droplet.save
         end
 
-        it 'has the correct result' do
-          expect(result[:result][:image]).to eq('test-image')
+        it 'presents the docker image' do
+          expect(result[:image]).to eq('test-image')
         end
 
         context 'when show_secrets is false' do
           let(:result) { DropletPresenter.new(droplet, show_secrets: false).to_hash }
 
-          it 'redacts the environment_variables, process_types, and execution_metadata' do
-            expect(result[:environment_variables]).to eq({ 'redacted_message' => '[PRIVATE DATA HIDDEN]' })
-            expect(result[:result][:process_types]).to eq({ 'redacted_message' => '[PRIVATE DATA HIDDEN]' })
-            expect(result[:result][:execution_metadata]).to eq('[PRIVATE DATA HIDDEN]')
+          it 'redacts the process_types and execution_metadata' do
+            expect(result[:process_types]).to eq({ 'redacted_message' => '[PRIVATE DATA HIDDEN]' })
+            expect(result[:execution_metadata]).to eq('[PRIVATE DATA HIDDEN]')
           end
         end
       end

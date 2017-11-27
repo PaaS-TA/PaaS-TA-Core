@@ -15,7 +15,7 @@ module VCAP::CloudController
       diego_docker: false,
       set_roles_by_username: true,
       unset_roles_by_username: true,
-      task_creation: false,
+      task_creation: true,
       env_var_visibility: true,
       space_scoped_private_broker_creation: true,
       space_developer_env_var_visibility: true
@@ -50,7 +50,6 @@ module VCAP::CloudController
       feature_flag = FeatureFlag.find(name: feature_flag_name.to_s)
       return feature_flag.enabled if feature_flag
       DEFAULT_FLAGS.fetch(feature_flag_name)
-
     rescue KeyError
       raise UndefinedFeatureFlagError.new "invalid key: #{feature_flag_name}"
     end

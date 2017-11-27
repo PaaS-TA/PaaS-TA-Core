@@ -7,12 +7,13 @@ resource "aws_instance" "server" {
 
     connection {
         user = "${lookup(var.user, var.platform)}"
-        key_file = "${var.key_path}"
+        private_key = "${file("${var.key_path}")}"
     }
 
     #Instance tags
     tags {
         Name = "${var.tagName}-${count.index}"
+        ConsulRole = "Server"
     }
 
     provisioner "file" {

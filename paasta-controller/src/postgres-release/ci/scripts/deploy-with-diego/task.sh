@@ -22,14 +22,18 @@ common_data:
   apps_domain: ${apps_domain}
   api_user: ${API_USER}
   api_password: ${API_PASSWORD}
+  Bosh_ip: ${BOSH_DIRECTOR}
+  Bosh_public_ip: ${BOSH_PUBLIC_IP}
+  stemcell_version: ${STEMCELL_VERSION}
   default_env:
     bosh:
       password: ~
+      keep_root_password: true
 EOF
 }
 
 function deploy_diego() {
-  bosh -t $BOSH_DIRECTOR download manifest ${CF_DEPLOYMENT} ${root}/pgci_cf.yml
+  bosh -d ${CF_DEPLOYMENT} manifest > ${root}/pgci_cf.yml
 
   generate_env_stub > env.yml
 
@@ -44,6 +48,10 @@ function deploy_diego() {
     "${root}/env.yml" \
     "${root}/postgres-ci-env/deployments/common/common.yml" > "${root}/iaas-settings.yml"
 
+  spiff merge \
+    "$root/postgres-ci-env/deployments/diego/sql_overrides.yml" \
+    "${root}/env.yml" > "${root}/sql_overrides.yml"
+
   pushd diego-release > /dev/null
     ./scripts/generate-deployment-manifest \
       -c $root/pgci_cf.yml \
@@ -51,27 +59,42 @@ function deploy_diego() {
       -p $root/property-overrides.yml \
       -n $root/postgres-ci-env/deployments/diego/instance-count-overrides.yml \
       -v $root/postgres-ci-env/deployments/diego/release-versions.yml \
+      -s $root/sql_overrides.yml \
+      -x \
+      -r \
       > $root/pgci_diego.yml
 
   popd > /dev/null
 
-  bosh -n \
-    -d pgci_diego.yml \
-    -t ${BOSH_DIRECTOR} \
-    deploy
+  bosh -n deploy -d "${CF_DEPLOYMENT}-diego" "$root/pgci_diego.yml"
 }
 
 function upload_release() {
   local release
   release=${1}
-  bosh -t ${BOSH_DIRECTOR} upload release https://bosh.io/d/github.com/${release}
+  bosh upload-release https://bosh.io/d/github.com/${release}
+}
+
+preflight_check() {
+  set +x
+  test -n "${BOSH_DIRECTOR}"
+  test -n "${BOSH_PUBLIC_IP}"
+  test -n "${BOSH_CLIENT}"
+  test -n "${BOSH_CLIENT_SECRET}"
+  test -n "${BOSH_CA_CERT}"
+  test -n "${CF_DEPLOYMENT}"
+  test -n "${API_USER}"
+  test -n "${API_PASSWORD}"
+  test -n "${STEMCELL_VERSION}"
+  set -x
 }
 
 function main() {
-  upload_release "cloudfoundry/cflinuxfs2-rootfs-release"
+  preflight_check
+  export BOSH_ENVIRONMENT="https://${BOSH_DIRECTOR}:25555"
+  upload_release "cloudfoundry/cflinuxfs2-release"
   upload_release "cloudfoundry/diego-release"
-  upload_release "cloudfoundry/garden-linux-release"
-  upload_release "cloudfoundry-incubator/etcd-release"
+  upload_release "cloudfoundry/garden-runc-release"
 
   deploy_diego
 }

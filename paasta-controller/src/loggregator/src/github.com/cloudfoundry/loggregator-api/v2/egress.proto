@@ -1,0 +1,37 @@
+syntax = "proto3";
+
+package loggregator.v2;
+
+import "envelope.proto";
+
+service Egress {
+  rpc Receiver(EgressRequest) returns (stream Envelope) {}
+  rpc BatchedReceiver(EgressBatchRequest) returns (stream EnvelopeBatch) {}
+}
+
+message EgressRequest {
+  string shard_id = 1;
+  Filter filter = 2;
+
+  // TODO: This can be removed once the envelope.deprecated_tags is removed.
+  bool   use_preferred_tags = 3;
+}
+
+message EgressBatchRequest {
+  string shard_id = 1;
+  Filter filter = 2;
+
+  // TODO: This can be removed once the envelope.deprecated_tags is removed.
+  bool   use_preferred_tags = 3;
+}
+
+message Filter {
+  string source_id = 1;
+
+  oneof Message {
+    LogFilter log = 2;
+  }
+}
+
+message LogFilter {
+}

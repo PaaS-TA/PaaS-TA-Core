@@ -1,14 +1,10 @@
 ---
-director_uuid: REPLACE_ME_DIRECTOR_UUID
-
 name: compilation
 
 releases:
 - name: consul
   version: latest
 - name: turbulence
-  version: latest
-- name: bosh-warden-cpi
   version: latest
 
 update:

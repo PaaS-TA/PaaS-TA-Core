@@ -44,6 +44,29 @@ module VCAP::CloudController::RestController
         paginated_collection_renderer.render_json(controller, dataset, '/v2/cars', opts, {})
       end
 
+      context 'when one of the objects serializes to nil' do
+        let(:dataset) { VCAP::CloudController::TestModel.dataset }
+        let(:serializer) { instance_double(PreloadedObjectSerializer) }
+
+        before do
+          VCAP::CloudController::TestModel.make
+          VCAP::CloudController::TestModel.make
+          counter = 0
+          allow(serializer).to receive(:serialize).with(any_args) do
+            if counter == 0
+              counter += 1
+              nil
+            else
+              'fake-serialization'
+            end
+          end
+        end
+
+        it 'excludes that object from the serialization' do
+          expect(JSON.parse(render_json_call)['resources'].size).to eq(1)
+        end
+      end
+
       context 'when results_per_page' do
         context 'is more than max results_per_page' do
           let(:max_results_per_page) { 10 }
@@ -293,6 +316,47 @@ module VCAP::CloudController::RestController
         end
       end
 
+      context 'order-by' do
+        before do
+          VCAP::CloudController::TestModel.make
+          VCAP::CloudController::TestModel.make
+          VCAP::CloudController::TestModel.make
+        end
+
+        let(:opts) do
+          {
+            results_per_page: 1,
+            order_by: order_by_param,
+            page: 2
+          }
+        end
+
+        context 'when not specified' do
+          let(:opts) do
+            {
+              results_per_page: 1,
+              page: 2
+            }
+          end
+
+          it 'does not include order-by in url params' do
+            next_url = JSON.parse(render_json_call)['next_url']
+            expect(next_url).to_not include('order-by')
+          end
+        end
+
+        context 'when it is specified' do
+          let(:order_by_param) { 'sortable_value' }
+
+          it 'includes order-by in next_url and prev_url' do
+            prev_url = JSON.parse(render_json_call)['prev_url']
+            next_url = JSON.parse(render_json_call)['next_url']
+            expect(prev_url).to include("order-by=#{order_by_param}")
+            expect(next_url).to include("order-by=#{order_by_param}")
+          end
+        end
+      end
+
       context 'when collection_transformer is given' do
         let(:collection_transformer) { double('collection_transformer') }
         let!(:test_model) { VCAP::CloudController::TestModel.make }
@@ -311,6 +375,43 @@ module VCAP::CloudController::RestController
           end
 
           expect(JSON.parse(render_json_call)['resources'][0]['entity']['unique_value']).to eq('test_value')
+        end
+      end
+
+      context 'when request_params are given' do
+        let(:results_per_page) { 1 }
+        before do
+          VCAP::CloudController::TestModel.make
+          VCAP::CloudController::TestModel.make
+          VCAP::CloudController::TestModel.make
+          opts[:q] = 'organization_guid:1234'
+        end
+
+        context 'at page 1' do
+          let(:page) { 1 }
+          it 'has a next link with the q' do
+            result = JSON.parse(render_json_call)
+            expect(result['prev_url']).to be_nil
+            expect(result['next_url']).to include('q=organization_guid:1234')
+          end
+        end
+
+        context 'at page 2' do
+          let(:page) { 2 }
+          it 'has a prev link with the q' do
+            result = JSON.parse(render_json_call)
+            expect(result['prev_url']).to include('q=organization_guid:1234')
+            expect(result['next_url']).to include('q=organization_guid:1234')
+          end
+        end
+
+        context 'at page 3' do
+          let(:page) { 2 }
+          it 'has a prev link with the q' do
+            result = JSON.parse(render_json_call)
+            expect(result['prev_url']).to include('q=organization_guid:1234')
+            expect(result['next_url']).to include('q=organization_guid:1234')
+          end
         end
       end
     end

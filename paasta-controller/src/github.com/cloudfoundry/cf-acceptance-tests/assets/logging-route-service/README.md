@@ -15,7 +15,8 @@ This example route service uses the new headers/features that have been added to
 
 - Download this repository and `cf push` to your chosen CF deployment.
 - Push your app which will be associated with the route service.
-- Use the [rtr CLI](https://github.com/cloudfoundry-incubator/routing-api-cli) to register this example as the `route_service_url` of your chosen app.
+- Create a user-provided route service ([see docs](http://docs.cloudfoundry.org/services/route-services.html#user-provided))
+- Bind the route service to the route (domain/hostname)
 - Tail the logs of this route service in order to verify that requests to your app go through the route service. The example logging route service will log requests and responses to and from your app.
 
 ## Environment Variables

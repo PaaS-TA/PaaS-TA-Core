@@ -35,6 +35,12 @@ type FakeconsulAPIAgent struct {
 			Error    error
 		}
 	}
+	LeaveCall struct {
+		CallCount int
+		Returns   struct {
+			Error error
+		}
+	}
 }
 
 func (fake *FakeconsulAPIAgent) Self() (map[string]map[string]interface{}, error) {
@@ -85,4 +91,7 @@ func (fake *FakeconsulAPIAgent) Join(member string, wan bool) error {
 	return fake.JoinCall.Returns.Error
 }
 
-// var _ confab.consulAPIAgent = new(FakeconsulAPIAgent)
+func (fake *FakeconsulAPIAgent) Leave() error {
+	fake.LeaveCall.CallCount++
+	return fake.LeaveCall.Returns.Error
+}

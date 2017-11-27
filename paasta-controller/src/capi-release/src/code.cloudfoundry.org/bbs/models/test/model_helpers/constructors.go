@@ -55,6 +55,7 @@ func NewValidDesiredLRP(guid string) *models.DesiredLRP {
 		DiskMb:      512,
 		MemoryMb:    1024,
 		CpuWeight:   42,
+		MaxPids:     1024,
 		Routes:      &models.Routes{"my-router": &myRouterJSON},
 		LogSource:   "some-log-source",
 		LogGuid:     "some-log-guid",
@@ -86,6 +87,11 @@ func NewValidDesiredLRP(guid string) *models.DesiredLRP {
 				},
 			},
 		},
+		CertificateProperties: &models.CertificateProperties{
+			OrganizationalUnit: []string{"iamthelizardking", "iamthelizardqueen"},
+		},
+		ImageUsername: "image-username",
+		ImagePassword: "image-password",
 	}
 	err := desiredLRP.Validate()
 	Expect(err).NotTo(HaveOccurred())
@@ -114,6 +120,7 @@ func NewValidTaskDefinition() *models.TaskDefinition {
 		}),
 		MemoryMb:    256,
 		DiskMb:      1024,
+		MaxPids:     1024,
 		CpuWeight:   42,
 		Privileged:  true,
 		LogGuid:     "123",
@@ -157,6 +164,11 @@ func NewValidTaskDefinition() *models.TaskDefinition {
 			},
 		},
 		PlacementTags: []string{"red-tag", "blue-tag", "one-tag", "two-tag"},
+		CertificateProperties: &models.CertificateProperties{
+			OrganizationalUnit: []string{"iamthelizardking", "iamthelizardqueen"},
+		},
+		ImageUsername: "image-username",
+		ImagePassword: "image-password",
 	}
 }
 

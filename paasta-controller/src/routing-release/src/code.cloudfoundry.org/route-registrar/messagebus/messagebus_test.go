@@ -10,6 +10,7 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega/gbytes"
 
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/lager/lagertest"
@@ -39,7 +40,7 @@ var _ = Describe("Messagebus test Suite", func() {
 
 		natsCmd = startNats(natsHost, natsPort, natsUsername, natsPassword)
 
-		logger = lagertest.NewTestLogger("Nats test")
+		logger = lagertest.NewTestLogger("nats-test")
 		var err error
 		servers := []string{
 			fmt.Sprintf(
@@ -55,6 +56,14 @@ var _ = Describe("Messagebus test Suite", func() {
 		opts.Servers = servers
 
 		testSpyClient, err = opts.Connect()
+		Expect(err).ToNot(HaveOccurred())
+
+		// Ensure nats server is listening before tests
+		Eventually(func() string {
+			connStatus := testSpyClient.Status()
+			return fmt.Sprintf("%v", connStatus)
+		}, 5*time.Second).Should(Equal("1"))
+
 		Expect(err).ShouldNot(HaveOccurred())
 
 		messageBusServer := config.MessageBusServer{
@@ -63,7 +72,7 @@ var _ = Describe("Messagebus test Suite", func() {
 			natsPassword,
 		}
 
-		messageBusServers = []config.MessageBusServer{messageBusServer, messageBusServer}
+		messageBusServers = []config.MessageBusServer{messageBusServer}
 
 		messageBus = messagebus.NewMessageBus(logger)
 	})
@@ -72,6 +81,8 @@ var _ = Describe("Messagebus test Suite", func() {
 		testSpyClient.Close()
 
 		err := natsCmd.Process.Kill()
+		Expect(err).NotTo(HaveOccurred())
+		_, err = natsCmd.Process.Wait()
 		Expect(err).NotTo(HaveOccurred())
 	})
 
@@ -89,6 +100,32 @@ var _ = Describe("Messagebus test Suite", func() {
 			It("returns error", func() {
 				err := messageBus.Connect(messageBusServers)
 				Expect(err).Should(HaveOccurred())
+			})
+		})
+
+		Context("when nats connection is successful", func() {
+			BeforeEach(func() {
+				err := messageBus.Connect(messageBusServers)
+				Expect(err).ShouldNot(HaveOccurred())
+			})
+			It("logs a message", func() {
+				Eventually(logger).Should(gbytes.Say(`nats-connection-successful`))
+				Eventually(logger).Should(gbytes.Say(fmt.Sprintf("%s", natsHost)))
+			})
+		})
+
+		Context("when nats connection closes", func() {
+			BeforeEach(func() {
+				err := messageBus.Connect(messageBusServers)
+				Expect(err).ShouldNot(HaveOccurred())
+				messageBus.Close()
+			})
+
+			It("logs a message", func() {
+				Eventually(logger).Should(gbytes.Say(`nats-connection-disconnected`))
+				Eventually(logger).Should(gbytes.Say(fmt.Sprintf("%s", natsHost)))
+				Eventually(logger).Should(gbytes.Say(`nats-connection-closed`))
+				Eventually(logger).Should(gbytes.Say(fmt.Sprintf("%s", natsHost)))
 			})
 		})
 	})
@@ -133,7 +170,7 @@ var _ = Describe("Messagebus test Suite", func() {
 
 			// Assert that we got the right message
 			var receivedMessage string
-			Eventually(registered).Should(Receive(&receivedMessage))
+			Eventually(registered, 2).Should(Receive(&receivedMessage))
 
 			expectedRegistryMessage := messagebus.Message{
 				URIs:            route.URIs,

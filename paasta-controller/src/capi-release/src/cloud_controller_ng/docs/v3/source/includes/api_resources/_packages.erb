@@ -3,12 +3,9 @@
   "guid": "4cb65058-f04f-458f-aca1-5f4e43de6407",
   "type": "docker",
   "data": {
-    "hash": {
-      "type": "sha1",
-      "value": null
-    },
-    "error": null,
-    "image": "registry/image:latest"
+    "image": "registry/image:latest",
+    "username": "username",
+    "password": "***"
   },
   "state": "READY",
   "created_at": "2015-11-03T00:53:54Z",
@@ -30,8 +27,8 @@
   "guid": "44f7c078-0934-470f-9883-4fcddc5b8f13",
   "type": "bits",
   "data": {
-    "hash": {
-      "type": "sha1",
+    "checksum": {
+      "type": "sha256",
       "value": null
     },
     "error": null
@@ -50,10 +47,6 @@
     "download": {
       "href": "https://api.example.org/v3/packages/44f7c078-0934-470f-9883-4fcddc5b8f13/download",
       "method": "GET"
-    },
-    "stage": {
-      "href": "https://api.example.org/v3/packages/44f7c078-0934-470f-9883-4fcddc5b8f13/droplets",
-      "method": "POST"
     },
     "app": {
       "href": "https://api.example.org/v3/apps/1d3bf0ec-5806-43c4-b64e-8364dba1086a"
@@ -83,8 +76,8 @@
       "guid": "a57fd932-85db-483a-a27e-b00efbb3b0a4",
       "type": "bits",
       "data": {
-        "hash": {
-          "type": "sha1",
+        "checksum": {
+          "type": "sha256",
           "value": null
         },
         "error": null
@@ -104,10 +97,6 @@
           "href": "https://api.example.org/v3/packages/a57fd932-85db-483a-a27e-b00efbb3b0a4/download",
           "method": "GET"
         },
-        "stage": {
-          "href": "https://api.example.org/v3/packages/a57fd932-85db-483a-a27e-b00efbb3b0a4/droplets",
-          "method": "POST"
-        },
         "app": {
           "href": "https://api.example.org/v3/apps/fa3558ce-1c4d-46fc-9776-54b9c8021745"
         }
@@ -117,12 +106,9 @@
       "guid": "8f1f294d-cef8-4c11-9f0b-3bcdc0bd2691",
       "type": "docker",
       "data": {
-        "hash": {
-          "type": "sha1",
-          "value": null
-        },
-        "error": null,
-        "image": "repository/docker-image:latest"
+        "image": "registry/image:latest",
+        "username": "username",
+        "password": "***"
       },
       "state": "READY",
       "created_at": "2015-11-03T00:53:54Z",
@@ -160,8 +146,8 @@
       "type": "bits",
       "data": {
         "error": null,
-        "hash": {
-          "type": "sha1",
+        "checksum": {
+          "type": "sha256",
           "value": null
         }
       },
@@ -179,10 +165,6 @@
         "download": {
           "href": "https://api.example.org/v3/packages/752edab0-2147-4f58-9c25-cd72ad8c3561/download",
           "method": "GET"
-        },
-        "stage": {
-          "href": "https://api.example.org/v3/packages/752edab0-2147-4f58-9c25-cd72ad8c3561/droplets",
-          "method": "POST"
         },
         "app": {
           "href": "https://api.example.org/v3/apps/f2efe391-2b5b-4836-8518-ad93fa9ebf69"
@@ -202,18 +184,14 @@ You are being redirected.
   "guid": "fec72fc1-e453-4463-a86d-5df426f337a3",
   "type": "docker",
   "data": {
-    "image": "http://awesome-sauce.com"
+    "image": "http://awesome-sauce.example.org"
   },
-  "state": "READY",
+  "state": "COPYING",
   "created_at": "2016-03-17T21:41:09Z",
   "updated_at": "2016-06-08T16:41:26Z",
   "links": {
     "self": {
       "href": "https://api.example.org/v3/packages/fec72fc1-e453-4463-a86d-5df426f337a3"
-    },
-    "stage": {
-      "href": "https://api.example.org/v3/packages/fec72fc1-e453-4463-a86d-5df426f337a3/droplets",
-      "method": "POST"
     },
     "app": {
       "href": "https://api.example.org/v3/apps/36208a68-562d-4f51-94ea-28bd8553a271"

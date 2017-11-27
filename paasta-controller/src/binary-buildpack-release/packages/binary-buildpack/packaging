@@ -1,2 +1,2 @@
     set -e -x
-    cp binary-buildpack/binary_buildpack-cached-*.zip ${BOSH_INSTALL_TARGET}
+    cp binary-buildpack/binary?buildpack-v*.zip ${BOSH_INSTALL_TARGET}

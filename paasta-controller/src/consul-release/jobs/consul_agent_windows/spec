@@ -5,11 +5,25 @@ templates:
   agent.key.erb: config/certs/agent.key
   ca.crt.erb: config/certs/ca.crt
   confab.json.erb: confab.json
+  consul_link.json.erb: consul_link.json
   pre-start.ps1.erb: bin/pre-start.ps1
 
 packages:
 - consul-windows
 - confab-windows
+
+consumes:
+- name: consul_common
+  type: consul_common
+  optional: true
+
+- name: consul_server
+  type: consul_server
+  optional: true
+
+- name: consul_client
+  type: consul_client
+  optional: true
 
 properties:
   consul.agent.servers.lan:
@@ -47,7 +61,11 @@ properties:
   consul.agent.domain:
     description: "Domain suffix for DNS"
 
-  consul.rewrite_resolv:
+  consul.agent.require_ssl:
+    description: "Require SSL to talk with the local agent"
+    default: false
+
+  consul.agent.rewrite_resolv:
     description: "When set to true this property will rewrite the resolv.conf file and add 127.0.0.1 as the first entry"
     default: true
 
@@ -62,3 +80,19 @@ properties:
 
   consul.encrypt_keys:
     description: "A list of passphrases that will be converted into encryption keys, the first key in the list is the active one"
+
+  consul.client.enabled:
+    description: "Set to false to disable the consul_agent on a VM."
+    default: true
+
+  syslog_daemon_config.address:
+    description: "Syslog host"
+    default: ""
+
+  syslog_daemon_config.port:
+    description: "Syslog port"
+    default: ""
+
+  syslog_daemon_config.transport:
+    description: "Syslog transport protocol (tcp or udp)"
+    default: "udp"

@@ -1,0 +1,50 @@
+---
+name: acceptance-tests
+templates:
+  test.sh.erb: bin/run
+  config.yml.erb: config/config.yml
+
+packages:
+ - acceptance-tests
+ - golang1.7
+
+properties:
+  postgres.acceptance_tests.bosh.target:
+   description: "Location of the BOSH Director to target when deploying postgres"
+   default: "192.168.50.4"
+
+  postgres.acceptance_tests.bosh.username:
+   description: "BOSH Director username"
+   default: "admin"
+
+  postgres.acceptance_tests.bosh.password:
+   description: "BOSH Director password"
+   default: "admin"
+
+  postgres.acceptance_tests.bosh.director_ca_cert:
+   description: "BOSH Director CA Cert"
+   default: ""
+
+  postgres.acceptance_tests.cloud_configs.default_azs:
+   description: "List of availability zones used by acceptance tests while deploying"
+   default: [z1]
+
+  postgres.acceptance_tests.cloud_configs.default_networks:
+   description: "List of networks used by acceptance tests while deploying"
+   default: [{name: private}]
+
+  postgres.acceptance_tests.cloud_configs.default_persistent_disk_type:
+   description: "Persistent disk type used by acceptance tests while deploying"
+   default: "10GB"
+
+  postgres.acceptance_tests.cloud_configs.default_vm_type:
+   description: "VM type used by acceptance tests while deploying"
+   default: "m3.medium"
+
+  postgres.acceptance_tests.postgres_release_version:
+   description: "The postgres-release version to test. If not specified, the latest uploaded to the director is used."
+   default: latest
+
+  postgres.acceptance_tests.postgresql_version:
+   description: "The PostgreSQL version that is expected to be deployed. If not specified, we expect that the one in the latest published postgres-release is deployed."
+   default: current

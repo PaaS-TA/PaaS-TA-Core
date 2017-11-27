@@ -1,0 +1,27 @@
+platform: hsqldb
+database.driverClassName: org.hsqldb.jdbcDriver
+database.url: jdbc:hsqldb:mem:jdbcUaaTests
+database.username: sa
+database.password:
+
+cloud_controller:
+  database:
+    driverClassName: org.hsqldb.jdbcDriver
+    url: jdbc:hsqldb:mem:cloud_controller;sql.enforce_strict_size=true
+    username: sa
+    password:
+
+---
+
+platform: postgresql
+database.driverClassName: org.postgresql.Driver
+database.url: jdbc:postgresql:uaa
+database.username: root
+database.password: changeme
+cloud_controller:
+  database:
+    driverClassName: org.postgresql.Driver
+    url: jdbc:postgresql:cloud_controller
+    username: root
+    password: changeme
+

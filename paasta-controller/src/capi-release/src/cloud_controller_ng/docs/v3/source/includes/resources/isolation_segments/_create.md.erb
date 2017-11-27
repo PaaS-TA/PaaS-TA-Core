@@ -1,0 +1,40 @@
+### Create an isolation segment
+
+```
+Example Request
+```
+
+```shell
+curl "https://api.example.org/v3/isolation_segments" \
+  -X POST \
+  -H "Authorization: bearer [token]" \
+  -H "Content-type: application/json" \
+  -d '{
+    "name": "my_segment"
+  }'
+```
+
+```
+Example Response
+```
+
+```http
+HTTP/1.1 201 Created
+Content-Type: application/json
+
+<%= yield_content :single_isolation_segment %>
+```
+
+#### Definition
+`POST /v3/isolation_segments`
+
+#### Required Parameters
+
+Name | Type | Description
+---- | ---- | -----------
+**name** | _string_ | Name of the Isolation Segment.  Isolation Segment names must be unique across the entire system, and case is ignored when checking for uniqueness.
+
+#### Permitted Roles
+ |
+--- | ---
+Admin |

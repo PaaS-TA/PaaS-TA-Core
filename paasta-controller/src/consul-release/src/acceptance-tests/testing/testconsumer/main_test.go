@@ -1,8 +1,11 @@
 package main_test
 
 import (
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -124,53 +127,81 @@ var _ = Describe("Proxying consul requests", func() {
 	})
 
 	Context("with a functioning consul", func() {
-		BeforeEach(func() {
-			consulServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-				if req.URL.Path == "/v1/kv/some-key" {
-					if req.Method == "GET" {
-						w.Write([]byte("some-value"))
-						return
+		TestConsulProxy := func(enableTLS bool) {
+			BeforeEach(func() {
+				handlerFunc := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+					if req.URL.Path == "/v1/kv/some-key" {
+						if req.Method == "GET" {
+							w.Write([]byte("some-value"))
+							return
+						}
+
+						if req.Method == "PUT" {
+							w.Write([]byte("true"))
+							return
+						}
 					}
 
-					if req.Method == "PUT" {
-						w.Write([]byte("true"))
-						return
-					}
+					w.WriteHeader(http.StatusTeapot)
+				})
+
+				var consulURL string
+				var args []string
+				if enableTLS {
+					consulPort, err := openPort()
+					Expect(err).NotTo(HaveOccurred())
+
+					consulURL = fmt.Sprintf("https://127.0.0.1:%s", consulPort)
+					startTLSServer(consulPort, "fixtures/server-ca.crt", "fixtures/agent.crt", "fixtures/agent.key", handlerFunc)
+					args = append(args,
+						"--cacert", "fixtures/server-ca.crt",
+						"--cert", "fixtures/agent.crt",
+						"--key", "fixtures/agent.key",
+					)
+				} else {
+					consulServer := httptest.NewServer(handlerFunc)
+					consulURL = consulServer.URL
 				}
+				args = append(args,
+					"--port", port,
+					"--consul-url", consulURL,
+					"--path-to-check-a-record", pathToCheckARecord,
+				)
 
-				w.WriteHeader(http.StatusTeapot)
-			}))
+				command := exec.Command(pathToConsumer, args...)
 
-			command := exec.Command(pathToConsumer, "--port", port, "--consul-url", consulServer.URL, "--path-to-check-a-record", pathToCheckARecord)
+				var err error
+				session, err = gexec.Start(command, GinkgoWriter, GinkgoWriter)
+				Expect(err).NotTo(HaveOccurred())
 
-			var err error
-			session, err = gexec.Start(command, GinkgoWriter, GinkgoWriter)
-			Expect(err).NotTo(HaveOccurred())
+				waitForServerToStart(port)
+			})
 
-			waitForServerToStart(port)
-		})
+			It("can set/get a key", func() {
+				status, responseBody, err := makeRequest("PUT", fmt.Sprintf("http://localhost:%s/consul/v1/kv/some-key", port), "some-value")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(status).To(Equal(http.StatusOK))
+				Expect(responseBody).To(Equal("true"))
 
-		It("can set/get a key", func() {
-			status, responseBody, err := makeRequest("PUT", fmt.Sprintf("http://localhost:%s/consul/v1/kv/some-key", port), "some-value")
-			Expect(err).NotTo(HaveOccurred())
-			Expect(status).To(Equal(http.StatusOK))
-			Expect(responseBody).To(Equal("true"))
+				status, responseBody, err = makeRequest("GET", fmt.Sprintf("http://localhost:%s/consul/v1/kv/some-key?raw", port), "")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(status).To(Equal(http.StatusOK))
+				Expect(responseBody).To(Equal("some-value"))
+			})
 
-			status, responseBody, err = makeRequest("GET", fmt.Sprintf("http://localhost:%s/consul/v1/kv/some-key?raw", port), "")
-			Expect(err).NotTo(HaveOccurred())
-			Expect(status).To(Equal(http.StatusOK))
-			Expect(responseBody).To(Equal("some-value"))
-		})
+			It("returns 418 for endpoints that are not supported", func() {
+				status, _, err := makeRequest("OPTIONS", fmt.Sprintf("http://localhost:%s/consul/v1/kv/some-key", port), "")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(status).To(Equal(http.StatusTeapot))
 
-		It("returns 418 for endpoints that are not supported", func() {
-			status, _, err := makeRequest("OPTIONS", fmt.Sprintf("http://localhost:%s/consul/v1/kv/some-key", port), "")
-			Expect(err).NotTo(HaveOccurred())
-			Expect(status).To(Equal(http.StatusTeapot))
+				status, _, err = makeRequest("GET", fmt.Sprintf("http://localhost:%s/consul/some/missing/path", port), "")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(status).To(Equal(http.StatusTeapot))
+			})
+		}
 
-			status, _, err = makeRequest("GET", fmt.Sprintf("http://localhost:%s/consul/some/missing/path", port), "")
-			Expect(err).NotTo(HaveOccurred())
-			Expect(status).To(Equal(http.StatusTeapot))
-		})
+		TestConsulProxy(true)
+		TestConsulProxy(false)
 	})
 
 	Context("proxy errors", func() {
@@ -241,4 +272,43 @@ func waitForServerToStart(port string) {
 			timer = time.After(1 * time.Second)
 		}
 	}
+}
+
+func startTLSServer(port, cert, key, caCert string, handlerFunc http.HandlerFunc) *http.Server {
+	consulServer := &http.Server{
+		Addr:    fmt.Sprintf(":%s", port),
+		Handler: handlerFunc,
+		TLSConfig: createTLSConfig(
+			"fixtures/agent.crt",
+			"fixtures/agent.key",
+			"fixtures/server-ca.crt",
+		),
+	}
+	go func() {
+		log.Fatal(consulServer.ListenAndServeTLS("fixtures/agent.crt", "fixtures/agent.key"))
+	}()
+
+	return consulServer
+}
+
+func createTLSConfig(consulCertPath, consulKeyPath, consulCACertPath string) *tls.Config {
+	cert, err := tls.LoadX509KeyPair(consulCertPath, consulKeyPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	caCert, err := ioutil.ReadFile(consulCACertPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+	caCertPool := x509.NewCertPool()
+	caCertPool.AppendCertsFromPEM(caCert)
+
+	tlsConfig := &tls.Config{
+		Certificates: []tls.Certificate{cert},
+		RootCAs:      caCertPool,
+	}
+	tlsConfig.BuildNameToCertificate()
+
+	return tlsConfig
 }

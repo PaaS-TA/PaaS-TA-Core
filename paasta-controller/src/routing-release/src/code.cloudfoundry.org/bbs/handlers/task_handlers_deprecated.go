@@ -9,14 +9,14 @@ import (
 	"code.cloudfoundry.org/lager"
 )
 
-func (h *TaskHandler) commonTasks(w http.ResponseWriter, req *http.Request, version format.Version) {
+func (h *TaskHandler) commonTasks(logger lager.Logger, w http.ResponseWriter, req *http.Request, version format.Version) {
 	var err error
-	logger := h.logger.Session("tasks", lager.Data{"revision": 0})
+	logger = logger.Session("tasks", lager.Data{"revision": 0})
 
 	request := &models.TasksRequest{}
 	response := &models.TasksResponse{}
 
-	defer exitIfUnrecoverable(logger, h.exitChan, response.Error)
+	defer func() { exitIfUnrecoverable(logger, h.exitChan, response.Error) }()
 	defer writeResponse(w, response)
 
 	err = parseRequest(logger, req, request)
@@ -42,22 +42,22 @@ func (h *TaskHandler) commonTasks(w http.ResponseWriter, req *http.Request, vers
 	}
 }
 
-func (h *TaskHandler) Tasks_r0(w http.ResponseWriter, req *http.Request) {
-	h.commonTasks(w, req, format.V0)
+func (h *TaskHandler) Tasks_r0(logger lager.Logger, w http.ResponseWriter, req *http.Request) {
+	h.commonTasks(logger, w, req, format.V0)
 }
 
-func (h *TaskHandler) Tasks_r1(w http.ResponseWriter, req *http.Request) {
-	h.commonTasks(w, req, format.V1)
+func (h *TaskHandler) Tasks_r1(logger lager.Logger, w http.ResponseWriter, req *http.Request) {
+	h.commonTasks(logger, w, req, format.V1)
 }
 
-func (h *TaskHandler) commonTaskByGuid(w http.ResponseWriter, req *http.Request, version format.Version) {
+func (h *TaskHandler) commonTaskByGuid(logger lager.Logger, w http.ResponseWriter, req *http.Request, version format.Version) {
 	var err error
-	logger := h.logger.Session("task-by-guid", lager.Data{"revision": 0})
+	logger = logger.Session("task-by-guid", lager.Data{"revision": 0})
 
 	request := &models.TaskByGuidRequest{}
 	response := &models.TaskResponse{}
 
-	defer exitIfUnrecoverable(logger, h.exitChan, response.Error)
+	defer func() { exitIfUnrecoverable(logger, h.exitChan, response.Error) }()
 	defer writeResponse(w, response)
 
 	err = parseRequest(logger, req, request)
@@ -78,22 +78,48 @@ func (h *TaskHandler) commonTaskByGuid(w http.ResponseWriter, req *http.Request,
 	}
 }
 
-func (h *TaskHandler) TaskByGuid_r0(w http.ResponseWriter, req *http.Request) {
-	h.commonTaskByGuid(w, req, format.V0)
+func (h *TaskHandler) TaskByGuid_r0(logger lager.Logger, w http.ResponseWriter, req *http.Request) {
+	h.commonTaskByGuid(logger, w, req, format.V0)
 }
 
-func (h *TaskHandler) TaskByGuid_r1(w http.ResponseWriter, req *http.Request) {
-	h.commonTaskByGuid(w, req, format.V1)
+func (h *TaskHandler) TaskByGuid_r1(logger lager.Logger, w http.ResponseWriter, req *http.Request) {
+	h.commonTaskByGuid(logger, w, req, format.V1)
 }
 
-func (h *TaskHandler) DesireTask_r0(w http.ResponseWriter, req *http.Request) {
+// this should upconvert the deprecated VolumeMounts struct
+func (h *TaskHandler) DesireTask_r1(logger lager.Logger, w http.ResponseWriter, req *http.Request) {
 	var err error
-	logger := h.logger.Session("desire-task")
+	logger = logger.Session("desire-task")
 
 	request := &models.DesireTaskRequest{}
 	response := &models.TaskLifecycleResponse{}
 
-	defer exitIfUnrecoverable(logger, h.exitChan, response.Error)
+	defer func() { exitIfUnrecoverable(logger, h.exitChan, response.Error) }()
+	defer func() { writeResponse(w, response) }()
+
+	err = parseRequest(logger, req, request)
+	if err != nil {
+		logger.Error("failed-parsing-request", err)
+		response.Error = models.ConvertError(err)
+		return
+	}
+
+	for i, mount := range request.TaskDefinition.VolumeMounts {
+		request.TaskDefinition.VolumeMounts[i] = mount.VersionUpToV1()
+	}
+
+	err = h.controller.DesireTask(logger, request.TaskDefinition, request.TaskGuid, request.Domain)
+	response.Error = models.ConvertError(err)
+}
+
+func (h *TaskHandler) DesireTask_r0(logger lager.Logger, w http.ResponseWriter, req *http.Request) {
+	var err error
+	logger = logger.Session("desire-task")
+
+	request := &models.DesireTaskRequest{}
+	response := &models.TaskLifecycleResponse{}
+
+	defer func() { exitIfUnrecoverable(logger, h.exitChan, response.Error) }()
 	defer writeResponse(w, response)
 
 	err = parseRequestForDesireTask_r0(logger, req, request)

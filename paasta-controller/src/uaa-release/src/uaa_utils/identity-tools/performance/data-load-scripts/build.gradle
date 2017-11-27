@@ -1,0 +1,116 @@
+apply plugin: 'java'
+
+import com.wiredforcode.gradle.spawn.*
+
+buildscript {
+    repositories {
+        maven { url 'http://dl.bintray.com/vermeulen-mp/gradle-plugins' }
+    }
+    dependencies {
+        classpath 'com.wiredforcode:gradle-spawn-plugin:0.8.0'
+    }
+}
+
+apply plugin: 'com.wiredforcode.spawn'
+
+task stopSSH (type:Exec) {
+    commandLine './tunnel.sh', 'stop'
+}
+
+task startSSH(type: SpawnProcessTask) {
+    if(project.hasProperty("file")) {
+        command "./tunnel.sh start " + file
+        ready 'Tunnel digged!'
+    } else {
+        command 'echo USAGE: startSSH path_to_key_file'
+        ready 'Done'
+    }
+}
+
+task loadCSV(type:Exec) {
+
+    List<String> arguments = ['--fields-optionally-enclosed-by', '"', '--fields-terminated-by', ',', '--lines-terminated-by', '\n', '--ignore-lines', 1, '--local'];
+
+    arguments.add('-h')
+    arguments.add(mysqlHost)
+    arguments.add('-u')
+    arguments.add(mysqlUser)
+    arguments.add('-p'+mysqlPwd)
+    arguments.add('-P')
+    arguments.add(mysqlPort)
+    arguments.add(mysqlDb)
+
+    commandLine 'mysqlimport'
+    arguments.add('identity_zone.csv')
+    args(arguments)
+
+    commandLine 'mysqlimport'
+    arguments.remove(args.length - 1)
+    arguments.add('groups.csv')
+    args(arguments)
+
+    commandLine 'mysqlimport'
+    arguments.remove(args.length - 1)
+    arguments.add('oauth_client_details.csv')
+    args(arguments)
+
+    commandLine 'mysqlimport'
+    arguments.remove(args.length - 1)
+    arguments.add('users.csv')
+    args(arguments)
+
+    commandLine 'mysqlimport'
+    arguments.remove(args.length - 1)
+    arguments.add('identity_provider.csv')
+    args(arguments)
+
+}
+
+task createCSV(type:JavaExec) {
+    if (project.hasProperty('count') && count.split(',').length == 3) {
+        main = 'CreateCSVData'
+        classpath = sourceSets.main.runtimeClasspath
+        args(count.split(','))
+    }
+}
+
+task createAndLoad() {
+    if(project.hasProperty('count') && count.split(',').length == 3) {
+        dependsOn 'createCSV'
+        dependsOn 'loadCSV'
+    } else {
+        doFirst {
+            println 'USAGE: `gradle createAndLoad -Pcount=numOfZones,clientsPerZone,usersPerZone'
+        }
+    }
+}
+
+task cleandb(type:Exec) {
+    dependsOn 'deleteCSV'
+
+    String deleteStatement = ""
+    for(String table : Arrays.asList("users","oauth_client_details","groups","identity_provider","group_membership", "authz_approvals", "external_group_mapping", "oauth_code", "revocable_tokens", "sec_audit", "service_provider")) {
+        deleteStatement += "delete from "+table+" where identity_zone_id like 'perfzone%'; commit;"
+    }
+    deleteStatement += "delete from identity_zone where id like 'perfzone%';"
+    List<String> arguments= []
+
+    arguments.add('-h')
+    arguments.add(mysqlHost)
+    arguments.add('-u')
+    arguments.add(mysqlUser)
+    arguments.add('-p'+mysqlPwd)
+    arguments.add('-P')
+    arguments.add(mysqlPort)
+    arguments.add('--execute')
+    arguments.add(deleteStatement)
+    arguments.add(mysqlDb)
+
+
+    commandLine 'mysql'
+    args(arguments)
+}
+
+task deleteCSV(type: Delete) {
+    delete 'users.csv', 'identity_zone.csv', 'oauth_client_details.csv' ,'groups.csv'
+}

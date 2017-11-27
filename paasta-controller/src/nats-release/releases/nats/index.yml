@@ -28,4 +28,20 @@ builds:
     version: '13'
   2d429440-9132-48e1-8986-eca76285cb44:
     version: '14'
+  1080d1c0-8712-4be7-9891-941fb0c89ec3:
+    version: '15'
+  a239d868-4e09-456e-8965-56cafdbb80e9:
+    version: '16'
+  43138136-900a-499f-9640-643850bc8661:
+    version: '17'
+  16a3d41e-52fa-4266-a5e9-8ab8268d421a:
+    version: '18'
+  0085af5c-c661-4ea3-9679-e672e1ecf0cd:
+    version: '19'
+  5460d95a-6832-4708-8b1e-076a3dc522a4:
+    version: '20'
+  3210a87f-34ac-4d82-bf3a-0d72ce34f2cc:
+    version: '21'
+  1b9221f3-9b94-4c60-921a-349c3c9ccc76:
+    version: '22'
 format-version: '2'

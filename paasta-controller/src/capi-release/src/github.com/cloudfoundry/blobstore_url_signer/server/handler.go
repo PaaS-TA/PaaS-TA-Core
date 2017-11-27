@@ -29,6 +29,14 @@ func (h *handlers) SignUrl(w http.ResponseWriter, r *http.Request) {
 	expirationDate := queries["expires"][0]
 	path := queries["path"][0]
 
-	redirectUrl := h.signer.Sign(expirationDate, path)
-	io.WriteString(w, redirectUrl)
+	switch r.URL.Path {
+	case "/sign":
+		redirectUrl := h.signer.Sign(expirationDate, path)
+		io.WriteString(w, redirectUrl)
+	case "/sign_for_put":
+		redirectUrl := h.signer.SignForPut(expirationDate, path)
+		io.WriteString(w, redirectUrl)
+	default:
+		w.WriteHeader(http.StatusBadRequest)
+	}
 }

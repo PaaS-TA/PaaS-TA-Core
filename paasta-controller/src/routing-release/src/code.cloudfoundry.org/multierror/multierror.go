@@ -48,7 +48,7 @@ func (m *MultiError) Length() int {
 
 func (m *MultiError) Error() string {
 	if m.Length() == 0 {
-		return fmt.Sprintf("there were 0 errors", m.Message)
+		return "there were 0 errors"
 	}
 	return m.formatError(0)
 }
@@ -63,7 +63,14 @@ func (m *MultiError) getMessage() string {
 	} else {
 		grammar = fmt.Sprintf("were %d errors", m.Length())
 	}
-	return fmt.Sprintf("there %s with '%s':", grammar, m.Message)
+
+	msg := fmt.Sprintf("there %s", grammar)
+
+	if m.Message != "" {
+		msg = fmt.Sprintf("%s with '%s'", msg, m.Message)
+	}
+
+	return fmt.Sprintf("%s:", msg)
 }
 
 func (m *MultiError) formatError(indent int) string {

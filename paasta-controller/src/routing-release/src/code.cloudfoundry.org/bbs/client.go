@@ -39,7 +39,6 @@ should be used instead.
 */
 type InternalClient interface {
 	Client
-	ExperimentalExternalEventClient
 
 	ClaimActualLRP(logger lager.Logger, processGuid string, index int, instanceKey *models.ActualLRPInstanceKey) error
 	StartActualLRP(logger lager.Logger, key *models.ActualLRPKey, instanceKey *models.ActualLRPInstanceKey, netInfo *models.ActualLRPNetInfo) error
@@ -89,6 +88,9 @@ type ExternalTaskClient interface {
 
 	// Lists all Tasks
 	Tasks(logger lager.Logger) ([]*models.Task, error)
+
+	// List all Tasks that match filter
+	TasksWithFilter(logger lager.Logger, filter models.TaskFilter) ([]*models.Task, error)
 
 	// Lists all Tasks of the given domain
 	TasksByDomain(logger lager.Logger, domain string) ([]*models.Task, error)
@@ -165,18 +167,6 @@ The ExternalEventClient is used to subscribe to groups of Events.
 */
 type ExternalEventClient interface {
 	SubscribeToEvents(logger lager.Logger) (events.EventSource, error)
-}
-
-/*
-** EXPERIMENTAL **
-The ExperimentalExternalEventClient is used to subscribe to groups of Events.
-*/
-type ExperimentalExternalEventClient interface {
-	// Returns an EventSource for watching changes to DesiredLRPs
-	SubscribeToDesiredLRPEvents(logger lager.Logger) (events.EventSource, error)
-
-	// Returns an EventSource for watching changes to ActualLRPs
-	SubscribeToActualLRPEvents(logger lager.Logger) (events.EventSource, error)
 }
 
 func newClient(url string) *client {
@@ -439,7 +429,8 @@ func (c *client) RemoveEvacuatingActualLRP(logger lager.Logger, key *models.Actu
 
 func (c *client) DesiredLRPs(logger lager.Logger, filter models.DesiredLRPFilter) ([]*models.DesiredLRP, error) {
 	request := models.DesiredLRPsRequest{
-		Domain: filter.Domain,
+		Domain:       filter.Domain,
+		ProcessGuids: filter.ProcessGuids,
 	}
 	response := models.DesiredLRPsResponse{}
 	err := c.doRequest(logger, DesiredLRPsRoute, nil, nil, &request, &response)
@@ -465,7 +456,8 @@ func (c *client) DesiredLRPByProcessGuid(logger lager.Logger, processGuid string
 
 func (c *client) DesiredLRPSchedulingInfos(logger lager.Logger, filter models.DesiredLRPFilter) ([]*models.DesiredLRPSchedulingInfo, error) {
 	request := models.DesiredLRPsRequest{
-		Domain: filter.Domain,
+		Domain:       filter.Domain,
+		ProcessGuids: filter.ProcessGuids,
 	}
 	response := models.DesiredLRPSchedulingInfosResponse{}
 	err := c.doRequest(logger, DesiredLRPSchedulingInfosRoute, nil, nil, &request, &response)
@@ -515,6 +507,19 @@ func (c *client) Tasks(logger lager.Logger) ([]*models.Task, error) {
 		return nil, err
 	}
 
+	return response.Tasks, response.Error.ToError()
+}
+
+func (c *client) TasksWithFilter(logger lager.Logger, filter models.TaskFilter) ([]*models.Task, error) {
+	request := models.TasksRequest{
+		Domain: filter.Domain,
+		CellId: filter.CellID,
+	}
+	response := models.TasksResponse{}
+	err := c.doRequest(logger, TasksRoute, nil, nil, &request, &response)
+	if err != nil {
+		return nil, err
+	}
 	return response.Tasks, response.Error.ToError()
 }
 
@@ -655,14 +660,6 @@ func (c *client) SubscribeToEvents(logger lager.Logger) (events.EventSource, err
 	return c.subscribeToEvents(EventStreamRoute_r0)
 }
 
-func (c *client) SubscribeToDesiredLRPEvents(logger lager.Logger) (events.EventSource, error) {
-	return c.subscribeToEvents(DesiredLRPEventStreamRoute)
-}
-
-func (c *client) SubscribeToActualLRPEvents(logger lager.Logger) (events.EventSource, error) {
-	return c.subscribeToEvents(ActualLRPEventStreamRoute)
-}
-
 func (c *client) Cells(logger lager.Logger) ([]*models.CellPresence, error) {
 	response := models.CellsResponse{}
 	err := c.doRequest(logger, CellsRoute, nil, nil, nil, &response)
@@ -709,20 +706,24 @@ func (c *client) doRequest(logger lager.Logger, requestName string, params rata.
 	var request *http.Request
 
 	for attempts := 0; attempts < 3; attempts++ {
-		logger.Debug("creating-request", lager.Data{"attempt": attempts + 1})
+		logger.Debug("creating-request", lager.Data{"attempt": attempts + 1, "request_name": requestName})
 		request, err = c.createRequest(requestName, params, queryParams, requestBody)
 		if err != nil {
 			logger.Error("failed-creating-request", err)
 			return err
 		}
 
-		logger.Debug("doing-request", lager.Data{"attempt": attempts + 1})
+		logger.Debug("doing-request", lager.Data{"attempt": attempts + 1, "request_path": request.URL.Path})
+
+		start := time.Now().UnixNano()
 		err = c.do(request, responseBody)
+		finish := time.Now().UnixNano()
+
 		if err != nil {
 			logger.Error("failed-doing-request", err)
 			time.Sleep(500 * time.Millisecond)
 		} else {
-			logger.Debug("complete")
+			logger.Debug("complete", lager.Data{"request_path": request.URL.Path, "duration_in_ns": finish - start})
 			break
 		}
 	}

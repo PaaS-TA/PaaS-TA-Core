@@ -176,15 +176,83 @@ module VCAP::CloudController
           before { set_current_user_as_admin }
 
           context 'when the operator is ":"' do
-            it 'successfully filters' do
-              instance1 = UserProvidedServiceInstance.make(name: 'instance-1', space: space1)
-              UserProvidedServiceInstance.make(name: 'instance-2', space: space2)
+            context 'when the details fit on the first page' do
+              it 'successfully filters' do
+                instance1 = UserProvidedServiceInstance.make(name: 'instance-1', space: space1)
+                UserProvidedServiceInstance.make(name: 'instance-2', space: space2)
 
-              get "v2/user_provided_service_instances?q=organization_guid:#{org1.guid}"
+                get "v2/user_provided_service_instances?q=organization_guid:#{org1.guid}"
 
-              expect(last_response.status).to eq(200)
-              expect(decoded_response['resources'].length).to eq(1)
-              expect(decoded_response['resources'][0].fetch('metadata').fetch('guid')).to eq(instance1.guid)
+                expect(last_response.status).to eq(200)
+                expect(decoded_response['resources'].length).to eq(1)
+                expect(decoded_response['resources'][0].fetch('metadata').fetch('guid')).to eq(instance1.guid)
+              end
+            end
+
+            context 'with pagination' do
+              let(:results_per_page) { 1 }
+              let!(:instances) do
+                [UserProvidedServiceInstance.make(name: 'instance-1', space: space1),
+                 UserProvidedServiceInstance.make(name: 'instance-2', space: space1),
+                 UserProvidedServiceInstance.make(name: 'instance-3', space: space1),
+                 UserProvidedServiceInstance.make(name: 'instance-4', space: space2),
+                ]
+              end
+
+              context 'at page 1' do
+                let(:page) { 1 }
+                it 'passes the org_guid filter into the next_url' do
+                  get "v2/user_provided_service_instances?page=#{page}&results-per-page=#{results_per_page}&q=organization_guid:#{org1.guid}"
+                  expect(last_response.status).to eq(200), last_response.body
+                  services = decoded_response['resources'].map { |resource| resource.fetch('metadata').fetch('guid') }
+                  expect(services.length).to eq(1)
+                  expect(services).to include(instances[0].guid)
+                  result = JSON.parse(last_response.body)
+                  expect(result['next_url']).to include("q=organization_guid:#{org1.guid}"), result['next_url']
+                  expect(result['prev_url']).to be_nil
+                end
+              end
+
+              context 'at page 2' do
+                let(:page) { 2 }
+                it 'passes the org_guid filter into the next_url' do
+                  get "v2/user_provided_service_instances?page=#{page}&results-per-page=#{results_per_page}&q=organization_guid:#{org1.guid}"
+                  expect(last_response.status).to eq(200), last_response.body
+                  services = decoded_response['resources'].map { |resource| resource.fetch('metadata').fetch('guid') }
+                  expect(services.length).to eq(1)
+                  expect(services).to include(instances[1].guid)
+                  result = JSON.parse(last_response.body)
+                  expect(result['next_url']).to include("q=organization_guid:#{org1.guid}"), result['next_url']
+                  expect(result['prev_url']).to include("q=organization_guid:#{org1.guid}"), result['prev_url']
+                end
+              end
+
+              context 'at page 3' do
+                let(:page) { 3 }
+                it 'passes the org_guid filter into the next_url' do
+                  get "v2/user_provided_service_instances?page=#{page}&results-per-page=#{results_per_page}&q=organization_guid:#{org1.guid}"
+                  expect(last_response.status).to eq(200), last_response.body
+                  services = decoded_response['resources'].map { |resource| resource.fetch('metadata').fetch('guid') }
+                  expect(services.length).to eq(1)
+                  expect(services).to include(instances[2].guid)
+                  result = JSON.parse(last_response.body)
+                  expect(result['next_url']).to be_nil
+                  expect(result['prev_url']).to include("q=organization_guid:#{org1.guid}"), result['prev_url']
+                end
+              end
+
+              context 'at page 4' do
+                let(:page) { 4 }
+                it 'passes the org_guid filter into the next_url' do
+                  get "v2/user_provided_service_instances?page=#{page}&results-per-page=#{results_per_page}&q=organization_guid:#{org1.guid}"
+                  expect(last_response.status).to eq(200), last_response.body
+                  services = decoded_response['resources'].map { |resource| resource.fetch('metadata').fetch('guid') }
+                  expect(services.length).to eq(0)
+                  result = JSON.parse(last_response.body)
+                  expect(result['next_url']).to be_nil
+                  expect(result['prev_url']).to include("q=organization_guid:#{org1.guid}"), result['prev_url']
+                end
+              end
             end
 
             context 'when filtering by other parameters as well' do
@@ -279,6 +347,24 @@ module VCAP::CloudController
           expect(last_response).to have_status_code(400)
           expect(decoded_response['code']).to eq(60002)
           expect(decoded_response['error_code']).to eq('CF-ServiceInstanceNameTaken')
+        end
+      end
+
+      context 'when we try to access a upsi via a managed SI endpoint' do
+        let(:update_req) do
+          { 'uri' => 'https://user:password@service-location.com:port/db' }
+        end
+        it 'fails with a 400 error' do
+          post '/v2/user_provided_service_instances', req.to_json
+
+          expect(last_response.status).to eq 201
+
+          service_instance = UserProvidedServiceInstance.first
+          expect(service_instance.name).to eq 'my-upsi'
+
+          put "/v2/service_instances/#{service_instance.guid}", update_req.to_json
+          expect(last_response.status).to eq(400), last_response.body
+          expect(parsed_response['description']).to eq('Please use the User Provided Services API to manage this resource.')
         end
       end
 
@@ -602,8 +688,8 @@ module VCAP::CloudController
 
       context 'when the route is mapped to a non-diego app' do
         before do
-          app = AppFactory.make(diego: false, space: route.space, state: 'STARTED')
-          RouteMappingModel.make(app: app.app, route: route, process_type: app.type)
+          process = AppFactory.make(diego: false, space: route.space, state: 'STARTED')
+          RouteMappingModel.make(app: process.app, route: route, process_type: process.type)
         end
 
         it 'raises RouteServiceRequiresDiego' do
@@ -616,8 +702,8 @@ module VCAP::CloudController
 
         context 'and is mapped to a diego app' do
           before do
-            diego_app = AppFactory.make(diego: true, space: route.space, state: 'STARTED')
-            RouteMappingModel.make(app: diego_app.app, route: route, process_type: diego_app.type)
+            diego_process = AppFactory.make(diego: true, space: route.space, state: 'STARTED')
+            RouteMappingModel.make(app: diego_process.app, route: route, process_type: diego_process.type)
           end
 
           it 'raises RouteServiceRequiresDiego' do
@@ -820,7 +906,7 @@ module VCAP::CloudController
         it 'returns a 400 InvalidRelation error' do
           delete "/v2/user_provided_service_instances/#{service_instance.guid}/routes/#{route.guid}"
           expect(last_response).to have_status_code(400)
-          expect(JSON.parse(last_response.body)['description']).to include('Invalid relation')
+          expect(JSON.parse(last_response.body)['description']).to eq("Route #{route.guid} is not bound to service instance #{service_instance.guid}.")
         end
       end
     end

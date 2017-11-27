@@ -1,11 +1,12 @@
 package main
 
 import (
-	"acceptance-tests/testing/testconsumer/handlers"
 	"flag"
 	"fmt"
 	"log"
 	"net/http"
+
+	"github.com/cloudfoundry-incubator/etcd-release/src/acceptance-tests/testing/testconsumer/handlers"
 )
 
 type Flags struct {

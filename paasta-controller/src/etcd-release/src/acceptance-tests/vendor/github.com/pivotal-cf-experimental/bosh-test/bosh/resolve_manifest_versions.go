@@ -56,7 +56,7 @@ func (c Client) ResolveManifestVersions(manifestYAML []byte) ([]byte, error) {
 
 	for i, pool := range m.ResourcePools {
 		if pool.Stemcell.Version == "latest" {
-			stemcell, err := c.Stemcell(pool.Stemcell.Name)
+			stemcell, err := c.StemcellByName(pool.Stemcell.Name)
 			if err != nil {
 				return nil, err
 			}
@@ -70,7 +70,41 @@ func (c Client) ResolveManifestVersions(manifestYAML []byte) ([]byte, error) {
 
 	for i, stemcell := range m.Stemcells {
 		if stemcell.Version == "latest" {
-			stemcell, err := c.Stemcell(stemcell.Name)
+			stemcell, err := c.StemcellByName(stemcell.Name)
+			if err != nil {
+				return nil, err
+			}
+			stemcellVersion, err := stemcell.Latest()
+			if err != nil {
+				return nil, err
+			}
+			m.Stemcells[i].Version = stemcellVersion
+		}
+	}
+	return yaml.Marshal(m)
+}
+
+func (c Client) ResolveManifestVersionsV2(manifestYAML []byte) ([]byte, error) {
+	m := manifest{}
+	err := yaml.Unmarshal(manifestYAML, &m)
+	if err != nil {
+		return nil, err
+	}
+
+	for i, r := range m.Releases {
+		if r.Version == "latest" {
+			release, err := c.Release(r.Name)
+			if err != nil {
+				return nil, err
+			}
+			r.Version = release.Latest()
+			m.Releases[i] = r
+		}
+	}
+
+	for i, stemcell := range m.Stemcells {
+		if stemcell.Version == "latest" {
+			stemcell, err := c.StemcellByOS(stemcell.OS)
 			if err != nil {
 				return nil, err
 			}

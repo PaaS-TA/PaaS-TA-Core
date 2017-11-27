@@ -12,10 +12,10 @@ module VCAP::CloudController
         service_binding = ServiceBinding.make
         app = service_binding.app
 
-        App.make(app: app, type: 'non-web')
+        ProcessModel.make(app: app, type: 'non-web')
         expect(service_binding.reload.v2_app).to be_nil
 
-        web_process = App.make(app: app, type: 'web')
+        web_process = ProcessModel.make(app: app, type: 'web')
         expect(service_binding.reload.v2_app.guid).to eq(web_process.guid)
       end
     end
@@ -36,6 +36,17 @@ module VCAP::CloudController
         expect { binding.save }.to raise_error(Sequel::ValidationFailed, /volume_mounts max_length/)
       end
 
+      context 'when the syslog_drain_url is longer than 10,000 characters' do
+        let(:overly_long_url) { "syslog://example.com/#{'s' * 10000}" }
+
+        it 'refuses to save this service binding' do
+          binding = ServiceBinding.make
+          binding.syslog_drain_url = overly_long_url
+
+          expect { binding.save }.to raise_error Sequel::ValidationFailed, /syslog_drain_url max_length/
+        end
+      end
+
       describe 'changing the binding after creation' do
         subject(:binding) { ServiceBinding.make }
 
@@ -46,7 +57,7 @@ module VCAP::CloudController
           end
 
           it 'does not allow changing app after it has been set' do
-            binding.app = AppFactory.make(space: binding.app.space)
+            binding.app = AppModel.make
             expect { binding.save }.to raise_error Sequel::ValidationFailed, /app/
           end
         end
@@ -120,18 +131,18 @@ module VCAP::CloudController
     end
 
     describe '#in_suspended_org?' do
-      let(:app) { VCAP::CloudController::App.make }
-      subject(:service_binding) {  VCAP::CloudController::ServiceBinding.new(app: app) }
+      let(:app_model) { VCAP::CloudController::AppModel.make }
+      subject(:service_binding) { VCAP::CloudController::ServiceBinding.new(app: app_model) }
 
       context 'when in a suspended organization' do
-        before { allow(app).to receive(:in_suspended_org?).and_return(true) }
+        before { allow(app_model).to receive(:in_suspended_org?).and_return(true) }
         it 'is true' do
           expect(service_binding).to be_in_suspended_org
         end
       end
 
       context 'when in an unsuspended organization' do
-        before { allow(app).to receive(:in_suspended_org?).and_return(false) }
+        before { allow(app_model).to receive(:in_suspended_org?).and_return(false) }
         it 'is false' do
           expect(service_binding).not_to be_in_suspended_org
         end

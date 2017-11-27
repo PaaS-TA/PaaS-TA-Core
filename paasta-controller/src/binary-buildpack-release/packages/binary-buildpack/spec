@@ -1,4 +1,4 @@
 ---
 name: binary-buildpack
 files:
-- binary-buildpack/binary_buildpack-cached-*.zip
+- binary-buildpack/binary?buildpack-v*.zip

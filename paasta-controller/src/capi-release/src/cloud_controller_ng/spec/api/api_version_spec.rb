@@ -2,11 +2,7 @@ require 'spec_helper'
 require 'vcap/digester'
 
 RSpec.describe 'Stable API warning system', api_version_check: true do
-  API_FOLDER_CHECKSUM = 'ea34b776617eda38419bb2a0de06477c741b18b1'.freeze
-
-  it 'double-checks the version' do
-    expect(VCAP::CloudController::Constants::API_VERSION).to eq('2.65.0')
-  end
+  API_FOLDER_CHECKSUM = '9a4720033354f38ccd572307341c5e930e6e7315'.freeze
 
   it 'tells the developer if the API specs change' do
     api_folder = File.expand_path('..', __FILE__)
@@ -19,15 +15,15 @@ RSpec.describe 'Stable API warning system', api_version_check: true do
     new_checksum = Digester.new.digest(all_file_checksum)
 
     expect(new_checksum).to eql(API_FOLDER_CHECKSUM),
-      <<-END
-You are about to make a breaking change in API!
+      <<~END
+        You are about to make a breaking change in API!
 
-Do you really want to do it? Then update the checksum (see below) & CC version.
+        Do you really want to do it? Then update the checksum (see below) & CC version.
 
-expected:
-    #{API_FOLDER_CHECKSUM}
-got:
-    #{new_checksum}
+        expected:
+            #{API_FOLDER_CHECKSUM}
+        got:
+            #{new_checksum}
     END
   end
 end

@@ -3,9 +3,11 @@ package assets
 type Assets struct {
 	AsyncServiceBroker       string
 	Dora                     string
+	DoraDroplet              string
 	DoraZip                  string
 	DotnetCore               string
 	Fuse                     string
+	GoCallsRubyZip           string
 	Golang                   string
 	HelloWorld               string
 	HelloRouting             string
@@ -25,7 +27,7 @@ type Assets struct {
 	Binary                   string
 	LoggingRouteService      string
 	WorkerApp                string
-	LatticeApp               string
+	MultiPortApp             string
 	SpringSleuthZip          string
 }
 
@@ -33,9 +35,11 @@ func NewAssets() Assets {
 	return Assets{
 		AsyncServiceBroker:       "assets/service_broker",
 		Dora:                     "assets/dora",
+		DoraDroplet:              "assets/dora-droplet.tar.gz",
 		DoraZip:                  "assets/dora.zip",
 		DotnetCore:               "assets/dotnet-core",
 		Fuse:                     "assets/fuse-mount",
+		GoCallsRubyZip:           "assets/go_calls_ruby.zip",
 		Golang:                   "assets/golang",
 		HelloRouting:             "assets/hello-routing",
 		HelloWorld:               "assets/hello-world",
@@ -55,7 +59,7 @@ func NewAssets() Assets {
 		Binary:                 "assets/binary",
 		LoggingRouteService:    "assets/logging-route-service",
 		WorkerApp:              "assets/worker-app",
-		LatticeApp:             "assets/lattice-app",
+		MultiPortApp:           "assets/multi-port-app",
 		SpringSleuthZip:        "assets/spring-sleuth/spring-sleuth.jar",
 	}
 }

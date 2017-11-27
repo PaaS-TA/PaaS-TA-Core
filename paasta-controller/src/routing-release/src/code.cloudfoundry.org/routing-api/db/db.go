@@ -23,11 +23,13 @@ type DB interface {
 	DeleteRoute(route models.Route) error
 
 	ReadTcpRouteMappings() ([]models.TcpRouteMapping, error)
+	ReadFilteredTcpRouteMappings(columnName string, values []string) ([]models.TcpRouteMapping, error)
 	SaveTcpRouteMapping(tcpMapping models.TcpRouteMapping) error
 	DeleteTcpRouteMapping(tcpMapping models.TcpRouteMapping) error
 
 	ReadRouterGroups() (models.RouterGroups, error)
 	ReadRouterGroup(guid string) (models.RouterGroup, error)
+	ReadRouterGroupByName(name string) (models.RouterGroup, error)
 	SaveRouterGroup(routerGroup models.RouterGroup) error
 
 	CancelWatches()
@@ -46,6 +48,7 @@ const (
 )
 
 var ErrorConflict = errors.New("etcd failed to compare")
+var ErrorEtcdNotSupported = DBError{Type: EtcdNotSupported, Message: "Database misconfigured with etcd, should be sql"}
 
 type EtcdDB struct {
 	Client     client.Client
@@ -347,6 +350,10 @@ func (e *EtcdDB) ReadRouterGroup(guid string) (models.RouterGroup, error) {
 	return result, err
 }
 
+func (e *EtcdDB) ReadRouterGroupByName(name string) (models.RouterGroup, error) {
+	return models.RouterGroup{}, ErrorEtcdNotSupported
+}
+
 func (e *EtcdDB) ReadRouterGroups() (models.RouterGroups, error) {
 	getOpts := &client.GetOptions{
 		Recursive: true,
@@ -405,6 +412,10 @@ func (e *EtcdDB) ReadTcpRouteMappings() ([]models.TcpRouteMapping, error) {
 		}
 	}
 	return listMappings, nil
+}
+
+func (e *EtcdDB) ReadFilteredTcpRouteMappings(columnName string, values []string) ([]models.TcpRouteMapping, error) {
+	return nil, ErrorEtcdNotSupported
 }
 
 func (e *EtcdDB) SaveTcpRouteMapping(tcpMapping models.TcpRouteMapping) error {

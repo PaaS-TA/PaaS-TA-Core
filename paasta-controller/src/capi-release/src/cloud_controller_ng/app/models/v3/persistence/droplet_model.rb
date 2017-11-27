@@ -20,16 +20,20 @@ module VCAP::CloudController
 
     many_to_one :package, class: 'VCAP::CloudController::PackageModel', key: :package_guid, primary_key: :guid, without_guid_generation: true
     many_to_one :app, class: 'VCAP::CloudController::AppModel', key: :app_guid, primary_key: :guid, without_guid_generation: true
+    many_to_one :build,
+      class: 'VCAP::CloudController::BuildModel',
+      key: :build_guid,
+      primary_key: :guid,
+      without_guid_generation: true
     one_through_one :space, join_table: AppModel.table_name, left_key: :guid, left_primary_key: :app_guid, right_primary_key: :guid, right_key: :space_guid
     one_to_one :buildpack_lifecycle_data,
       class:       'VCAP::CloudController::BuildpackLifecycleDataModel',
       key:         :droplet_guid,
       primary_key: :guid
 
-    add_association_dependencies buildpack_lifecycle_data: :delete
+    add_association_dependencies buildpack_lifecycle_data: :destroy
 
-    encrypt :environment_variables, salt: :salt, column: :encrypted_environment_variables
-    serializes_via_json :environment_variables
+    encrypt :docker_receipt_password, salt: :docker_receipt_password_salt, column: :encrypted_docker_receipt_password
     serializes_via_json :process_types
 
     def error
@@ -40,27 +44,6 @@ module VCAP::CloudController
     def validate
       super
       validates_includes DROPLET_STATES, :state, allow_missing: true
-    end
-
-    def after_create
-      super
-      unless copying? || processing_upload?
-        app_usage_event_repository.create_from_droplet(self, 'STAGING_STARTED')
-      end
-    end
-
-    def after_update
-      super
-      if !exiting_processing_upload? && (entering_staged? || entering_failed?)
-        app_usage_event_repository.create_from_droplet(self, 'STAGING_STOPPED')
-      end
-    end
-
-    def after_destroy
-      super
-      unless in_final_state? || copying? || processing_upload?
-        app_usage_event_repository.create_from_droplet(self, 'STAGING_STOPPED')
-      end
     end
 
     def set_buildpack_receipt(buildpack_key:, detect_output:, requested_buildpack:, buildpack_url: nil)
@@ -81,6 +64,10 @@ module VCAP::CloudController
     def blobstore_key(hash=nil)
       hash ||= droplet_hash
       File.join(guid, hash) if hash
+    end
+
+    def checksum
+      sha256_checksum || droplet_hash
     end
 
     def buildpack?

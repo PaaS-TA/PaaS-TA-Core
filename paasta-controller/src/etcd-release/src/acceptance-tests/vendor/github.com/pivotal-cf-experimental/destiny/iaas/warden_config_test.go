@@ -28,7 +28,7 @@ var _ = Describe("Warden Config", func() {
 
 	Describe("Compilation", func() {
 		It("returns an empty compilation cloud properties for Warden", func() {
-			compilationCloudProperties := wardenConfig.Compilation()
+			compilationCloudProperties := wardenConfig.Compilation("ignored")
 			Expect(compilationCloudProperties).To(Equal(core.CompilationCloudProperties{}))
 		})
 	})

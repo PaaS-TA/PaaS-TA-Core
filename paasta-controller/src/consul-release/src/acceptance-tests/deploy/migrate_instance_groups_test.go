@@ -9,7 +9,7 @@ import (
 	"github.com/cloudfoundry-incubator/consul-release/src/acceptance-tests/testing/consulclient"
 	"github.com/cloudfoundry-incubator/consul-release/src/acceptance-tests/testing/helpers"
 	"github.com/pivotal-cf-experimental/bosh-test/bosh"
-	"github.com/pivotal-cf-experimental/destiny/consul"
+	"github.com/pivotal-cf-experimental/destiny/ops"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -24,62 +24,80 @@ const (
 
 var _ = Describe("Migrate instance groups", func() {
 	var (
-		manifest consul.Manifest
-		kv       consulclient.HTTPKV
-		spammers []*helpers.Spammer
+		manifest     string
+		manifestName string
+
+		kv      consulclient.HTTPKV
+		spammer *helpers.Spammer
 	)
 
 	AfterEach(func() {
 		if !CurrentGinkgoTestDescription().Failed {
-			err := boshClient.DeleteDeployment(manifest.Name)
+			err := boshClient.DeleteDeployment(manifestName)
 			Expect(err).NotTo(HaveOccurred())
 		}
 	})
 
-	Describe("when migrating two instance groups from different AZs to a multi-AZ single instance group", func() {
+	Describe("when migrating an instance group from one name to another", func() {
 		It("deploys successfully with minimal interruption", func() {
-			By("deploying 3 node cluster across two AZs with BOSH 1.0 manifest", func() {
+			By("deploying 3 node cluster across two AZs with name consul", func() {
 				var err error
-				manifest, err = helpers.DeployMultiAZConsul("migrate-instance-group", boshClient, config)
+				manifest, err = helpers.DeployConsulWithInstanceCount("migrate-instance-group", 3, config.WindowsClients, boshClient)
+				Expect(err).NotTo(HaveOccurred())
+
+				manifestName, err = ops.ManifestName(manifest)
 				Expect(err).NotTo(HaveOccurred())
 
 				Eventually(func() ([]bosh.VM, error) {
-					return helpers.DeploymentVMs(boshClient, manifest.Name)
-				}, "1m", "10s").Should(ConsistOf(helpers.GetVMsFromManifestV1(manifest)))
+					return helpers.DeploymentVMs(boshClient, manifestName)
+				}, "5m", "10s").Should(ConsistOf(helpers.GetVMsFromManifest(manifest)))
 
-				for i, ip := range manifest.Jobs[2].Networks[0].StaticIPs {
-					kv = consulclient.NewHTTPKV(fmt.Sprintf("http://%s:6769", ip))
-					spammers = append(spammers, helpers.NewSpammer(kv, 1*time.Second, fmt.Sprintf("test-consumer-%d", i)))
-				}
+				testConsumerIPs, err := helpers.GetVMIPs(boshClient, manifestName, "testconsumer")
+				Expect(err).NotTo(HaveOccurred())
+
+				kv = consulclient.NewHTTPKV(fmt.Sprintf("http://%s:6769", testConsumerIPs[0]))
+
+				spammer = helpers.NewSpammer(kv, 1*time.Second, "testconsumer")
+
+				spammer.Spam()
 			})
 
-			By("starting spammer", func() {
-				for _, spammer := range spammers {
-					spammer.Spam()
-				}
-			})
+			By("deploying 3 node cluster across two AZs with name consul_new", func() {
+				var err error
+				manifest, err = ops.ApplyOps(manifest, []ops.Op{
+					{
+						Type:  "replace",
+						Path:  "/instance_groups/name=consul/name",
+						Value: "consul_new",
+					},
+					{
+						Type: "replace",
+						Path: "/instance_groups/name=consul_new/migrated_from?/-",
+						Value: map[string]string{
+							"name": "consul",
+						},
+					},
+				})
+				Expect(err).NotTo(HaveOccurred())
 
-			By("deploying 3 node cluster across two AZs with BOSH 2.0 manifest", func() {
-				manifestv2, err := helpers.DeployMultiAZConsulMigration(boshClient, config, manifest.Name)
+				_, err = boshClient.Deploy([]byte(manifest))
 				Expect(err).NotTo(HaveOccurred())
 
 				Eventually(func() ([]bosh.VM, error) {
-					return helpers.DeploymentVMs(boshClient, manifestv2.Name)
-				}, "1m", "10s").Should(ConsistOf(helpers.GetVMsFromManifest(manifestv2)))
+					return helpers.DeploymentVMs(boshClient, manifestName)
+				}, "5m", "10s").Should(ConsistOf(helpers.GetVMsFromManifest(manifest)))
 			})
 
 			By("verifying keys are accounted for in cluster", func() {
-				for _, spammer := range spammers {
-					spammer.Stop()
-					spammerErrs := spammer.Check()
+				spammer.Stop()
+				spammerErrs := spammer.Check()
 
-					var errorSet helpers.ErrorSet
+				var errorSet helpers.ErrorSet
 
+				if spammerErrs != nil {
 					switch spammerErrs.(type) {
 					case helpers.ErrorSet:
 						errorSet = spammerErrs.(helpers.ErrorSet)
-					case nil:
-						continue
 					default:
 						Fail(spammerErrs.Error())
 					}

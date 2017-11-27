@@ -1,6 +1,7 @@
 package main_test
 
 import (
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -11,6 +12,7 @@ import (
 
 	"code.cloudfoundry.org/bbs/models"
 	"code.cloudfoundry.org/nsync"
+	"code.cloudfoundry.org/nsync/config"
 	"github.com/gogo/protobuf/proto"
 	"github.com/hashicorp/consul/api"
 	. "github.com/onsi/ginkgo"
@@ -322,19 +324,32 @@ var _ = Describe("Nsync Listener Initialization", func() {
 })
 
 var newNSyncRunner = func(nsyncListenAddress string) *ginkgomon.Runner {
+	configFile, err := ioutil.TempFile("", "listener_config")
+	Expect(err).NotTo(HaveOccurred())
+
+	listenerConfig := config.DefaultListenerConfig()
+	listenerConfig.BBSAddress = fakeBBS.URL()
+	listenerConfig.ListenAddress = nsyncListenAddress
+	listenerConfig.Lifecycles = []string{
+		"buildpack/some-stack:some-health-check.tar.gz",
+		"docker:the/docker/lifecycle/path.tgz",
+	}
+	listenerConfig.FileServerURL = "http://file-server.com"
+	listenerConfig.LagerConfig.LogLevel = "debug"
+	listenerConfig.ConsulCluster = consulRunner.ConsulCluster()
+
+	listenerJSON, err := json.Marshal(listenerConfig)
+	Expect(err).NotTo(HaveOccurred())
+	err = ioutil.WriteFile(configFile.Name(), listenerJSON, 0644)
+	Expect(err).NotTo(HaveOccurred())
+
 	return ginkgomon.New(ginkgomon.Config{
 		Name:          "nsync",
 		AnsiColorCode: "97m",
 		StartCheck:    "nsync.listener.started",
 		Command: exec.Command(
 			listenerPath,
-			"-bbsAddress", fakeBBS.URL(),
-			"-listenAddress", nsyncListenAddress,
-			"-lifecycle", "buildpack/some-stack:some-health-check.tar.gz",
-			"-lifecycle", "docker:the/docker/lifecycle/path.tgz",
-			"-fileServerURL", "http://file-server.com",
-			"-logLevel", "debug",
-			"-consulCluster", consulRunner.ConsulCluster(),
+			"-configPath", configFile.Name(),
 		),
 	})
 }

@@ -1,0 +1,5 @@
+---
+name: cli-windows
+files:
+  - exiter.ps1
+  - cli/cf-cli_6.26.0_winx64.zip

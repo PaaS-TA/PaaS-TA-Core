@@ -8,21 +8,40 @@ import (
 
 var _ = Describe("CellPresence", func() {
 	var (
-		cellPresence models.CellPresence
-		capacity     models.CellCapacity
+		cellPresence         models.CellPresence
+		capacity             models.CellCapacity
+		expectedProviderList []*models.Provider
 	)
 
 	BeforeEach(func() {
 		capacity = models.NewCellCapacity(128, 1024, 3)
 		rootfsProviders := []string{"provider-1"}
-		preloadedRootFSes := []string{"provider-2"}
-		cellPresence = models.NewCellPresence("some-id", "some-address", "some-zone", capacity, rootfsProviders, preloadedRootFSes)
+		preloadedRootFSes := []string{"provider-2", "provider-3"}
+		placementTags := []string{"tag-1", "tag-2"}
+		optionalPlacementTags := []string{"optional-tag-1", "optional-tag-2"}
+		cellPresence = models.NewCellPresence("some-id", "some-address", "http://some-url", "some-zone", capacity, rootfsProviders, preloadedRootFSes, placementTags, optionalPlacementTags)
+		expectedProviderList = []*models.Provider{
+			&models.Provider{"preloaded", []string{"provider-2", "provider-3"}},
+			&models.Provider{"provider-1", []string{}},
+		}
 	})
 
 	Describe("Validate", func() {
 		Context("when cell presence is valid", func() {
 			It("does not return an error", func() {
 				Expect(cellPresence.Validate()).NotTo(HaveOccurred())
+				Expect(cellPresence.GetRootfsProviders()).To(Equal(expectedProviderList))
+			})
+
+			Context("when the RepUrl is empty", func() {
+				BeforeEach(func() {
+					cellPresence.RepUrl = ""
+				})
+
+				It("does not return an error", func() {
+					err := cellPresence.Validate()
+					Expect(err).NotTo(HaveOccurred())
+				})
 			})
 		})
 
@@ -48,6 +67,20 @@ var _ = Describe("CellPresence", func() {
 					err := cellPresence.Validate()
 					Expect(err).To(HaveOccurred())
 					Expect(err.Error()).To(ContainSubstring("rep_address"))
+				})
+			})
+
+			Context("when rep url is invalid", func() {
+				Context("when RepUrl is not configured with HTTP or HTTPS", func() {
+					BeforeEach(func() {
+						cellPresence.RepUrl = "some-rep-url"
+					})
+
+					It("returns an error", func() {
+						err := cellPresence.Validate()
+						Expect(err).To(HaveOccurred())
+						Expect(err.Error()).To(ContainSubstring("rep_url"))
+					})
 				})
 			})
 

@@ -1,0 +1,14 @@
+jobs:
+properties:
+  databases:
+    databases:
+    - citext: true
+      name: sandbox
+    port: 5524
+    roles:
+    - name: pgadmin
+      password: admin
+    - name: pgother
+      password: other
+      permissions:
+      - CONNECTION LIMIT 10

@@ -1,0 +1,11 @@
+#!/bin/bash
+
+set -e -x
+
+go vet ./...
+go install -v github.com/onsi/ginkgo/ginkgo
+packages=("http_routes" "tcp_routing")
+for i in "${packages[@]}"
+do
+  ginkgo -r -slowSpecThreshold=120 "$@" "$i"
+done

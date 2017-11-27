@@ -14,12 +14,13 @@ import (
 var _ = Describe("MasterLock", func() {
 	Context("when the bbs cannot obtain the bbs lock", func() {
 		var competingBBSLockProcess ifrit.Process
+
 		BeforeEach(func() {
-			competingBBSLock := locket.NewLock(logger, consulClient, locket.LockSchemaPath("bbs_lock"), []byte{}, clock.NewClock(), locket.RetryInterval, locket.LockTTL)
+			competingBBSLock := locket.NewLock(logger, consulClient, locket.LockSchemaPath("bbs_lock"), []byte{}, clock.NewClock(), locket.RetryInterval, locket.DefaultSessionTTL)
 			competingBBSLockProcess = ifrit.Invoke(competingBBSLock)
 
-			bbsRunner = testrunner.New(bbsBinPath, bbsArgs)
-			bbsRunner.StartCheck = "bbs.lock.acquiring-lock"
+			bbsRunner = testrunner.New(bbsBinPath, bbsConfig)
+			bbsRunner.StartCheck = "bbs.consul-lock.acquiring-lock"
 
 			bbsProcess = ginkgomon.Invoke(bbsRunner)
 		})
@@ -45,7 +46,7 @@ var _ = Describe("MasterLock", func() {
 
 	Context("when the bbs loses the master lock", func() {
 		BeforeEach(func() {
-			bbsRunner = testrunner.New(bbsBinPath, bbsArgs)
+			bbsRunner = testrunner.New(bbsBinPath, bbsConfig)
 			bbsProcess = ginkgomon.Invoke(bbsRunner)
 			consulRunner.Reset()
 		})

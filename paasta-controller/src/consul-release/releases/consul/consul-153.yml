@@ -1,0 +1,79 @@
+---
+packages:
+- name: acceptance-tests-windows
+  version: 29c3a1f6ed5fbf345f59faccc945fdfc14c314bc
+  fingerprint: 29c3a1f6ed5fbf345f59faccc945fdfc14c314bc
+  sha1: 3b2fe2d6e60a91f0560e711cae98d80b9db9caac
+  dependencies:
+  - golang1.7-windows
+- name: acceptance-tests
+  version: 352fa354269f4a8b6b6f3ee4452ae8a92454b3cb
+  fingerprint: 352fa354269f4a8b6b6f3ee4452ae8a92454b3cb
+  sha1: ba9e58a5d879b31deb8f5298d2079f8096a0b138
+  dependencies:
+  - golang1.7
+- name: confab-windows
+  version: 46979831f3da5681026df0f8f31e8ac44dd6b9dd
+  fingerprint: 46979831f3da5681026df0f8f31e8ac44dd6b9dd
+  sha1: b07b8bc4e7bd188449680730572c4ba782ca5ba1
+  dependencies:
+  - golang1.7-windows
+- name: confab
+  version: 34a313e10de9cd67888bc3cc8ac07235076680d8
+  fingerprint: 34a313e10de9cd67888bc3cc8ac07235076680d8
+  sha1: 3294213e5eeb485f7ee0c16ea6a95f48aace04cd
+  dependencies:
+  - golang1.7
+- name: consul-windows
+  version: 0ed111917f5981b4b319914dfc1924af88eea408
+  fingerprint: 0ed111917f5981b4b319914dfc1924af88eea408
+  sha1: 8f9ecd00064ba813e1b084d5888f743468af9bdd
+  dependencies: []
+- name: consul
+  version: 43cd9f9edb9b3929902b2bf0ca081ec2dd3f31a1
+  fingerprint: 43cd9f9edb9b3929902b2bf0ca081ec2dd3f31a1
+  sha1: 769b42331cec3b3f36c6350713b690cfc04412a5
+  dependencies: []
+- name: golang1.7-windows
+  version: 1a80382e081cd429cf518f0c783f4e4172cac79e
+  fingerprint: 1a80382e081cd429cf518f0c783f4e4172cac79e
+  sha1: b91caa06ad34561a1f8bbd08b5e910ab14a493f9
+  dependencies: []
+- name: golang1.7
+  version: 181f7537c2ec17ac2406d9f2eb3322fd80fa2a1c
+  fingerprint: 181f7537c2ec17ac2406d9f2eb3322fd80fa2a1c
+  sha1: ca440d716d1672418cb88b4d70e4dc76387dbd38
+  dependencies: []
+jobs:
+- name: acceptance-tests
+  version: 943c6083581e623dc66c7d9126d8e5989c4c2b31
+  fingerprint: 943c6083581e623dc66c7d9126d8e5989c4c2b31
+  sha1: 17e5e4fc47302c499195f00c501816f34ed51e5f
+- name: consul-test-consumer-windows
+  version: 6748c0675da2292c680da03e89b738a9d5818370
+  fingerprint: 6748c0675da2292c680da03e89b738a9d5818370
+  sha1: 9809861c06e855db1b55b76732544e1d445f5dc2
+- name: consul-test-consumer
+  version: 7263db87ba85eaf0dd41bd198359c8597e961839
+  fingerprint: 7263db87ba85eaf0dd41bd198359c8597e961839
+  sha1: 7b08b0590d8c68818dccb20d9d612d4d21b9c932
+- name: consul_agent
+  version: 7b13fb22251e873bb1c60da20bb7346681b9f8fb
+  fingerprint: 7b13fb22251e873bb1c60da20bb7346681b9f8fb
+  sha1: 10283e6b236fa86094ad6ed13571b537bda4e40d
+- name: consul_agent_windows
+  version: 1094ee684c241d47b1c0b788d5b37dda260ad896
+  fingerprint: 1094ee684c241d47b1c0b788d5b37dda260ad896
+  sha1: 79d7e8bfdfc5b0a4bfafac8f7af304d933a82920
+- name: fake-dns-server
+  version: a1ea5f64de0860512470ace7ce2376aa9470f9b1
+  fingerprint: a1ea5f64de0860512470ace7ce2376aa9470f9b1
+  sha1: 0565f9af4117990bb80296e3c64cc6e76238be37
+license:
+  version: 03c513f94198bc667f3ce8e6267e8b3f03b34c73
+  fingerprint: 03c513f94198bc667f3ce8e6267e8b3f03b34c73
+  sha1: 72b67257d5fb0fa4f90fc8863e75d7cd21893669
+commit_hash: f3961b9d
+uncommitted_changes: true
+name: consul
+version: '153'

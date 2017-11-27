@@ -1,23 +1,22 @@
-require 'cloud_controller/dea/client'
+require 'utils/uri_utils'
+require 'models/helpers/process_types'
 
 module VCAP::CloudController
   class Route < Sequel::Model
-    class InvalidDomainRelation < CloudController::Errors::InvalidRelation; end
     class InvalidOrganizationRelation < CloudController::Errors::InvalidRelation; end
-    class DockerDisabled < CloudController::Errors::InvalidRelation; end
 
     many_to_one :domain
     many_to_one :space, after_set: :validate_changed_space
 
     one_to_many :route_mappings, class: 'VCAP::CloudController::RouteMappingModel', key: :route_guid, primary_key: :guid
 
-    many_to_many :apps, class: 'VCAP::CloudController::App',
+    many_to_many :apps, class: 'VCAP::CloudController::ProcessModel',
                         join_table:              RouteMappingModel.table_name,
                         left_primary_key:        :guid, left_key: :route_guid,
                         right_primary_key:       [:app_guid, :type], right_key: [:app_guid, :process_type],
                         distinct:                true,
                         order:                   Sequel.asc(:id),
-                        conditions:              { type: 'web' }
+                        conditions:              { type: ProcessTypes::WEB }
 
     one_to_one :route_binding
     one_through_one :service_instance, join_table: :route_bindings
@@ -32,7 +31,7 @@ module VCAP::CloudController
     end
 
     def uri
-      "#{fqdn}#{path}"
+      "#{fqdn}#{path}#{":#{port}" if !port.nil?}"
     end
 
     def as_summary_json
@@ -71,7 +70,7 @@ module VCAP::CloudController
 
       errors.add(:host, :presence) if host.nil?
 
-      validates_format /^([\w\-]+|\*)$/, :host if host && !host.empty?
+      validates_format /\A([\w\-]+|\*)\z/, :host if host && !host.empty?
 
       validate_uniqueness_on_host_and_domain if path.empty? && port.nil?
       validate_uniqueness_on_host_domain_and_port if path.empty?
@@ -114,7 +113,7 @@ module VCAP::CloudController
     def validate_path
       return if path == ''
 
-      if !"pathcheck://#{host}#{path}".is_uri?
+      if !UriUtils.is_uri?("pathcheck://#{host}#{path}")
         errors.add(:path, :invalid_path)
       end
 
@@ -145,8 +144,8 @@ module VCAP::CloudController
     end
 
     def validate_changed_space(new_space)
-      raise CloudController::Errors::InvalidAppRelation if apps.any? { |app| app.space.id != space.id }
-      raise InvalidOrganizationRelation if domain && !domain.usable_by_organization?(new_space.organization)
+      raise CloudController::Errors::InvalidAppRelation.new('Route and apps not in same space') if apps.any? { |app| app.space.id != space.id }
+      raise InvalidOrganizationRelation.new("Organization cannot use domain #{domain.name}") if domain && !domain.usable_by_organization?(new_space.organization)
     end
 
     def self.user_visibility_filter(user)

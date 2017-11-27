@@ -1,8 +1,8 @@
-require 'queries/service_binding_create_fetcher'
-require 'queries/service_binding_list_fetcher'
+require 'fetchers/service_binding_create_fetcher'
+require 'fetchers/service_binding_list_fetcher'
 require 'presenters/v3/service_binding_presenter'
-require 'messages/service_binding_create_message'
-require 'messages/service_bindings_list_message'
+require 'messages/service_bindings/service_binding_create_message'
+require 'messages/service_bindings/service_bindings_list_message'
 require 'actions/service_binding_create'
 require 'actions/service_binding_delete'
 require 'controllers/v3/mixins/sub_resource'
@@ -20,7 +20,7 @@ class ServiceBindingsController < ApplicationController
     unauthorized! unless can_write?(app.space.guid)
 
     begin
-      service_binding = ServiceBindingCreate.new(current_user.guid, current_user_email).create(app, service_instance, message, volume_services_enabled?)
+      service_binding = ServiceBindingCreate.new(user_audit_info).create(app, service_instance, message, volume_services_enabled?)
       render status: :created, json: Presenters::V3::ServiceBindingPresenter.new(service_binding)
     rescue ServiceBindingCreate::ServiceInstanceNotBindable
       raise CloudController::Errors::ApiError.new_from_details('UnbindableService')
@@ -42,7 +42,7 @@ class ServiceBindingsController < ApplicationController
     message = ServiceBindingsListMessage.from_params(query_params)
     invalid_param!(message.errors.full_messages) unless message.valid?
 
-    dataset = if roles.admin? || roles.admin_read_only?
+    dataset = if can_read_globally?
                 ServiceBindingListFetcher.new(message).fetch_all
               else
                 ServiceBindingListFetcher.new(message).fetch(space_guids: readable_space_guids)
@@ -57,10 +57,9 @@ class ServiceBindingsController < ApplicationController
     binding_not_found! unless binding && can_read?(binding.space.guid, binding.space.organization.guid)
     unauthorized! unless can_write?(binding.space.guid)
 
-    ServiceBindingDelete.new(current_user.guid, current_user_email).single_delete_sync(binding)
+    ServiceBindingDelete.new(user_audit_info).single_delete_sync(binding)
 
     head :no_content
-
   rescue ServiceBindingDelete::FailedToDelete => e
     unprocessable!(e.message)
   end

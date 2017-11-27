@@ -24,7 +24,7 @@ type OutputData struct {
 	LeaveCallCount      int
 	UseKeyCallCount     int
 	InstallKeyCallCount int
-	StatsCallCount      int
+	SelfCallCount       int
 }
 
 func NewOutputWriter(path string, pid int, args []string, configDir string) *OutputWriter {
@@ -73,8 +73,8 @@ func (ow *OutputWriter) run() {
 			ow.data.InstallKeyCallCount++
 		case "usekey":
 			ow.data.UseKeyCallCount++
-		case "stats":
-			ow.data.StatsCallCount++
+		case "self":
+			ow.data.SelfCallCount++
 		case "exit":
 			return
 		}
@@ -107,8 +107,8 @@ func (ow *OutputWriter) InstallKeyCalled() {
 	ow.callCountChan <- "installkey"
 }
 
-func (ow *OutputWriter) StatsCalled() {
-	ow.callCountChan <- "stats"
+func (ow *OutputWriter) SelfCalled() {
+	ow.callCountChan <- "self"
 }
 
 func (ow *OutputWriter) Exit() {

@@ -4,5 +4,5 @@ name: consul
 dependencies: []
 
 files:
-  - consul/consul_0.7.0_linux_amd64.zip
-  - consul/consul-template_0.14.0_linux_amd64.zip
+  - consul/consul_0.7.4_linux_amd64.zip
+  - consul/consul-template_0.18.1_linux_amd64.zip

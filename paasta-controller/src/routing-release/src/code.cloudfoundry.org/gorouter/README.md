@@ -1,11 +1,9 @@
-[![Build Status](https://travis-ci.org/cloudfoundry/gorouter.svg?branch=master)](https://travis-ci.org/cloudfoundry/gorouter)
+[![Build Status](https://travis-ci.org/cloudfoundry/gorouter.svg?branch=master)](https://travis-ci.org/cloudfoundry/gorouter) [![Go Report Card](https://goreportcard.com/badge/github.com/cloudfoundry/gorouter)](https://goreportcard.com/report/github.com/cloudfoundry/gorouter)
 
 # GoRouter
-This repository contains the source code for the Cloud Foundry router. GoRouter is deployed by default with Cloud Foundry ([cf-release](https://github.com/cloudfoundry/cf-release)) which includes [routing-release](https://github.com/cloudfoundry-incubator/routing-release) as submodule.
+This repository contains the source code for the Cloud Foundry L7 HTTP router. GoRouter is deployed by default with Cloud Foundry ([cf-release](https://github.com/cloudfoundry/cf-release)) which includes [routing-release](https://github.com/cloudfoundry-incubator/routing-release) as submodule.
 
 **Note**: This repository should be imported as `code.cloudfoundry.org/gorouter`.
-
-You can find the old router [here](http://github.com/cloudfoundry-attic/router)
 
 ## Development
 
@@ -71,16 +69,28 @@ go install
 
 ```bash
 # Start NATS server in daemon mode
-go get github.com/apcera/gnatsd
+go get github.com/nats-io/gnatsd
 gnatsd &
 
 # Start gorouter
 gorouter
 ```
 
-## Dynamic Configuration of the Routing Table
+## Performance
 
-When the gorouter starts, it sends a `router.start` message. This message contains an interval that other components should then send `router.register` on, `minimumRegisterIntervalInSeconds`. It is recommended that clients should send `router.register` messages on this interval. This `minimumRegisterIntervalInSeconds` value is configured through the `start_response_delay_interval` configuration property. GoRouter will prune routes that it considers to be stale based upon a seperate "staleness" value, `droplet_stale_threshold`, which defaults to 120 seconds. GoRouter will check if routes have become stale on an interval defined by `prune_stale_droplets_interval`, which defaults to 30 seconds. All of these values are represented in seconds and will always be integers.
+See [Routing Release 0.144.0 Release Notes](https://github.com/cloudfoundry-incubator/routing-release/releases/tag/0.144.0)
+
+## Dynamic Routing Table
+
+Gorouters routing table is updated dynamically via the NATS message bus. NATS can be deployed via BOSH with ([cf-release](https://github.com/cloudfoundry/cf-release)) or standalone using [nats-release](https://github.com/cloudfoundry/nats-release).
+
+To add or remove a record from the routing table, a NATS client must send register or unregister messages. Records in the routing table have a maximum TTL of 120 seconds, so clients must heartbeat registration messages periodically; we recommend every 20s. [Route Registrar](https://github.com/cloudfoundry/route-registrar) is a BOSH job that comes with [Routing Release](https://github.com/cloudfoundry-incubator/routing-release) that automates this process.
+
+When deployed with Cloud Foundry, registration of routes for apps pushed to CF occurs automatically without user involvement. For details, see [Routes and Domains](https://docs.cloudfoundry.org/devguide/deploy-apps/routes-domains.html).
+
+### Registering Routes via NATS
+
+When the gorouter starts, it sends a `router.start` message to NATS. This message contains an interval that other components should then send `router.register` on, `minimumRegisterIntervalInSeconds`. It is recommended that clients should send `router.register` messages on this interval. This `minimumRegisterIntervalInSeconds` value is configured through the `start_response_delay_interval` configuration property. GoRouter will prune routes that it considers to be stale based upon a seperate "staleness" value, `droplet_stale_threshold`, which defaults to 120 seconds. GoRouter will check if routes have become stale on an interval defined by `prune_stale_droplets_interval`, which defaults to 30 seconds. All of these values are represented in seconds and will always be integers.
 
 The format of the `router.start` message is as follows:
 
@@ -113,7 +123,8 @@ The format of the `router.register` message is as follows:
   },
   "app": "some_app_guid",
   "stale_threshold_in_seconds": 120,
-  "private_instance_id": "some_app_instance_id"
+  "private_instance_id": "some_app_instance_id",
+  "isolation_segment": "some_iso_seg_name"
 }
 ```
 
@@ -122,6 +133,8 @@ The format of the `router.register` message is as follows:
 `app` is a unique identifier for an application that the endpoint is registered for. This value will be included in router access logs with the label `app_id`, as well as being sent with requests to the endpoint in an HTTP header `X-CF-ApplicationId`.
 
 `private_instance_id` is a unique identifier for an instance associated with the app identified by the `app` field. Gorouter includes an HTTP header `X-CF-InstanceId` set to this value with requests to the registered endpoint.
+
+`isolation_segment` determines which routers will register route. Only Gorouters configured with the matching isolation segment will register the route. If a value is not provided, the route will be registered only by Gorouters set to the `all` or `shared-and-segments` router table sharding modes. Refer to the job properties for [Gorouter](https://github.com/cloudfoundry-incubator/routing-release/blob/develop/jobs/gorouter/spec) for more information.
 
 Such a message can be sent to both the `router.register` subject to register
 URIs, and to the `router.unregister` subject to unregister URIs, respectively.
@@ -145,6 +158,8 @@ See that it works!
 $ curl my_first_url.vcap.me:8081
 Hello!
 ```
+
+**Note:** In order to use `nats-pub` to register a route, you must run the command on the NATS VM. If you are using [`cf-deployment`](https://github.com/cloudfoundry/cf-deployment), you can run `nats-pub` from any VM.  
 
 ## Healthchecking from a Load Balancer
 
@@ -221,10 +236,10 @@ The `/routes` endpoint returns the entire routing table as JSON. This endpoint r
 
 ```
 $ curl "http://someuser:somepass@10.0.32.15:8080/routes"
-{"0295dd314aaf582f201e655cbd74ade5.cloudfoundry.me":["127.0.0.1:34567"],"03e316d6aa375d1dc1153700da5f1798.cloudfoundry.me":["127.0.0.1:34568"]}
+{"api.catwoman.cf-app.com":[{"address":"10.244.0.138:9022","ttl":0,"tags":{"component":"CloudController"}}],"dora-dora.catwoman.cf-app.com":[{"address":"10.244.16.4:60035","ttl":0,"tags":{"component":"route-emitter"}},{"address":"10.244.16.4:60060","ttl":0,"tags":{"component":"route-emitter"}}]}
 ```
 
-Because of the nature of the data present in `/varz` and `/routes`, they require http basic authentication credentials. These credentials can be found the BOSH manifest under the `router` job:
+Because of the nature of the data present in `/varz` and `/routes`, they require http basic authentication credentials. These credentials can be found the BOSH manifest for cf-release under the `router` job:
 
 ```
 properties:
@@ -234,6 +249,8 @@ properties:
       port:
       user: paronymy61-polaric
 ```
+
+If `router.status.user` is not set in the manifest, the default is `router-status` as can be seen from [the job spec](https://github.com/cloudfoundry-incubator/routing-release/blob/develop/jobs/gorouter/spec).
 
 Or on the Gorouter VM under `/var/vcap/jobs/gorouter/config/gorouter.yml`:
 
@@ -287,7 +304,7 @@ _NOTE: GoRouter currently only supports changing the load balancing strategy at 
 
 ## When terminating TLS in front of Gorouter with a component that does not support sending HTTP headers
 
-### Enabling apps and CF to detect that request was encrypted using X-Forwarded-Proto 
+### Enabling apps and CF to detect that request was encrypted using X-Forwarded-Proto
 If you terminate TLS in front of Gorouter, your component should send the `X-Forwarded-Proto` HTTP header in order for applications and Cloud Foundry system components to correctly detect when the original request was encrypted. As an example, UAA will reject requests that do not include `X-Forwarded-Proto: https`.
 
 If your TLS-terminating component does not support sending HTTP headers, we recommend also terminating TLS at Gorouter. In this scenario you should only disable TLS at Gorouter if your TLS-terminating component rejects unencrypted requests **and** your private network is completely trusted. In this case, use the following property to inform applications and CF system components that requests are secure.
@@ -334,22 +351,42 @@ Examples: the router can't bind to its TCP port, a CF component has published in
 * `info`, `debug` - An expected event has occurred. Examples: a new CF component was registered with the router, the router has begun
 to prune routes for stale droplets.
 
+Sample log message in gorouter.
+
+`[2017-02-01 22:54:08+0000] {"log_level":0,"timestamp":1485989648.0895808,"message":"endpoint-registered","source":"vcap.gorouter.registry","data":{"uri":"0-*.login.bosh-lite.com","backend":"10.123.0.134:8080","modification_tag":{"guid":"","index":0}}}
+`
+
+- `log_level`: This represents logging level of the message
+- `timestamp`: Epoch time of the log
+- `message`: Content of the log line
+- `source`: The function within Gorouter that initiated the log message
+- `data`: Additional information that varies based on the message
+
 Access logs provide information for the following fields when recieving a request:
 
-`<Request Host> - [<Start Date>] "<Request Method> <Request URL> <Request Protocol>" <Status Code> <Bytes Received> <Bytes Sent> "<Referer>" "<User-Agent>" <Remote Address> x_forwarded_for:"<X-Forwarded-For>" x_forwarded_proto:"<X-Forwarded-Proto>" vcap_request_id:<X-Vcap-Request-ID> response_time:<Response Time> app_id:<Application ID> <Extra Headers>`
-* Status Code, Response Time, Application ID, and Extra Headers are all optional fields
-* The absence of Status Code, Response Time or Application ID will result in a "-" in the corresponding field
+`<Request Host> - [<Start Date>] "<Request Method> <Request URL> <Request Protocol>" <Status Code> <Bytes Received> <Bytes Sent> "<Referer>" "<User-Agent>" <Remote Address> <Backend Address> x_forwarded_for:"<X-Forwarded-For>" x_forwarded_proto:"<X-Forwarded-Proto>" vcap_request_id:<X-Vcap-Request-ID> response_time:<Response Time> app_id:<Application ID> app_index:<Application Index> <Extra Headers>`
+* Status Code, Response Time, Application ID, Application Index, and Extra Headers are all optional fields
+* The absence of Status Code, Response Time, Application ID, or Application Index will result in a "-" in the corresponding field
 
 Access logs are also redirected to syslog.
 
 ## Headers
 
-If an user wants to send requests to a specific app instance, the header `X-CF-APP-INSTANCE` can be added to indicate the specific instance to be targeted. The format of the header value should be `X-Cf-App-Instance: APP_GUID:APP_INDEX`. If the instance cannot be found or the format is wrong, a 404 status code is returned.
+If an user wants to send requests to a specific app instance, the header `X-CF-APP-INSTANCE` can be added to indicate the specific instance to be targeted. The format of the header value should be `X-Cf-App-Instance: APP_GUID:APP_INDEX`. If the instance cannot be found or the format is wrong, a 404 status code is returned. Usage of this header is only available for users on the Diego architecture. 
+
+## Supported Cipher Suites
+
+Refer to [golang 1.7](https://github.com/golang/go/blob/release-branch.go1.7/src/crypto/tls/cipher_suites.go#L269-L285) for the list of supported cipher suites for the Gorouter.
 
 ## Docs
 
 There is a separate [docs](docs) folder which contains more advanced topics.
 
+## Troubleshooting
+
+Refer [doc](https://docs.pivotal.io/pivotalcf/1-9/adminguide/troubleshooting_slow_requests.html) to learn more troubleshooting slow requests.
+
 ## Contributing
 
 Please read the [contributors' guide](https://github.com/cloudfoundry/gorouter/blob/master/CONTRIBUTING.md)
+Please read our [Development Guide for Gorouter](https://github.com/cloudfoundry/gorouter/blob/master/docs/gorouter_development_guide.md)

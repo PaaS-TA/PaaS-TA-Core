@@ -77,6 +77,41 @@ kill_and_wait() {
   wait_pidfile $pidfile 1 $timeout $force
 }
 
+check_pidfile() {
+  pidfile=$1
+  timeout=${2:-0}
+  countdown=$timeout
+
+  if [ -f "$pidfile" ]; then
+    pid=$(head -1 "$pidfile")
+
+    if [ -z "$pid" ]; then
+      echo "Unable to get pid from $pidfile"
+    elif [ -e /proc/$pid ]; then
+      while [ -e /proc/$pid ]; do
+        sleep 1
+        [ "$countdown" != '0' -a $(( $countdown % 10 )) = '0' ] && echo -n .
+        if [ $timeout -gt 0 ]; then
+          if [ $countdown -eq 0 ]; then
+            break
+          else
+            countdown=$(( $countdown - 1 ))
+          fi
+        fi
+      done
+      if [ -e /proc/$pid ]; then
+        echo "Timed Out"
+        exit 1
+      else
+        echo "Stopped"
+      fi
+    else
+      echo "Process $pid is not running"
+    fi
+  else
+    echo "Pidfile $pidfile doesn't exist"
+  fi
+}
 running_in_container() {
   grep -q -E '/instance|/docker/' /proc/self/cgroup
 }

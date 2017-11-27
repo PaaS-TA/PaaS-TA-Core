@@ -1,0 +1,43 @@
+---
+name: consats
+
+releases:
+- name: consul
+  version: CONSUL_RELEASE_VERSION # REPLACE ME
+
+stemcells:
+- alias: default
+  os: ubuntu-trusty
+  version: STEMCELL_VERSION # REPLACE ME
+
+instance_groups:
+- name: acceptance-tests
+  instances: 1
+  lifecycle: errand
+  azs: [z1]
+  vm_type: m3.medium
+  vm_extensions: [10GB_ephemeral_disk]
+  stemcell: default
+  networks:
+  - name: private
+  jobs:
+  - name: acceptance-tests
+    release: consul
+
+properties:
+  consul:
+    acceptance_tests:
+      bosh:
+        target: BOSH_DIRECTOR # REPLACE ME
+        username: BOSH_USER # REPLACE ME
+        password: BOSH_PASSWORD # REPLACE ME
+        director_ca_cert: BOSH_DIRECTOR_CA_CERT # REPLACE ME
+      parallel_nodes: 1
+      consul_release_version: CONSUL_RELEASE_VERSION # REPLACE ME
+
+update:
+  serial: true
+  canaries: 1
+  max_in_flight: 1
+  canary_watch_time: 1000-180000
+  update_watch_time: 1000-180000

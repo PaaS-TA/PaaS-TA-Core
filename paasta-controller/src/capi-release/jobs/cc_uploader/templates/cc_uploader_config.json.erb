@@ -1,0 +1,28 @@
+<%
+  config = {}
+  conf_dir = "/var/vcap/jobs/cc_uploader/config"
+
+  config[:log_level] = p("capi.cc_uploader.log_level")
+  config[:dropsonde_port] = p("capi.cc_uploader.dropsonde_port")
+  config[:lager_config] = { log_level: p("capi.cc_uploader.log_level") }
+
+  config[:listen_addr] = "#{p("capi.cc_uploader.bind_addr")}:#{p("http_port")}"
+  config[:debug_server_config] = { debug_address: "#{p("capi.cc_uploader.debug_bind_addr")}:#{p("capi.cc_uploader.debug_port")}" }
+  config[:consul_cluster] = "http://127.0.0.1:#{p("capi.cc_uploader.consul_agent_port")}"
+
+  config[:cc_ca_cert] = "#{conf_dir}/certs/cc/ca.crt"
+  config[:cc_client_cert] = "#{conf_dir}/certs/cc/client.crt"
+  config[:cc_client_key] = "#{conf_dir}/certs/cc/client.key"
+
+  config[:mutual_tls] = {
+    listen_addr:  "#{p("capi.cc_uploader.bind_addr")}:#{p("https_port")}",
+    ca_cert:      "#{conf_dir}/certs/cc_uploader/ca.crt",
+    server_cert:  "#{conf_dir}/certs/cc_uploader/server.crt",
+    server_key:   "#{conf_dir}/certs/cc_uploader/server.key",
+  }
+
+  if_p("capi.cc_uploader.cc.job_polling_interval_in_seconds") do |interval|
+    config[:job_polling_interval_in_seconds] = "#{interval}s"
+  end
+%>
+<%= config.to_json %>

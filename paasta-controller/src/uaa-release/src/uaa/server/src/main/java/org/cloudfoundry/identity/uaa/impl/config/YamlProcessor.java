@@ -1,5 +1,5 @@
 /*******************************************************************************
- *     Cloud Foundry 
+ *     Cloud Foundry
  *     Copyright (c) [2009-2016] Pivotal Software, Inc. All Rights Reserved.
  *
  *     This product is licensed to you under the Apache License, Version 2.0 (the "License").
@@ -14,7 +14,6 @@ package org.cloudfoundry.identity.uaa.impl.config;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import org.cloudfoundry.identity.uaa.util.UaaStringUtils;
 import org.springframework.core.io.Resource;
 import org.springframework.util.StringUtils;
 import org.yaml.snakeyaml.Yaml;
@@ -28,12 +27,9 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Properties;
 
-/**
- * Base class for Yaml factories.
- * 
- * @author Dave Syer
- * 
- */
+import static org.cloudfoundry.identity.uaa.util.UaaMapUtils.prettyPrintYaml;
+import static org.cloudfoundry.identity.uaa.util.UaaMapUtils.redactValues;
+
 public class YamlProcessor {
 
     public interface MatchCallback {
@@ -59,7 +55,7 @@ public class YamlProcessor {
      * of the documents in a YAML resource. In
      * YAML documents are separated by
      * <code>---</code> lines, and each document is converted to properties before the match is made. E.g.
-     * 
+     *
      * <pre>
      * environment: dev
      * url: http://dev.bar.com
@@ -69,17 +65,17 @@ public class YamlProcessor {
      * url:http://foo.bar.com
      * name: My Cool App
      * </pre>
-     * 
+     *
      * when mapped with <code>documentMatchers = {"environment": "prod"}</code>
      * would end up as
-     * 
+     *
      * <pre>
      * environment=prod
      * url=http://foo.bar.com
      * name=My Cool App
      * url=http://dev.bar.com
      * </pre>
-     * 
+     *
      * @param matchers a map of keys to value patterns (regular expressions)
      */
     public void setDocumentMatchers(Map<String, String> matchers) {
@@ -90,7 +86,7 @@ public class YamlProcessor {
      * Flag indicating that a document that contains none of the keys in the
      * {@link #setDocumentMatchers(Map) document
      * matchers} will nevertheless match.
-     * 
+     *
      * @param matchDefault the flag to set (default true)
      */
     public void setMatchDefault(boolean matchDefault) {
@@ -109,8 +105,8 @@ public class YamlProcessor {
      * <li><code>FIRST_FOUND</code> if you want to take the first resource in
      * the list that exists and use just that.</li>
      * </ul>
-     * 
-     * 
+     *
+     *
      * @param resolutionMethod the resolution method to set. Defaults to
      *            OVERRIDE.
      */
@@ -134,7 +130,7 @@ public class YamlProcessor {
      * representation as Properties. Depending on the
      * {@link #setResolutionMethod(ResolutionMethod)} not all of the documents
      * will be parsed.
-     * 
+     *
      * @param callback a callback to delegate to once matching documents are
      *            found
      */
@@ -183,7 +179,7 @@ public class YamlProcessor {
         Properties properties = new Properties();
         assignProperties(properties, map, null);
         if (documentMatchers.isEmpty()) {
-            logger.debug("Merging document (no matchers set)" + UaaStringUtils.hidePasswords(map));
+            logger.debug("Merging document (no matchers set):\n" + prettyPrintYaml(redactValues(map)));
             callback.process(properties, map);
         }
         else {
@@ -196,8 +192,10 @@ public class YamlProcessor {
                     keyFound = true;
                     String value = properties.getProperty(key);
                     if (value.matches(pattern)) {
-                        logger.debug("Matched document with " + key + "=" + value + " (pattern=/" + pattern + "/): "
-                                        + UaaStringUtils.hidePasswords(map));
+                        logger.debug("Matched document with " +
+                                     key + "=" + value + " (pattern=/" +
+                                     pattern + "/):\n" + prettyPrintYaml(redactValues(map))
+                        );
                         callback.process(properties, map);
                         valueFound = true;
                         // No need to check for more matches
@@ -206,7 +204,7 @@ public class YamlProcessor {
                 }
             }
             if (!keyFound && matchDefault) {
-                logger.debug("Matched document with default matcher: " + UaaStringUtils.hidePasswords(map));
+                logger.debug("Matched document with default matcher:\n" + prettyPrintYaml(redactValues(map)));
                 callback.process(properties, map);
             }
             else if (!valueFound) {

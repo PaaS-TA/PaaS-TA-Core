@@ -25,7 +25,7 @@ A standalone executable written in golang that continuously broadcasts a routes 
 1. The route-registrar expects a configuration YAML file like the one below:
   ```yaml
   message_bus_servers:
-  - host: NATS_SERVER_HOST
+  - host: NATS_SERVER_HOST:PORT
     user: NATS_SERVER_USERNAME
     password: NATS_SERVER_PASSWORD
   host: HOSTNAME_OR_IP_OF_ROUTE_DESTINATION
@@ -45,18 +45,19 @@ A standalone executable written in golang that continuously broadcasts a routes 
       script_path: /path/to/check/executable
       timeout: HEALTH_CHECK_TIMEOUT # optional
   ```
-  - `message_bus_servers` is an array of data with location and credentials for the NATS servers; route-registrar currently registers and deregisters routes via NATS messages.
-  - `host` is the destination hostname or IP for the routes being registered.
-  - for each route collection, `name` must be provided and be a string.
-  - for each route collection, `port` must be provided and must be a positive integer > 1.
-  - for each route collection, `uris` must be provided and be a non empty array of strings.  All URIs in a given route collection will be mapped to the same host and port.
-  - for each route collection, `registration_interval` must be provided and be a string with units (e.g. "20s"). It must parse to a positive time duration e.g. "-5s" is not permitted.
-  - for each route collection, `route_service_url` is optional and enables the component to register a route service for that route.
-  - for each route collection, `health_check` is optional and explained in more detail below.
+  - `message_bus_servers` is an array of data with location and credentials for the NATS servers; route-registrar currently registers and deregisters routes via NATS messages. `message_bus_servers.host` must include both hostname and port; e.g. `host: 10.0.32.11:4222`
+  - `host` is the destination hostname or IP for the routes being registered. To Gorouter, these are backends.
+  - `routes` is required and is an array of hashes. For each route collection:
+    - `name` must be provided and be a string
+    - `port` is for the destination host (backend). Must be provided and must be a positive integer > 1.
+    - `uris` are the routes being registered for the destination `host`. Must be provided and be a non empty array of strings.  All URIs in a given route collection will be mapped to the same host and port.
+    - `registration_interval` is the interval for which routes are registered with NATS. Must be provided and be a string with units (e.g. "20s"). It must parse to a positive time duration e.g. "-5s" is not permitted.
+    - `route_service_url` is optional. When provided, Gorouter will proxy requests received for the `uris` above to this address.
+    - `health_check` is optional and explained in more detail below.
 
 1. Run route-registrar binaries using the following command
   ```
-  ./bin/route-registrar -configPath=FILE_PATH_TO_CONFIG_YML --pidFile=PATH_TO_PIDFILE
+  route-registrar -configPath FILE_PATH_TO_CONFIG_YML -pidfile PATH_TO_PIDFILE
   ```
 
 ### Health check

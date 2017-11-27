@@ -96,9 +96,11 @@ func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) err
 
 		case <-signals:
 			logger.Info("stopping")
-			err := subscription.Close()
-			if err != nil {
-				logger.Error("failed-closing-event-source", err)
+			if subscription != nil {
+				err := subscription.Close()
+				if err != nil {
+					logger.Error("failed-closing-event-source", err)
+				}
 			}
 			return nil
 		}

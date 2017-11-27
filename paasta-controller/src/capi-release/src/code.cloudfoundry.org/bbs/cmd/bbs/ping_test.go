@@ -21,11 +21,11 @@ var _ = Describe("Ping API", func() {
 			})
 
 			By("starting the bbs without a lock", func() {
-				competingBBSLock := locket.NewLock(logger, consulClient, locket.LockSchemaPath("bbs_lock"), []byte{}, clock.NewClock(), locket.RetryInterval, locket.LockTTL)
+				competingBBSLock := locket.NewLock(logger, consulClient, locket.LockSchemaPath("bbs_lock"), []byte{}, clock.NewClock(), locket.RetryInterval, locket.DefaultSessionTTL)
 				competingBBSLockProcess := ifrit.Invoke(competingBBSLock)
 				defer ginkgomon.Kill(competingBBSLockProcess)
 
-				bbsRunner = testrunner.New(bbsBinPath, bbsArgs)
+				bbsRunner = testrunner.New(bbsBinPath, bbsConfig)
 				bbsRunner.StartCheck = "bbs.lock.acquiring-lock"
 				bbsProcess = ginkgomon.Invoke(bbsRunner)
 
@@ -60,11 +60,11 @@ var _ = Describe("Ping API", func() {
 			})
 
 			By("starting the bbs without a lock", func() {
-				competingBBSLock := locket.NewLock(logger, consulClient, locket.LockSchemaPath("bbs_lock"), []byte{}, clock.NewClock(), locket.RetryInterval, locket.LockTTL)
+				competingBBSLock := locket.NewLock(logger, consulClient, locket.LockSchemaPath("bbs_lock"), []byte{}, clock.NewClock(), locket.RetryInterval, locket.DefaultSessionTTL)
 				competingBBSLockProcess := ifrit.Invoke(competingBBSLock)
 				defer ginkgomon.Kill(competingBBSLockProcess)
 
-				bbsRunner = testrunner.New(bbsBinPath, bbsArgs)
+				bbsRunner = testrunner.New(bbsBinPath, bbsConfig)
 				bbsRunner.StartCheck = "bbs.lock.acquiring-lock"
 				bbsProcess = ginkgomon.Invoke(bbsRunner)
 

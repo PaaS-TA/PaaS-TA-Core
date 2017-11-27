@@ -1,0 +1,80 @@
+meta:
+  stemcell:
+    name: bosh-warden-boshlite-ubuntu-trusty-go_agent
+    version: latest
+
+director_uuid: <%= %x[bosh status --uuid] %>
+
+name: postgres-lite
+
+jobs:
+- name: postgres
+  networks:
+  - name: default
+    static_ips:
+    - 10.244.4.2
+
+resource_pools:
+- name: medium
+  cloud_properties:
+    name: random
+
+compilation:
+  cloud_properties:
+    name: random
+
+networks:
+- name: default
+  subnets:
+  - cloud_properties:
+      name: random
+    range: 10.244.4.0/30
+    reserved:
+    - 10.244.4.1
+    static:
+    - 10.244.4.2
+  - cloud_properties:
+      name: random
+    range: 10.244.4.4/30
+    reserved:
+    - 10.244.4.5
+    static:
+    - 10.244.4.6
+  - cloud_properties:
+      name: random
+    range: 10.244.4.8/30
+    reserved:
+    - 10.244.4.9
+    static:
+    - 10.244.4.10
+  - cloud_properties:
+      name: random
+    range: 10.244.4.12/30
+    reserved:
+    - 10.244.4.13
+    static: []
+  - cloud_properties:
+      name: random
+    range: 10.244.4.16/30
+    reserved:
+    - 10.244.4.17
+    static: []
+  - cloud_properties:
+      name: random
+    range: 10.244.4.20/30
+    reserved:
+    - 10.244.4.21
+    static: []
+  - cloud_properties:
+      name: random
+    range: 10.244.4.24/30
+    reserved:
+    - 10.244.4.25
+    static: []
+  - cloud_properties:
+      name: random
+    range: 10.244.4.28/30
+    reserved:
+    - 10.244.4.29
+    static: []
+  type: manual

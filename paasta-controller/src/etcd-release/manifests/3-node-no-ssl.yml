@@ -1,0 +1,40 @@
+name: etcd-no-ssl
+
+stemcells:
+- alias: default
+  os: ubuntu-trusty
+  version: latest
+
+releases:
+- name: etcd
+  version: latest
+
+instance_groups:
+- name: etcd
+  azs: [z1, z2, z3]
+  instances: 3
+  persistent_disk_type: 1GB
+  vm_type: default
+  stemcell: default
+  update:
+    serial: true
+    max_in_flight: 1
+  networks: [{name: private}]
+  jobs:
+  - name: etcd
+    release: etcd
+    consumes:
+      etcd: {from: etcd_server}
+    provides:
+      etcd: {as: etcd_server}
+    properties:
+      etcd:
+        peer_require_ssl: false
+        require_ssl: false
+        heartbeat_interval_in_milliseconds: 50
+
+update:
+  canaries: 0
+  max_in_flight: 1
+  canary_watch_time: 1000-60000
+  update_watch_time: 1000-60000

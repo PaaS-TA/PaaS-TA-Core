@@ -10,6 +10,8 @@ import (
 	"github.com/onsi/gomega/gbytes"
 	. "github.com/onsi/gomega/gexec"
 
+	"path/filepath"
+
 	"github.com/cloudfoundry-incubator/cf-test-helpers/cf"
 	"github.com/cloudfoundry-incubator/cf-test-helpers/helpers"
 	"github.com/cloudfoundry/cf-acceptance-tests/helpers/random_name"
@@ -37,6 +39,7 @@ var _ = AppsDescribe("Healthcheck", func() {
 			Eventually(cf.Cf(
 				"push", appName,
 				"-p", assets.NewAssets().WorkerApp,
+				"-f", filepath.Join(assets.NewAssets().WorkerApp, "manifest.yml"),
 				"--no-start",
 				"-b", "go_buildpack",
 				"-m", DEFAULT_MEMORY_LIMIT,
@@ -73,6 +76,32 @@ var _ = AppsDescribe("Healthcheck", func() {
 				"-u", "port"),
 				Config.DefaultTimeoutDuration(),
 			).Should(Exit(0))
+
+			By("staging and running it")
+			app_helpers.SetBackend(appName)
+			Eventually(cf.Cf("start", appName), Config.CfPushTimeoutDuration()).Should(Exit(0))
+
+			By("verifying it's up")
+			Eventually(helpers.CurlingAppRoot(Config, appName)).Should(ContainSubstring("Hi, I'm Dora!"))
+		})
+	})
+
+	Describe("when the healthcheck is set to http", func() {
+		It("starts up successfully", func() {
+			By("pushing it")
+			Eventually(cf.Cf(
+				"push", appName,
+				"-p", assets.NewAssets().Dora,
+				"--no-start",
+				"-b", Config.GetRubyBuildpackName(),
+				"-m", DEFAULT_MEMORY_LIMIT,
+				"-d", Config.GetAppsDomain(),
+				"-i", "1",
+				"-u", "port"),
+				Config.DefaultTimeoutDuration(),
+			).Should(Exit(0))
+
+			cf.Cf("curl", appName, "-X", "PUT", "-d", `{"HealthCheckType":"http", "HealthCheckHTTPEndpoint":"/health"}`)
 
 			By("staging and running it")
 			app_helpers.SetBackend(appName)

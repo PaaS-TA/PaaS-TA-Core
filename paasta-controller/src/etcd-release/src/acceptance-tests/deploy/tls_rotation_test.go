@@ -6,11 +6,12 @@ import (
 	"strings"
 	"time"
 
-	etcdclient "acceptance-tests/testing/etcd"
-	"acceptance-tests/testing/helpers"
+	etcdclient "github.com/cloudfoundry-incubator/etcd-release/src/acceptance-tests/testing/etcd"
+
+	"github.com/cloudfoundry-incubator/etcd-release/src/acceptance-tests/testing/helpers"
 
 	"github.com/pivotal-cf-experimental/bosh-test/bosh"
-	"github.com/pivotal-cf-experimental/destiny/etcd"
+	"github.com/pivotal-cf-experimental/destiny/ops"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -251,29 +252,35 @@ SqV4zLqA2Vk+crbtUsAyP8qUoaeuoKUIJR7tkiPBg1QrBiUqSEs=
 
 var _ = Describe("TLS rotation", func() {
 	var (
-		manifest   etcd.Manifest
+		manifest     string
+		manifestName string
+
 		etcdClient etcdclient.Client
 		spammer    *helpers.Spammer
 	)
 
 	BeforeEach(func() {
 		var err error
-		manifest, err = helpers.DeployEtcdWithInstanceCount("tls_rotation_test", 3, client, config, true)
+		manifest, err = helpers.DeployEtcdWithInstanceCount("tls-rotation", 3, true, boshClient)
+		Expect(err).NotTo(HaveOccurred())
+
+		manifestName, err = ops.ManifestName(manifest)
 		Expect(err).NotTo(HaveOccurred())
 
 		Eventually(func() ([]bosh.VM, error) {
-			return helpers.DeploymentVMs(client, manifest.Name)
+			return helpers.DeploymentVMs(boshClient, manifestName)
 		}, "1m", "10s").Should(ConsistOf(helpers.GetVMsFromManifest(manifest)))
 
-		testConsumerIndex, err := helpers.FindJobIndexByName(manifest, "testconsumer_z1")
+		testConsumerIPs, err := helpers.GetVMIPs(boshClient, manifestName, "testconsumer")
 		Expect(err).NotTo(HaveOccurred())
-		etcdClient = etcdclient.NewClient(fmt.Sprintf("http://%s:6769", manifest.Jobs[testConsumerIndex].Networks[0].StaticIPs[0]))
+
+		etcdClient = etcdclient.NewClient(fmt.Sprintf("http://%s:6769", testConsumerIPs[0]))
 		spammer = helpers.NewSpammer(etcdClient, 1*time.Second, "tls-rotation")
 	})
 
 	AfterEach(func() {
 		if !CurrentGinkgoTestDescription().Failed {
-			err := client.DeleteDeployment(manifest.Name)
+			err := boshClient.DeleteDeployment(manifestName)
 			Expect(err).NotTo(HaveOccurred())
 		}
 	})
@@ -284,9 +291,25 @@ var _ = Describe("TLS rotation", func() {
 		})
 
 		By("adding new ca certs", func() {
-			manifest.Properties.EtcdTestConsumer.Etcd.CACert = fmt.Sprintf("%s\n%s", manifest.Properties.EtcdTestConsumer.Etcd.CACert, newCACert)
-			manifest.Properties.Etcd.CACert = fmt.Sprintf("%s\n%s", manifest.Properties.Etcd.CACert, newCACert)
-			manifest.Properties.Etcd.PeerCACert = fmt.Sprintf("%s\n%s", manifest.Properties.Etcd.PeerCACert, newPeerCACert)
+			oldCACert, err := ops.FindOp(manifest, "/instance_groups/name=etcd/properties/etcd/ca_cert")
+			Expect(err).NotTo(HaveOccurred())
+
+			oldPeerCACert, err := ops.FindOp(manifest, "/instance_groups/name=etcd/properties/etcd/peer_ca_cert")
+			Expect(err).NotTo(HaveOccurred())
+
+			manifest, err = ops.ApplyOps(manifest, []ops.Op{
+				{
+					Type:  "replace",
+					Path:  "/instance_groups/name=etcd/properties/etcd/ca_cert",
+					Value: fmt.Sprintf("%s\n%s", oldCACert.(string), newCACert),
+				},
+				{
+					Type:  "replace",
+					Path:  "/instance_groups/name=etcd/properties/etcd/peer_ca_cert",
+					Value: fmt.Sprintf("%s\n%s", oldPeerCACert.(string), newPeerCACert),
+				},
+			})
+			Expect(err).NotTo(HaveOccurred())
 		})
 
 		By("deploying with the new ca certs", func() {
@@ -294,14 +317,40 @@ var _ = Describe("TLS rotation", func() {
 		})
 
 		By("replacing certs and keys", func() {
-			manifest.Properties.EtcdTestConsumer.Etcd.ClientCert = newClientCert
-			manifest.Properties.EtcdTestConsumer.Etcd.ClientKey = newClientKey
-			manifest.Properties.Etcd.ClientCert = newClientCert
-			manifest.Properties.Etcd.ClientKey = newClientKey
-			manifest.Properties.Etcd.PeerCert = newPeerCert
-			manifest.Properties.Etcd.PeerKey = newPeerKey
-			manifest.Properties.Etcd.ServerCert = newServerCert
-			manifest.Properties.Etcd.ServerKey = newServerKey
+			var err error
+			manifest, err = ops.ApplyOps(manifest, []ops.Op{
+				{
+					Type:  "replace",
+					Path:  "/instance_groups/name=etcd/properties/etcd/client_cert",
+					Value: newClientCert,
+				},
+				{
+					Type:  "replace",
+					Path:  "/instance_groups/name=etcd/properties/etcd/client_key",
+					Value: newClientKey,
+				},
+				{
+					Type:  "replace",
+					Path:  "/instance_groups/name=etcd/properties/etcd/peer_cert",
+					Value: newPeerCert,
+				},
+				{
+					Type:  "replace",
+					Path:  "/instance_groups/name=etcd/properties/etcd/peer_key",
+					Value: newPeerKey,
+				},
+				{
+					Type:  "replace",
+					Path:  "/instance_groups/name=etcd/properties/etcd/server_cert",
+					Value: newServerCert,
+				},
+				{
+					Type:  "replace",
+					Path:  "/instance_groups/name=etcd/properties/etcd/server_key",
+					Value: newServerKey,
+				},
+			})
+			Expect(err).NotTo(HaveOccurred())
 		})
 
 		By("deploying with the new certs and keys", func() {
@@ -309,9 +358,20 @@ var _ = Describe("TLS rotation", func() {
 		})
 
 		By("removing old ca certs", func() {
-			manifest.Properties.EtcdTestConsumer.Etcd.CACert = newCACert
-			manifest.Properties.Etcd.CACert = newCACert
-			manifest.Properties.Etcd.PeerCACert = newPeerCACert
+			var err error
+			manifest, err = ops.ApplyOps(manifest, []ops.Op{
+				{
+					Type:  "replace",
+					Path:  "/instance_groups/name=etcd/properties/etcd/ca_cert",
+					Value: newCACert,
+				},
+				{
+					Type:  "replace",
+					Path:  "/instance_groups/name=etcd/properties/etcd/peer_ca_cert",
+					Value: newPeerCACert,
+				},
+			})
+			Expect(err).NotTo(HaveOccurred())
 		})
 
 		By("deploying with the old ca certs removed", func() {
@@ -370,17 +430,14 @@ var _ = Describe("TLS rotation", func() {
 	})
 })
 
-func deployManifest(manifest etcd.Manifest) {
-	yaml, err := manifest.ToYAML()
+func deployManifest(manifest string) {
+	_, err := boshClient.Deploy([]byte(manifest))
 	Expect(err).NotTo(HaveOccurred())
 
-	yaml, err = client.ResolveManifestVersions(yaml)
-	Expect(err).NotTo(HaveOccurred())
-
-	_, err = client.Deploy(yaml)
+	manifestName, err := ops.ManifestName(manifest)
 	Expect(err).NotTo(HaveOccurred())
 
 	Eventually(func() ([]bosh.VM, error) {
-		return helpers.DeploymentVMs(client, manifest.Name)
+		return helpers.DeploymentVMs(boshClient, manifestName)
 	}, "1m", "10s").Should(ConsistOf(helpers.GetVMsFromManifest(manifest)))
 }

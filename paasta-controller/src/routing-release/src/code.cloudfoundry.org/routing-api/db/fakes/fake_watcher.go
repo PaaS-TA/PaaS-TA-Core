@@ -18,12 +18,17 @@ type FakeWatcher struct {
 		result1 *client.Response
 		result2 error
 	}
+	nextReturnsOnCall map[int]struct {
+		result1 *client.Response
+		result2 error
+	}
 	invocations      map[string][][]interface{}
 	invocationsMutex sync.RWMutex
 }
 
 func (fake *FakeWatcher) Next(arg1 context.Context) (*client.Response, error) {
 	fake.nextMutex.Lock()
+	ret, specificReturn := fake.nextReturnsOnCall[len(fake.nextArgsForCall)]
 	fake.nextArgsForCall = append(fake.nextArgsForCall, struct {
 		arg1 context.Context
 	}{arg1})
@@ -31,9 +36,11 @@ func (fake *FakeWatcher) Next(arg1 context.Context) (*client.Response, error) {
 	fake.nextMutex.Unlock()
 	if fake.NextStub != nil {
 		return fake.NextStub(arg1)
-	} else {
-		return fake.nextReturns.result1, fake.nextReturns.result2
 	}
+	if specificReturn {
+		return ret.result1, ret.result2
+	}
+	return fake.nextReturns.result1, fake.nextReturns.result2
 }
 
 func (fake *FakeWatcher) NextCallCount() int {
@@ -51,6 +58,20 @@ func (fake *FakeWatcher) NextArgsForCall(i int) context.Context {
 func (fake *FakeWatcher) NextReturns(result1 *client.Response, result2 error) {
 	fake.NextStub = nil
 	fake.nextReturns = struct {
+		result1 *client.Response
+		result2 error
+	}{result1, result2}
+}
+
+func (fake *FakeWatcher) NextReturnsOnCall(i int, result1 *client.Response, result2 error) {
+	fake.NextStub = nil
+	if fake.nextReturnsOnCall == nil {
+		fake.nextReturnsOnCall = make(map[int]struct {
+			result1 *client.Response
+			result2 error
+		})
+	}
+	fake.nextReturnsOnCall[i] = struct {
 		result1 *client.Response
 		result2 error
 	}{result1, result2}

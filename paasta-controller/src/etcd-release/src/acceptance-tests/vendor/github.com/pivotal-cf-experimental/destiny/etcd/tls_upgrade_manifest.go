@@ -24,7 +24,7 @@ func NewTLSUpgradeManifest(config Config, iaasConfig iaas.Config) Manifest {
 		Network:             "etcd1",
 		ReuseCompilationVMs: true,
 		Workers:             3,
-		CloudProperties:     iaasConfig.Compilation(),
+		CloudProperties:     iaasConfig.Compilation("us-east-1a"),
 	}
 
 	update := core.Update{
@@ -90,6 +90,9 @@ func NewTLSUpgradeManifest(config Config, iaasConfig iaas.Config) Manifest {
 			{
 				Name:    "consul_agent",
 				Release: "consul",
+				Consumes: core.JobConsumes{
+					Consul: "nil",
+				},
 			},
 		},
 		Properties: &core.JobProperties{
@@ -118,6 +121,9 @@ func NewTLSUpgradeManifest(config Config, iaasConfig iaas.Config) Manifest {
 			{
 				Name:    "consul_agent",
 				Release: "consul",
+				Consumes: core.JobConsumes{
+					Consul: "nil",
+				},
 			},
 			{
 				Name:    "etcd",
@@ -171,6 +177,9 @@ func NewTLSUpgradeManifest(config Config, iaasConfig iaas.Config) Manifest {
 			{
 				Name:    "consul_agent",
 				Release: "consul",
+				Consumes: core.JobConsumes{
+					Consul: "nil",
+				},
 			},
 			{
 				Name:    "etcd_proxy",
@@ -198,6 +207,9 @@ func NewTLSUpgradeManifest(config Config, iaasConfig iaas.Config) Manifest {
 			{
 				Name:    "consul_agent",
 				Release: "consul",
+				Consumes: core.JobConsumes{
+					Consul: "nil",
+				},
 			},
 			{
 				Name:    "etcd_testconsumer",

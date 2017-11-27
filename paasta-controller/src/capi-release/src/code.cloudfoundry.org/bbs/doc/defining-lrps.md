@@ -44,6 +44,7 @@ err := client.DesireLRP(logger, &models.DesiredLRP{
 		"failure-message",
 	)),
 	DiskMb:      512,
+	MaxPids:     1024,
 	MemoryMb:    1024,
 	Privileged:  true,
 	CpuWeight:   42,
@@ -146,8 +147,19 @@ To pull the image from a different registry than the default (Docker Hub), speci
 
 > You *must* provide the dockerimage `RootFs` uri as above, including the leading `docker://`!
 
-> [Lattice](https://github.com/cloudfoundry-incubator/lattice) does not ship with any preloaded root filesystems. You must specify a Docker image when using Lattice. You can mount the filesystem provided by diego-release by specifying `"rootfs": "docker:///cloudfoundry/cflinuxfs2"`.
+##### `ImageUsername` [optional]
 
+The `ImageUsername` field specifies the username to be used when fetching the
+container image defined by the `RootFs` field from the image repository.
+
+Setting `ImageUsername` requires the `ImagePassword` to also be set.
+
+##### `ImagePassword` [optional]
+
+The `ImagePassword` field specifies the password to be used when fetching the
+container image defined by the `RootFs` field from the image repository.
+
+Setting `ImagePassword` requires the `ImageUsername` to also be set.
 
 ##### `EnvironmentVariables` [optional]
 
@@ -198,6 +210,13 @@ Processes that attempt to exceed this limit will not be allowed to write to disk
 - `DiskMb` must be an integer >= 0
 - If set to 0 no disk constraints are applied to the container
 - The units are megabytes
+
+##### `MaxPids` [optional]
+
+A maximum process limit is applied to the container. If the number of processes running on the container reach the limit, new processes spawned will fail.
+
+- The `MaxPids` value must be an integer greater than or equal to 0.
+- If set to 0, no process limit is applied to the container.
 
 ##### `MemoryMb` [optional]
 

@@ -41,16 +41,17 @@ const (
 	DesiredLRPByProcessGuidRoute_r0 = "DesiredLRPByProcessGuid" // Deprecated
 
 	// Desire LRP Lifecycle
-	DesireDesiredLRPRoute = "DesireDesiredLRP_r1"
+	DesireDesiredLRPRoute = "DesireDesiredLRP_r2"
 	UpdateDesiredLRPRoute = "UpdateDesireLRP"
 	RemoveDesiredLRPRoute = "RemoveDesiredLRP"
 
+	DesireDesiredLRPRoute_r1 = "DesireDesiredLRP_r1"
 	DesireDesiredLRPRoute_r0 = "DesireDesiredLRP"
 
 	// Tasks
 	TasksRoute         = "Tasks_r2"
 	TaskByGuidRoute    = "TaskByGuid_r2"
-	DesireTaskRoute    = "DesireTask_r1"
+	DesireTaskRoute    = "DesireTask_r2"
 	StartTaskRoute     = "StartTask"
 	CancelTaskRoute    = "CancelTask"
 	FailTaskRoute      = "FailTask"
@@ -61,17 +62,17 @@ const (
 	TasksRoute_r1      = "Tasks_r1"      // Deprecated
 	TaskByGuidRoute_r1 = "TaskByGuid_r1" // Deprecated
 
-	DesireTaskRoute_r0 = "DesireTask" // Deprecated
-	TasksRoute_r0      = "Tasks"      // Deprecated
-	TaskByGuidRoute_r0 = "TaskByGuid" // Deprecated
+	DesireTaskRoute_r0 = "DesireTask"    // Deprecated
+	DesireTaskRoute_r1 = "DesireTask_r1" // Deprecated
+	TasksRoute_r0      = "Tasks"         // Deprecated
+	TaskByGuidRoute_r0 = "TaskByGuid"    // Deprecated
 
 	// Event Streaming
-	EventStreamRoute_r0        = "EventStream_r0" // Deprecated
-	DesiredLRPEventStreamRoute = "DesiredLRPEventStreamRoute"
-	ActualLRPEventStreamRoute  = "ActualLRPEventStreamRoute"
+	EventStreamRoute_r0 = "EventStream_r0"
 
 	// Cell Presence
-	CellsRoute = "Cells_r1"
+	CellsRoute    = "Cells_r2"
+	CellsRoute_r1 = "Cells_r1"
 )
 
 var Routes = rata.Routes{
@@ -103,15 +104,19 @@ var Routes = rata.Routes{
 	{Path: "/v1/actual_lrps/evacuate_running", Method: "POST", Name: EvacuateRunningActualLRPRoute},
 
 	// Desired LRPs
-	{Path: "/v1/desired_lrps/list.r1", Method: "POST", Name: DesiredLRPsRoute},
-	{Path: "/v1/desired_lrps/get_by_process_guid.r1", Method: "POST", Name: DesiredLRPByProcessGuidRoute},
 	{Path: "/v1/desired_lrp_scheduling_infos/list", Method: "POST", Name: DesiredLRPSchedulingInfosRoute},
 
-	{Path: "/v1/desired_lrps/list", Method: "POST", Name: DesiredLRPsRoute_r0},                            // Deprecated
-	{Path: "/v1/desired_lrps/get_by_process_guid", Method: "POST", Name: DesiredLRPByProcessGuidRoute_r0}, // Deprecated
+	{Path: "/v1/desired_lrps/list.r2", Method: "POST", Name: DesiredLRPsRoute},
+	{Path: "/v1/desired_lrps/get_by_process_guid.r2", Method: "POST", Name: DesiredLRPByProcessGuidRoute},
+
+	{Path: "/v1/desired_lrps/list.r1", Method: "POST", Name: DesiredLRPsRoute_r1},                            // Deprecated
+	{Path: "/v1/desired_lrps/get_by_process_guid.r1", Method: "POST", Name: DesiredLRPByProcessGuidRoute_r1}, // Deprecated
+	{Path: "/v1/desired_lrps/list", Method: "POST", Name: DesiredLRPsRoute_r0},                               // Deprecated
+	{Path: "/v1/desired_lrps/get_by_process_guid", Method: "POST", Name: DesiredLRPByProcessGuidRoute_r0},    // Deprecated
 
 	// Desire LPR Lifecycle
-	{Path: "/v1/desired_lrp/desire.r1", Method: "POST", Name: DesireDesiredLRPRoute},
+	{Path: "/v1/desired_lrp/desire.r2", Method: "POST", Name: DesireDesiredLRPRoute},
+	{Path: "/v1/desired_lrp/desire.r1", Method: "POST", Name: DesireDesiredLRPRoute_r1}, // Deprecated
 	{Path: "/v1/desired_lrp/update", Method: "POST", Name: UpdateDesiredLRPRoute},
 	{Path: "/v1/desired_lrp/remove", Method: "POST", Name: RemoveDesiredLRPRoute},
 	{Path: "/v1/desired_lrp/desire", Method: "POST", Name: DesireDesiredLRPRoute_r0}, // Deprecated
@@ -126,7 +131,8 @@ var Routes = rata.Routes{
 	{Path: "/v1/tasks/get_by_task_guid", Method: "GET", Name: TaskByGuidRoute_r0},     // Deprecated
 
 	// Task Lifecycle
-	{Path: "/v1/tasks/desire.r1", Method: "POST", Name: DesireTaskRoute},
+	{Path: "/v1/tasks/desire.r2", Method: "POST", Name: DesireTaskRoute},
+	{Path: "/v1/tasks/desire.r1", Method: "POST", Name: DesireTaskRoute_r1}, // Deprecated
 	{Path: "/v1/tasks/start", Method: "POST", Name: StartTaskRoute},
 	{Path: "/v1/tasks/cancel", Method: "POST", Name: CancelTaskRoute},
 	{Path: "/v1/tasks/fail", Method: "POST", Name: FailTaskRoute},
@@ -138,9 +144,8 @@ var Routes = rata.Routes{
 
 	// Event Streaming
 	{Path: "/v1/events", Method: "GET", Name: EventStreamRoute_r0},
-	{Path: "/v1/desired_lrp_events", Method: "GET", Name: DesiredLRPEventStreamRoute}, // Experimental
-	{Path: "/v1/actual_lrp_events", Method: "GET", Name: ActualLRPEventStreamRoute},   // Experimental
 
 	// Cells
-	{Path: "/v1/cells/list.r1", Method: "GET", Name: CellsRoute},
+	{Path: "/v1/cells/list.r1", Method: "POST", Name: CellsRoute},
+	{Path: "/v1/cells/list.r1", Method: "GET", Name: CellsRoute_r1}, // Deprecated
 }

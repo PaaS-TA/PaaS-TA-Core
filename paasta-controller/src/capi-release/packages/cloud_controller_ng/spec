@@ -16,5 +16,6 @@ files:
 - capi-release/src/cloud_controller_ng/config/environment.rb
 - capi-release/src/cloud_controller_ng/config/routes.rb
 - capi-release/src/cloud_controller_ng/config/version
+- capi-release/src/cloud_controller_ng/config/version_v2
 - capi-release/src/cloud_controller_ng/LICENSE
 - capi-release/src/cloud_controller_ng/NOTICE

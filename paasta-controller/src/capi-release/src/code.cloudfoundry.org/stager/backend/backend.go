@@ -39,7 +39,6 @@ type Config struct {
 	FileServerURL            string
 	CCUploaderURL            string
 	Lifecycles               map[string]string
-	DockerRegistryAddress    string
 	InsecureDockerRegistries []string
 	ConsulCluster            string
 	SkipCertVerify           bool

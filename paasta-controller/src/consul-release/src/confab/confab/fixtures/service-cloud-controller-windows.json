@@ -1,0 +1,18 @@
+{
+    "service": {
+        "check": {
+            "interval": "3s",
+            "name": "dns_health_check",
+            "script": "powershell -Command /var/vcap/jobs/cloud_controller/bin/dns_health_check.ps1; Exit $LASTEXITCODE"
+        },
+        "checks": [
+            {
+                "interval": "5m",
+                "name": "do_something",
+                "script": "/var/vcap/jobs/cloudcontroller/bin/do_something"
+            }
+        ],
+        "name": "cloud-controller",
+        "tags": ["my-node-3"]
+    }
+}

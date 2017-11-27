@@ -1,169 +1,154 @@
 require 'spec_helper'
 require 'actions/droplet_create'
-require 'cloud_controller/backends/staging_memory_calculator'
-require 'cloud_controller/backends/staging_disk_calculator'
-require 'cloud_controller/backends/staging_environment_builder'
-require 'messages/droplet_create_message'
 
 module VCAP::CloudController
   RSpec.describe DropletCreate do
-    subject(:action) { described_class.new(memory_limit_calculator, disk_limit_calculator, environment_builder) }
-    let(:user) { User.make }
-    let(:user_email) { 'user@example.com' }
-
-    let(:memory_limit_calculator) { double(:memory_limit_calculator) }
-    let(:disk_limit_calculator) { double(:disk_limit_calculator) }
-    let(:environment_builder) { double(:environment_builder) }
-
-    let(:lifecycle) { BuildpackLifecycle.new(package, staging_message) }
-    let(:package) { PackageModel.make(app: app, state: PackageModel::READY_STATE) }
+    subject(:droplet_create) { DropletCreate.new }
     let(:app) { AppModel.make }
-    let(:space) { app.space }
-    let(:org) { space.organization }
-
-    let(:staging_message) { DropletCreateMessage.create_from_http_request(request) }
-
-    let(:request) do
-      {
-        lifecycle:            {
-          type: 'buildpack',
-          data: lifecycle_data
-        },
-        staging_memory_in_mb: staging_memory_in_mb,
-        staging_disk_in_mb:   staging_disk_in_mb
-      }.deep_stringify_keys
-    end
-    let(:staging_memory_in_mb) { 12340 }
-    let(:staging_disk_in_mb) { 32100 }
-    let(:buildpack_git_url) { 'http://example.com/repo.git' }
-    let(:stack) { Stack.default }
-    let(:lifecycle_data) do
-      {
-        stack:     stack.name,
-        buildpack: buildpack_git_url
-      }
+    let(:package) { PackageModel.make app: app }
+    let(:build) do
+      BuildModel.make(
+        app: app,
+        package: package,
+        created_by_user_guid: 'schneider',
+        created_by_user_email: 'bob@loblaw.com',
+        created_by_user_name: 'bobert'
+      )
     end
 
-    let(:stagers) { instance_double(Stagers) }
-    let(:stager) { instance_double(Diego::Stager) }
-    let(:calculated_mem_limit) { 32 }
-    let(:calculated_staging_disk_in_mb) { 64 }
-
-    let(:environment_variables) { 'environment_variables' }
-
-    before do
-      allow(CloudController::DependencyLocator.instance).to receive(:stagers).and_return(stagers)
-      allow(stagers).to receive(:stager_for_app).and_return(stager)
-      allow(stager).to receive(:stage)
-      allow(memory_limit_calculator).to receive(:get_limit).with(staging_memory_in_mb, space, org).and_return(calculated_mem_limit)
-      allow(disk_limit_calculator).to receive(:get_limit).with(staging_disk_in_mb).and_return(calculated_staging_disk_in_mb)
-      allow(environment_builder).to receive(:build).and_return(environment_variables)
-    end
-
-    describe '#create_and_stage' do
-      it 'creates an audit event' do
-        expect(Repositories::DropletEventRepository).to receive(:record_create_by_staging).with(
-          instance_of(DropletModel),
-          user,
-          user_email,
-          staging_message.audit_hash,
-          app.name,
-          space.guid,
-          org.guid
-        )
-
-        action.create_and_stage(package: package, lifecycle: lifecycle, message: staging_message, user: user, user_email: user_email)
+    describe '#create_docker_droplet' do
+      before do
+        package.update(docker_username: 'docker-username', docker_password: 'example-docker-password')
       end
 
-      context 'creating a droplet' do
-        it 'creates a droplet' do
-          droplet = nil
+      it 'creates a droplet for build' do
+        expect {
+          droplet_create.create_docker_droplet(build)
+        }.to change { [DropletModel.count, Event.count] }.by([1, 1])
 
+        droplet = DropletModel.last
+
+        expect(droplet.state).to eq(DropletModel::STAGING_STATE)
+        expect(droplet.app).to eq(app)
+        expect(droplet.package_guid).to eq(package.guid)
+        expect(droplet.build).to eq(build)
+
+        expect(droplet.docker_receipt_username).to eq('docker-username')
+        expect(droplet.docker_receipt_password).to eq('example-docker-password')
+
+        expect(droplet.buildpack_lifecycle_data).to be_nil
+
+        event = Event.last
+        expect(event.type).to eq('audit.app.droplet.create')
+        expect(event.actor).to eq('schneider')
+        expect(event.actor_type).to eq('user')
+        expect(event.actor_name).to eq('bob@loblaw.com')
+        expect(event.actor_username).to eq('bobert')
+        expect(event.actee).to eq(app.guid)
+        expect(event.actee_type).to eq('app')
+        expect(event.actee_name).to eq(app.name)
+        expect(event.timestamp).to be
+        expect(event.space_guid).to eq(app.space_guid)
+        expect(event.organization_guid).to eq(app.space.organization.guid)
+        expect(event.metadata).to eq({
+          'droplet_guid' => droplet.guid,
+          'package_guid' => package.guid,
+        })
+      end
+
+      context 'when the build does not contain created_by fields' do
+        let(:build) do
+          BuildModel.make(
+            app: app,
+            package: package,
+          )
+        end
+
+        it 'sets the actor to UNKNOWN' do
           expect {
-            droplet = action.create_and_stage(package: package, lifecycle: lifecycle, message: staging_message, user: user, user_email: user_email)
-          }.to change { DropletModel.count }.by(1)
+            droplet_create.create_docker_droplet(build)
+          }.to change { [DropletModel.count, Event.count] }.by([1, 1])
 
-          expect(droplet.state).to eq(DropletModel::STAGING_STATE)
-          expect(droplet.lifecycle_data.to_hash).to eq(lifecycle_data)
-          expect(droplet.package_guid).to eq(package.guid)
-          expect(droplet.app_guid).to eq(app.guid)
-          expect(droplet.staging_memory_in_mb).to eq(calculated_mem_limit)
-          expect(droplet.staging_disk_in_mb).to eq(calculated_staging_disk_in_mb)
-          expect(droplet.environment_variables).to eq(environment_variables)
-          expect(droplet.lifecycle_data).to_not be_nil
-        end
-      end
+          droplet = DropletModel.last
+          expect(droplet.build).to eq(build)
 
-      context 'creating a stage request' do
-        it 'initiates a staging request' do
-          droplet = action.create_and_stage(package: package, lifecycle: lifecycle, message: staging_message, user: user, user_email: user_email)
-          expect(stager).to have_received(:stage) do |staging_details|
-            expect(staging_details.package).to eq(package)
-            expect(staging_details.droplet).to eq(droplet)
-            expect(staging_details.staging_memory_in_mb).to eq(calculated_mem_limit)
-            expect(staging_details.staging_disk_in_mb).to eq(calculated_staging_disk_in_mb)
-            expect(staging_details.environment_variables).to eq(environment_variables)
-            expect(staging_details.lifecycle).to eq(lifecycle)
-          end
-        end
-      end
-
-      context 'when staging is unsuccessful' do
-        context 'when the package is not ready' do
-          let(:package) { PackageModel.make(app: app, state: PackageModel::PENDING_STATE) }
-          it 'raises an InvalidPackage exception' do
-            expect {
-              action.create_and_stage(package: package, lifecycle: lifecycle, message: staging_message, user: user, user_email: user_email)
-            }.to raise_error(DropletCreate::InvalidPackage, /not ready/)
-          end
-        end
-
-        describe 'staging_disk_in_mb' do
-          context 'when disk_limit_calculator raises StagingDiskCalculator::LimitExceeded' do
-            before do
-              allow(disk_limit_calculator).to receive(:get_limit).with(staging_disk_in_mb).and_raise(StagingDiskCalculator::LimitExceeded)
-            end
-
-            it 'raises DropletCreate::DiskLimitExceeded' do
-              expect {
-                action.create_and_stage(package: package, lifecycle: lifecycle, message: staging_message, user: user, user_email: user_email)
-              }.to raise_error(DropletCreate::DiskLimitExceeded)
-            end
-          end
-        end
-
-        describe 'staging_memory_in_mb' do
-          context 'when memory_limit_calculator raises MemoryLimitCalculator::SpaceQuotaExceeded' do
-            before do
-              allow(memory_limit_calculator).to receive(:get_limit).with(staging_memory_in_mb, space, org).and_raise(StagingMemoryCalculator::SpaceQuotaExceeded)
-            end
-
-            it 'raises DropletCreate::SpaceQuotaExceeded' do
-              expect {
-                action.create_and_stage(package: package, lifecycle: lifecycle, message: staging_message, user: user, user_email: user_email)
-              }.to raise_error(DropletCreate::SpaceQuotaExceeded)
-            end
-          end
-
-          context 'when memory_limit_calculator raises MemoryLimitCalculator::OrgQuotaExceeded' do
-            before do
-              allow(memory_limit_calculator).to receive(:get_limit).with(staging_memory_in_mb, space, org).and_raise(StagingMemoryCalculator::OrgQuotaExceeded)
-            end
-
-            it 'raises DropletCreate::OrgQuotaExceeded' do
-              expect {
-                action.create_and_stage(package: package, lifecycle: lifecycle, message: staging_message, user: user, user_email: user_email)
-              }.to raise_error(DropletCreate::OrgQuotaExceeded)
-            end
-          end
+          event = Event.last
+          expect(event.type).to eq('audit.app.droplet.create')
+          expect(event.actor_type).to eq('user')
+          expect(event.actor).to eq('UNKNOWN')
+          expect(event.actor_name).to eq('')
+          expect(event.actor_username).to eq('')
+          expect(event.metadata).to eq({
+            'droplet_guid' => droplet.guid,
+            'package_guid' => package.guid,
+          })
         end
       end
     end
 
-    describe '#create_and_stage_without_event' do
-      it 'does not create an audit event' do
-        expect(Repositories::DropletEventRepository).not_to receive(:record_create_by_staging)
-        action.create_and_stage_without_event(package: package, lifecycle: lifecycle, message: staging_message)
+    describe '#create_buildpack_droplet' do
+      let!(:buildpack_lifecycle_data) { BuildpackLifecycleDataModel.make(build: build) }
+
+      it 'sets it on the droplet' do
+        expect {
+          droplet_create.create_buildpack_droplet(build)
+        }.to change { [DropletModel.count, Event.count] }.by([1, 1])
+
+        droplet = DropletModel.last
+
+        expect(droplet.state).to eq(DropletModel::STAGING_STATE)
+        expect(droplet.app).to eq(app)
+        expect(droplet.package).to eq(package)
+        expect(droplet.build).to eq(build)
+
+        buildpack_lifecycle_data.reload
+        expect(buildpack_lifecycle_data.droplet).to eq(droplet)
+
+        event = Event.last
+        expect(event.type).to eq('audit.app.droplet.create')
+        expect(event.actor).to eq('schneider')
+        expect(event.actor_type).to eq('user')
+        expect(event.actor_name).to eq('bob@loblaw.com')
+        expect(event.actor_username).to eq('bobert')
+        expect(event.actee).to eq(app.guid)
+        expect(event.actee_type).to eq('app')
+        expect(event.actee_name).to eq(app.name)
+        expect(event.timestamp).to be
+        expect(event.space_guid).to eq(app.space_guid)
+        expect(event.organization_guid).to eq(app.space.organization.guid)
+        expect(event.metadata).to eq({
+          'droplet_guid' => droplet.guid,
+          'package_guid' => package.guid,
+        })
+      end
+
+      context 'when the build does not contain created_by fields' do
+        let(:build) do
+          BuildModel.make(
+            app: app,
+            package: package,
+          )
+        end
+
+        it 'sets the actor to UNKNOWN' do
+          expect {
+            droplet_create.create_buildpack_droplet(build)
+          }.to change { [DropletModel.count, Event.count] }.by([1, 1])
+
+          droplet = DropletModel.last
+          expect(droplet.build).to eq(build)
+
+          event = Event.last
+          expect(event.type).to eq('audit.app.droplet.create')
+          expect(event.actor_type).to eq('user')
+          expect(event.actor).to eq('UNKNOWN')
+          expect(event.actor_name).to eq('')
+          expect(event.actor_username).to eq('')
+          expect(event.metadata).to eq({
+            'droplet_guid' => droplet.guid,
+            'package_guid' => package.guid,
+          })
+        end
       end
     end
   end

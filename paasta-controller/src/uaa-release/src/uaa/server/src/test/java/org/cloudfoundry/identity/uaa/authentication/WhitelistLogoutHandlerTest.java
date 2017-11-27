@@ -14,11 +14,11 @@
 
 package org.cloudfoundry.identity.uaa.authentication;
 
+import org.cloudfoundry.identity.uaa.zone.ClientServicesExtension;
 import org.junit.Before;
 import org.junit.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
-import org.springframework.security.oauth2.provider.ClientDetailsService;
 import org.springframework.security.oauth2.provider.NoSuchClientException;
 import org.springframework.security.oauth2.provider.client.BaseClientDetails;
 
@@ -36,7 +36,7 @@ public class WhitelistLogoutHandlerTest {
     private MockHttpServletRequest request = new MockHttpServletRequest();
     private MockHttpServletResponse response = new MockHttpServletResponse();
     private BaseClientDetails client = new BaseClientDetails(CLIENT_ID,"","","","","http://*.testing.com,http://testing.com");
-    private ClientDetailsService clientDetailsService =  mock(ClientDetailsService.class);
+    private ClientServicesExtension clientDetailsService =  mock(ClientServicesExtension.class);
 
     @Before
     public void setUp() {
@@ -67,13 +67,14 @@ public class WhitelistLogoutHandlerTest {
     }
 
     @Test
-    public void test_allow_open_redirect() throws Exception {
+    public void test_open_redirect_no_longer_allowed() throws Exception {
         handler.setWhitelist(null);
         handler.setAlwaysUseDefaultTargetUrl(false);
+        handler.setDefaultTargetUrl("/login");
         request.setParameter("redirect", "http://testing.com");
-        assertEquals("http://testing.com", handler.determineTargetUrl(request, response));
+        assertEquals("/login", handler.determineTargetUrl(request, response));
         request.setParameter("redirect", "http://www.testing.com");
-        assertEquals("http://www.testing.com", handler.determineTargetUrl(request, response));
+        assertEquals("/login", handler.determineTargetUrl(request, response));
     }
 
     @Test

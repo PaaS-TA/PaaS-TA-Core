@@ -2,7 +2,7 @@
 name: confab-windows
 
 dependencies:
-  - golang1.7-windows
+  - golang1.8-windows
 
 files:
   - confab/**/*

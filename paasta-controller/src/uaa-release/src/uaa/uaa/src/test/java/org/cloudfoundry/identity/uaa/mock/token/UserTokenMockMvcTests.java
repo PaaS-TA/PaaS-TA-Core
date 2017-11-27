@@ -23,6 +23,7 @@ import org.cloudfoundry.identity.uaa.oauth.token.RevocableTokenProvisioning;
 import org.cloudfoundry.identity.uaa.oauth.token.TokenConstants;
 import org.cloudfoundry.identity.uaa.util.JsonUtils;
 import org.cloudfoundry.identity.uaa.zone.IdentityZone;
+import org.cloudfoundry.identity.uaa.zone.IdentityZoneHolder;
 import org.junit.Test;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -93,7 +94,7 @@ public class UserTokenMockMvcTests extends AbstractTokenMockMvcTests {
         assertEquals("test.scope", result.get("scope"));
         assertNull(result.get(ACCESS_TOKEN));
 
-        RevocableToken token = getWebApplicationContext().getBean(RevocableTokenProvisioning.class).retrieve(refreshToken);
+        RevocableToken token = getWebApplicationContext().getBean(RevocableTokenProvisioning.class).retrieve(refreshToken, IdentityZoneHolder.get().getId());
         assertEquals(recipientId, token.getClientId());
 
         response = getMockMvc().perform(
@@ -197,7 +198,8 @@ public class UserTokenMockMvcTests extends AbstractTokenMockMvcTests {
             null,
             "openid,uaa.user,tokens.",
             TokenConstants.GRANT_TYPE_USER_TOKEN,
-            null
+            null,
+            "http://redirect.uri"
         );
         client.setClientSecret(SECRET);
         getMockMvc().perform(

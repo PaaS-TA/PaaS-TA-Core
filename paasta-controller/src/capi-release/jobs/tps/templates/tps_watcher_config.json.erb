@@ -1,0 +1,36 @@
+<%
+conf_dir = "/var/vcap/jobs/tps/config"
+config = {}
+
+if p("capi.tps.bbs.require_ssl")
+  config[:bbs_client_cert] = "#{conf_dir}/certs/bbs/client.crt"
+  config[:bbs_client_key] = "#{conf_dir}/certs/bbs/client.key"
+  config[:bbs_ca_cert] = "#{conf_dir}/certs/bbs/ca.crt"
+  config[:bbs_api_url] = "https://" + p("capi.tps.bbs.api_location")
+else
+  config[:bbs_api_url] =  "http://" + p("capi.tps.bbs.api_location")
+end
+
+if_p("capi.tps.bbs.max_idle_conns_per_host") do |value|
+  config[:bbs_max_idle_conns_per_host] =  value
+end
+
+config[:cc_base_url] =  "https://#{p("capi.tps.cc.internal_service_hostname")}:#{p("capi.tps.cc.external_port")}"
+config[:cc_client_cert] = "#{conf_dir}/certs/cc/client.crt"
+config[:cc_client_key] = "#{conf_dir}/certs/cc/client.key"
+config[:cc_ca_cert] = "#{conf_dir}/certs/cc/ca.crt"
+config[:consul_cluster] =  "http://127.0.0.1:" + p("capi.tps.consul_agent_port").to_s
+config[:debug_server_config] = { debug_address: p("capi.tps.watcher.debug_addr") }
+config[:dropsonde_port] =  p("capi.tps.dropsonde_port")
+config[:lager_config] = { log_level: p("capi.tps.log_level") }
+
+if p("capi.tps.bbs.require_ssl")
+  config[:locket_client_cert_file] = "#{conf_dir}/certs/bbs/client.crt"
+  config[:locket_client_key_file] = "#{conf_dir}/certs/bbs/client.key"
+  config[:locket_ca_cert_file] = "#{conf_dir}/certs/bbs/ca.crt"
+  config[:locket_address] = p("capi.tps.watcher.locket.api_location")
+end
+
+config[:skip_consul_lock] = p("capi.tps.watcher.skip_consul_lock")
+%>
+<%= config.to_json %>

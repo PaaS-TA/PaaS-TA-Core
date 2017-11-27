@@ -3,145 +3,254 @@ package metricbatcher_test
 import (
 	"time"
 
-	"github.com/cloudfoundry/dropsonde/metric_sender/fake"
-	"github.com/cloudfoundry/dropsonde/metricbatcher"
-
+	. "github.com/apoydence/eachers"
+	"github.com/apoydence/eachers/testhelpers"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+
+	"github.com/cloudfoundry/dropsonde/metricbatcher"
 )
 
 var _ = Describe("MetricBatcher", func() {
 	var (
-		fakeMetricSender *fake.FakeMetricSender
+		mockMetricSender *mockMetricSender
 		metricBatcher    *metricbatcher.MetricBatcher
+		mockChainer      *mockCounterChainer
 	)
 
 	BeforeEach(func() {
-		fakeMetricSender = fake.NewFakeMetricSender()
+		mockMetricSender = newMockMetricSender()
+		mockChainer = newMockCounterChainer()
+		testhelpers.AlwaysReturn(mockMetricSender.CounterOutput, mockChainer)
+		testhelpers.AlwaysReturn(mockChainer.SetTagOutput, mockChainer)
+
+		metricBatcher = metricbatcher.New(mockMetricSender, 50*time.Millisecond)
 	})
 
-	Context("BatchIncrementCounter", func() {
+	Describe("BatchCounter", func() {
+		It("batches and sends with a chaining API", func() {
+			metricBatcher.BatchCounter("count").Increment()
+			Expect(mockMetricSender.CounterInput).ToNot(BeCalled())
+			Eventually(mockMetricSender.CounterInput).Should(BeCalled(With("count")))
+			Eventually(mockChainer.AddInput).Should(BeCalled(With(uint64(1))))
+			mockChainer.AddOutput.Ret0 <- nil
+		})
 
-		BeforeEach(func() {
-			metricBatcher = metricbatcher.New(fakeMetricSender, 50*time.Millisecond)
+		It("batches events with different tags separately", func() {
+			metricBatcher.BatchCounter("count").
+				SetTag("foo", "bar").
+				Increment()
+			metricBatcher.BatchCounter("count").
+				SetTag("baz", "qux").
+				Increment()
+			metricBatcher.BatchCounter("count").
+				SetTag("baz", "qux").
+				Add(2)
+
+			Eventually(mockMetricSender.CounterInput).Should(BeCalled(With("count")))
+			Eventually(mockChainer.SetTagInput).Should(BeCalled(With("foo", "bar")))
+			Eventually(mockChainer.AddInput).Should(BeCalled(With(uint64(1))))
+
+			mockChainer.AddOutput.Ret0 <- nil
+
+			Eventually(mockMetricSender.CounterInput).Should(BeCalled(With("count")))
+
+			Eventually(mockChainer.SetTagInput).Should(BeCalled(With("baz", "qux")))
+			Eventually(mockChainer.AddInput).Should(BeCalled(With(uint64(3))))
+
+			mockChainer.AddOutput.Ret0 <- nil
+		})
+
+		It("can add while it flushes without a data race", func() {
+			close(mockChainer.AddOutput.Ret0)
+
+			counter := metricBatcher.BatchCounter("count").SetTag("foo", "bar")
+			after := time.After(100 * time.Millisecond)
+			for {
+				select {
+				case <-after:
+					return
+				default:
+					counter.Increment()
+					counter.Add(2)
+				}
+			}
+		})
+	})
+
+	Describe("BatchIncrementCounter", func() {
+		It("accepts metrics while it's flushing metrics", func() {
+			metricBatcher.BatchIncrementCounter("count")
+			Eventually(mockMetricSender.CounterInput).Should(BeCalled(With("count")))
+			Eventually(mockChainer.AddInput).Should(BeCalled(With(uint64(1))))
+
+			done := make(chan struct{})
+			go func() {
+				defer close(done)
+				metricBatcher.BatchIncrementCounter("count")
+				metricBatcher.BatchIncrementCounter("count")
+			}()
+			Eventually(done).Should(BeClosed())
+
+			mockChainer.AddOutput.Ret0 <- nil
+
+			Eventually(mockMetricSender.CounterInput).Should(BeCalled(With("count")))
+			Eventually(mockChainer.AddInput).Should(BeCalled(With(uint64(2))))
+
+			mockChainer.AddOutput.Ret0 <- nil
 		})
 
 		It("batches and then sends a single metric", func() {
 			metricBatcher.BatchIncrementCounter("count")
-			Expect(fakeMetricSender.GetCounter("count")).To(BeEquivalentTo(0)) // should not increment.
+			Expect(mockChainer.AddInput).ToNot(BeCalled())
 
 			metricBatcher.BatchIncrementCounter("count")
 			metricBatcher.BatchIncrementCounter("count")
+			Eventually(mockChainer.AddInput).Should(BeCalled(With(uint64(3))))
 
-			time.Sleep(75 * time.Millisecond)
-			Expect(fakeMetricSender.GetCounter("count")).To(BeEquivalentTo(3)) // should update counter only when time out
+			mockChainer.AddOutput.Ret0 <- nil
 
 			metricBatcher.BatchIncrementCounter("count")
-			metricBatcher.BatchIncrementCounter("count")
-			Expect(fakeMetricSender.GetCounter("count")).To(BeEquivalentTo(3)) // should update counter only when time out
+			Expect(mockChainer.AddInput).ToNot(BeCalled())
 
-			time.Sleep(75 * time.Millisecond)
-			Expect(fakeMetricSender.GetCounter("count")).To(BeEquivalentTo(5)) // should update counter only when time out
+			metricBatcher.BatchIncrementCounter("count")
+
+			Eventually(mockChainer.AddInput).Should(BeCalled(With(uint64(2))))
+
+			mockChainer.AddOutput.Ret0 <- nil
 		})
 
 		It("batches and then sends multiple metrics", func() {
-			metricBatcher.BatchIncrementCounter("count1")
-			metricBatcher.BatchIncrementCounter("count2")
-			metricBatcher.BatchIncrementCounter("count2")
-			Expect(fakeMetricSender.GetCounter("count1")).To(BeEquivalentTo(0)) // should not increment.
-			Expect(fakeMetricSender.GetCounter("count2")).To(BeEquivalentTo(0)) // should not increment.
-
-			time.Sleep(75 * time.Millisecond)
-			Expect(fakeMetricSender.GetCounter("count1")).To(BeEquivalentTo(1)) // should update counter only when time out
-			Expect(fakeMetricSender.GetCounter("count2")).To(BeEquivalentTo(2)) // should update counter only when time out
+			close(mockChainer.AddOutput.Ret0)
 
 			metricBatcher.BatchIncrementCounter("count1")
 			metricBatcher.BatchIncrementCounter("count2")
-			Expect(fakeMetricSender.GetCounter("count1")).To(BeEquivalentTo(1)) // should update counter only when time out
-			Expect(fakeMetricSender.GetCounter("count2")).To(BeEquivalentTo(2)) // should update counter only when time out
+			metricBatcher.BatchIncrementCounter("count2")
+			Expect(mockChainer.AddInput).ToNot(BeCalled())
+			Eventually(mockMetricSender.CounterInput).Should(BeCalled(With("count1")))
+			Eventually(mockMetricSender.CounterInput).Should(BeCalled(With("count2")))
+			Eventually(mockChainer.AddInput).Should(BeCalled(With(uint64(1))))
+			Eventually(mockChainer.AddInput).Should(BeCalled(With(uint64(2))))
 
-			time.Sleep(75 * time.Millisecond)
-			Expect(fakeMetricSender.GetCounter("count1")).To(BeEquivalentTo(2)) // should update counter only when time out
-			Expect(fakeMetricSender.GetCounter("count2")).To(BeEquivalentTo(3)) // should update counter only when time out
+			metricBatcher.BatchIncrementCounter("count1")
+			metricBatcher.BatchIncrementCounter("count2")
+			Expect(mockChainer.AddInput).ToNot(BeCalled())
+			Eventually(mockMetricSender.CounterInput).Should(BeCalled(With("count1")))
+			Eventually(mockMetricSender.CounterInput).Should(BeCalled(With("count2")))
+			Eventually(mockChainer.AddInput).Should(BeCalled(With(uint64(1))))
+			Eventually(mockChainer.AddInput).Should(BeCalled(With(uint64(1))))
 		})
 	})
 
-	Context("BatchAddCounter", func() {
-
-		BeforeEach(func() {
-			metricBatcher = metricbatcher.New(fakeMetricSender, 50*time.Millisecond)
-		})
-
+	Describe("BatchAddCounter", func() {
 		It("batches and then sends a single metric", func() {
+			close(mockChainer.AddOutput.Ret0)
+
 			metricBatcher.BatchAddCounter("count", 2)
-			Expect(fakeMetricSender.GetCounter("count")).To(BeEquivalentTo(0)) // should not increment.
+			Expect(mockChainer.AddInput).ToNot(BeCalled())
 
 			metricBatcher.BatchAddCounter("count", 2)
 			metricBatcher.BatchAddCounter("count", 3)
 
-			time.Sleep(75 * time.Millisecond)
-			Expect(fakeMetricSender.GetCounter("count")).To(BeEquivalentTo(7)) // should update counter only when time out
+			Eventually(mockChainer.AddInput).Should(BeCalled(With(uint64(7))))
 
 			metricBatcher.BatchAddCounter("count", 1)
 			metricBatcher.BatchAddCounter("count", 2)
-			Expect(fakeMetricSender.GetCounter("count")).To(BeEquivalentTo(7)) // should update counter only when time out
-
-			time.Sleep(75 * time.Millisecond)
-			Expect(fakeMetricSender.GetCounter("count")).To(BeEquivalentTo(10)) // should update counter only when time out
+			Eventually(mockChainer.AddInput).Should(BeCalled(With(uint64(3))))
 		})
 
 		It("batches and then sends multiple metrics", func() {
+			close(mockChainer.AddOutput.Ret0)
+
 			metricBatcher.BatchAddCounter("count1", 2)
 			metricBatcher.BatchAddCounter("count2", 1)
 			metricBatcher.BatchAddCounter("count2", 2)
-			Expect(fakeMetricSender.GetCounter("count1")).To(BeEquivalentTo(0)) // should not increment.
-			Expect(fakeMetricSender.GetCounter("count2")).To(BeEquivalentTo(0)) // should not increment.
-
-			time.Sleep(75 * time.Millisecond)
-			Expect(fakeMetricSender.GetCounter("count1")).To(BeEquivalentTo(2)) // should update counter only when time out
-			Expect(fakeMetricSender.GetCounter("count2")).To(BeEquivalentTo(3)) // should update counter only when time out
+			Expect(mockChainer.AddInput).ToNot(BeCalled())
+			Eventually(mockMetricSender.CounterInput).Should(BeCalled(With("count1")))
+			Eventually(mockMetricSender.CounterInput).Should(BeCalled(With("count2")))
+			Eventually(mockChainer.AddInput).Should(BeCalled(With(uint64(2))))
+			Eventually(mockChainer.AddInput).Should(BeCalled(With(uint64(3))))
 
 			metricBatcher.BatchAddCounter("count1", 2)
 			metricBatcher.BatchAddCounter("count2", 2)
-			Expect(fakeMetricSender.GetCounter("count1")).To(BeEquivalentTo(2)) // should update counter only when time out
-			Expect(fakeMetricSender.GetCounter("count2")).To(BeEquivalentTo(3)) // should update counter only when time out
-
-			time.Sleep(75 * time.Millisecond)
-			Expect(fakeMetricSender.GetCounter("count1")).To(BeEquivalentTo(4)) // should update counter only when time out
-			Expect(fakeMetricSender.GetCounter("count2")).To(BeEquivalentTo(5)) // should update counter only when time out
+			Expect(mockChainer.AddInput).ToNot(BeCalled())
+			Eventually(mockMetricSender.CounterInput).Should(BeCalled(With("count1")))
+			Eventually(mockMetricSender.CounterInput).Should(BeCalled(With("count2")))
+			Eventually(mockChainer.AddInput).Should(BeCalled(With(uint64(2))))
+			Eventually(mockChainer.AddInput).Should(BeCalled(With(uint64(2))))
 		})
 	})
 
-	Context("Reset", func() {
-		It("cancels any scheduled counter emission", func() {
-			metricBatcher = metricbatcher.New(fakeMetricSender, 50*time.Millisecond)
+	Describe("AddConsistentlyEmittedMetrics", func() {
+		It("emits zero values for consistenly emitted metrics", func() {
+			close(mockChainer.AddOutput.Ret0)
 
+			metricBatcher.AddConsistentlyEmittedMetrics("count1")
+			Eventually(mockChainer.AddInput).Should(BeCalled(With(uint64(0))))
+		})
+
+		It("continues to emit zero values for consistenly emitted metrics", func() {
+			close(mockChainer.AddOutput.Ret0)
+
+			metricBatcher.AddConsistentlyEmittedMetrics("count1")
+			metricBatcher.BatchAddCounter("count1", 2)
+			Eventually(mockChainer.AddInput).Should(BeCalled(With(uint64(2))))
+			Eventually(mockChainer.AddInput).Should(BeCalled(With(uint64(0))))
+		})
+
+		It("respects tags when emitting zero values", func() {
+			close(mockChainer.AddOutput.Ret0)
+
+			metricBatcher.AddConsistentlyEmittedMetrics("count1")
+			metricBatcher.BatchCounter("count1").SetTag("tag1", "value1").Add(3)
+			metricBatcher.BatchCounter("count1").SetTag("tag2", "value2").Add(5)
+
+			Eventually(mockChainer.SetTagInput).Should(BeCalled(With("tag1", "value1")))
+			Eventually(mockChainer.AddInput).Should(BeCalled(With(uint64(3))))
+
+			Eventually(mockChainer.SetTagInput).Should(BeCalled(With("tag2", "value2")))
+			Eventually(mockChainer.AddInput).Should(BeCalled(With(uint64(5))))
+
+			Eventually(mockChainer.SetTagInput).Should(BeCalled(With("tag1", "value1")))
+			Eventually(mockChainer.AddInput).Should(BeCalled(With(uint64(0))))
+
+			Eventually(mockChainer.SetTagInput).Should(BeCalled(With("tag2", "value2")))
+			Eventually(mockChainer.AddInput).Should(BeCalled(With(uint64(0))))
+		})
+	})
+
+	Describe("Reset", func() {
+		It("cancels any scheduled counter emission", func() {
 			metricBatcher.BatchAddCounter("count1", 2)
 			metricBatcher.BatchIncrementCounter("count1")
 
 			metricBatcher.Reset()
 
-			Consistently(func() uint64 { return fakeMetricSender.GetCounter("count1") }).Should(BeZero())
+			Consistently(mockChainer.AddInput).ShouldNot(BeCalled())
 		})
 	})
 
-	Context("Close", func() {
+	Describe("Close", func() {
 		BeforeEach(func() {
 			// Sets ticker to a longer time so that the Flush isn't called automatically from the go routine
-			metricBatcher = metricbatcher.New(fakeMetricSender, 5*time.Second)
+			metricBatcher = metricbatcher.New(mockMetricSender, 5*time.Second)
 		})
 
 		It("flushes remaining metrics", func() {
+			close(mockChainer.AddOutput.Ret0)
+
 			metricBatcher.BatchAddCounter("count2", 1)
 			metricBatcher.Close()
 
-			Eventually(fakeMetricSender.GetCounter("count2")).Should(BeEquivalentTo(1))
+			Eventually(mockMetricSender.CounterInput).Should(BeCalled(With("count2")))
+			Eventually(mockChainer.AddInput).Should(BeCalled(With(uint64(1))))
 		})
 
 		It("panics when sending metrics after closing", func() {
 			metricBatcher.Close()
-			Expect(func() { metricBatcher.BatchAddCounter("count3", 3) }).To(Panic())
+			Expect(func() {
+				metricBatcher.BatchAddCounter("count3", 3)
+			}).To(Panic())
 		})
 	})
-
 })

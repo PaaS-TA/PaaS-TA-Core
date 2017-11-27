@@ -17,6 +17,10 @@ const (
 	DebugFlag = "debugAddr"
 )
 
+type DebugServerConfig struct {
+	DebugAddress string `json:"debug_address"`
+}
+
 func AddFlags(flags *flag.FlagSet) {
 	flags.String(
 		DebugFlag,

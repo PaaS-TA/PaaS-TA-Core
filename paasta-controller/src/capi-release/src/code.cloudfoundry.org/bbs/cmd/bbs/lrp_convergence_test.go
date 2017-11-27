@@ -7,6 +7,7 @@ import (
 	"code.cloudfoundry.org/bbs/cmd/bbs/testrunner"
 	"code.cloudfoundry.org/bbs/models"
 	"code.cloudfoundry.org/bbs/models/test/model_helpers"
+	"code.cloudfoundry.org/durationjson"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/tedsuo/ifrit/ginkgomon"
@@ -18,13 +19,14 @@ var _ = Describe("Convergence API", func() {
 
 		BeforeEach(func() {
 			// make the converger more aggressive by running every second
-			bbsArgs.ConvergeRepeatInterval = time.Second
-			bbsRunner = testrunner.New(bbsBinPath, bbsArgs)
+			bbsConfig.ConvergeRepeatInterval = durationjson.Duration(time.Second)
+			bbsRunner = testrunner.New(bbsBinPath, bbsConfig)
 			bbsProcess = ginkgomon.Invoke(bbsRunner)
 
 			cellPresence := models.NewCellPresence(
 				"some-cell",
 				"cell.example.com",
+				"http://cell.example.com",
 				"the-zone",
 				models.NewCellCapacity(128, 1024, 6),
 				[]string{},

@@ -1,0 +1,43 @@
+### The package object
+
+Name | Type | Description
+---- | ---- | -----------
+**type** | _string_ | Package type. Valid values are `bits`, `docker`.
+**data** | _object_ | Data for package type.
+**state** | _string_ | State of the package. Valid states are `AWAITING_UPLOAD`, `PROCESSING_UPLOAD`, `READY`, `FAILED`, `COPYING`, `EXPIRED`.
+**guid** | _uuid_ | Unique identifier for the package.
+**created_at** | _datetime_ | The time with zone when the object was created.
+**updated_at** | _datetime_ | The time with zone when the object was last updated.
+**links** | [_links object_](#links) | Links to related resources.
+
+#### Bits package
+
+A bits package is used to upload source code for an app to. The bits package will provide an `upload` link to which a zip file should be uploaded.
+
+Name | Type | Description
+---- | ---- | -----------
+**type** | _string_ | `bits`
+**data.error** | _string_ | If an error occurs this field will contain the error message.
+**data.checksum.type** | _string_ | The checksum type, for example: `sha256`.
+**data.checksum.value** | _string_ | The checksum value. This will be populated after bits are uploaded.
+**state** | _string_ | State of the package. Valid states are `AWAITING_UPLOAD`, `PROCESSING_UPLOAD`, `READY`, `FAILED`, `COPYING`, `EXPIRED`.
+**guid** | _uuid_ | Unique identifier for the package.
+**created_at** | _datetime_ | The time with zone when the object was created.
+**updated_at** | _datetime_ | The time with zone when the object was last updated.
+**links** | [_links object_](#links) | Links to related resources.
+
+#### Docker package
+
+A docker package references a docker image from a registry.
+
+Name | Type | Description
+---- | ---- | -----------
+**type** | _string_ | `docker`
+**data.image** | _string_ | The registry address of the image.
+**data.username** | _string_ | The username for the image's registry.
+**data.password** | _string_ | The password for the image's registry.
+**state** | _string_ | State of the package. Valid states are `READY`, `FAILED`, `COPYING`, `EXPIRED`.
+**guid** | _uuid_ | Unique identifier for the package.
+**created_at** | _datetime_ | The time with zone when the object was created.
+**updated_at** | _datetime_ | The time with zone when the object was last updated.
+**links** | [_links object_](#links) | Links to related resources.

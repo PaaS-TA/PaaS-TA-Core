@@ -1,4 +1,4 @@
 ---
 name: dotnet-core-buildpack
 files:
-- dotnet-core-buildpack/dotnet-core_buildpack-cached-*.zip
+- dotnet-core-buildpack/dotnet-core?buildpack-v*.zip

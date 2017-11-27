@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<project version="4">
-  <component name="dataSourceStorageLocal">
-    <data-source name="PostgreSQL - ccdb@10.244.0.30" uuid="d0bf7eba-d2aa-4ff1-b4e9-b378b7e903f4">
-      <secret-storage>master_key</secret-storage>
-      <user-name>ccadmin</user-name>
-    </data-source>
-  </component>
-</project>

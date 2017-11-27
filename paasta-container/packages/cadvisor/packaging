@@ -1,4 +1,0 @@
-set -e -x
-
-cp -a cadvisor/cadvisor ${BOSH_INSTALL_TARGET}
-

@@ -1,0 +1,37 @@
+### Get a process
+
+```
+Example Request
+```
+
+```shell
+curl "https://api.example.org/v3/processes/[guid]" \
+  -X GET \
+  -H "Authorization: bearer [token]"
+```
+
+```
+Example Response
+```
+
+```http
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+<%= yield_content :single_process %>
+```
+
+#### Definition
+`GET /v3/processes/:guid` <br>
+`GET /v3/apps/:guid/processes/:type`
+
+#### Permitted Roles
+ |
+--- | ---
+Space Developer |
+Space Manager |
+Space Auditor |
+Org Manager |
+Admin |
+Admin Read-Only |
+Global Auditor |

@@ -1,0 +1,57 @@
+### Copy a droplet
+
+```
+Example Request
+```
+
+```shell
+curl "https://api.example.org/v3/droplets?source_guid=[guid]" \
+  -X POST \
+  -H "Authorization: bearer [token]" \
+  -H "Content-type: application/json" \
+  -d '{
+    "relationships": {
+      "app": {
+        "data": {
+          "guid": "[app-guid]"
+        }
+      }
+    }
+  }'
+```
+
+```
+Example Response
+```
+
+```http
+HTTP/1.1 201 Created
+Content-Type: application/json
+
+<%= yield_content :single_copying_buildpack_droplet %>
+```
+
+Copy a droplet to a different app. The copied droplet excludes the
+environment variables listed on the source droplet.
+
+#### Definition
+`POST /v3/droplets?source_guid=:guid`
+
+#### Required Query Parameters
+
+Name | Type | Description
+---- | ---- | ------------
+**source_guid** | _uuid_ | Source guid of the droplet to be copied.
+
+#### Required Parameters
+
+Name | Type | Description
+---- | ---- | -----------
+**app** | [_to-one relationship_](#to-one-relationships) | A relationship to the destination app.
+
+
+#### Permitted Roles
+ |
+--- | ---
+Space Developer |
+Admin |

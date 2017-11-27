@@ -8,14 +8,24 @@ import (
 	"code.cloudfoundry.org/lager"
 	"github.com/nu7hatch/gouuid"
 
-	"code.cloudfoundry.org/bbs"
 	"code.cloudfoundry.org/bbs/models"
+	"code.cloudfoundry.org/bbs/serviceclient"
 	"code.cloudfoundry.org/clock"
 )
 
+//go:generate counterfeiter -o fake_controllers/fake_lrp_convergence_controller.go . LrpConvergenceController
+type LrpConvergenceController interface {
+	ConvergeLRPs(logger lager.Logger) error
+}
+
+//go:generate counterfeiter -o fake_controllers/fake_task_controller.go . TaskController
+type TaskController interface {
+	ConvergeTasks(logger lager.Logger, kickTaskDuration, expirePendingTaskDuration, expireCompletedTaskDuration time.Duration) error
+}
+
 type Converger struct {
 	id                          string
-	serviceClient               bbs.ServiceClient
+	serviceClient               serviceclient.ServiceClient
 	lrpConvergenceController    LrpConvergenceController
 	taskController              TaskController
 	logger                      lager.Logger
@@ -32,7 +42,7 @@ func New(
 	clock clock.Clock,
 	lrpConvergenceController LrpConvergenceController,
 	taskController TaskController,
-	serviceClient bbs.ServiceClient,
+	serviceClient serviceclient.ServiceClient,
 	convergeRepeatInterval,
 	kickTaskDuration,
 	expirePendingTaskDuration,
@@ -79,6 +89,10 @@ func (c *Converger) Run(signals <-chan os.Signal, ready chan<- struct{}) error {
 			return nil
 
 		case event := <-cellEvents:
+			// Stopping the timer in order to avoid a race condition in the tests.
+			// Executing Stop() removes the timer from the list of watchers on the clock
+			// which allows us to use WaitForWatcherAndIncrement on the fake clock.
+			convergeTimer.Stop()
 			switch event.EventType() {
 			case models.EventTypeCellDisappeared:
 				logger.Info("received-cell-disappeared-event", lager.Data{"cell-id": event.CellIDs()})
@@ -86,6 +100,7 @@ func (c *Converger) Run(signals <-chan os.Signal, ready chan<- struct{}) error {
 			}
 
 		case <-convergeTimer.C():
+			convergeTimer.Stop()
 			c.converge()
 		}
 

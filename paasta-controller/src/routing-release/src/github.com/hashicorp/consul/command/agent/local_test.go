@@ -9,6 +9,7 @@ import (
 
 	"github.com/hashicorp/consul/consul/structs"
 	"github.com/hashicorp/consul/testutil"
+	"github.com/hashicorp/consul/types"
 )
 
 func TestAgentAntiEntropy_Services(t *testing.T) {
@@ -654,7 +655,7 @@ func TestAgentAntiEntropy_Checks(t *testing.T) {
 
 func TestAgentAntiEntropy_Check_DeferSync(t *testing.T) {
 	conf := nextConfig()
-	conf.CheckUpdateInterval = 100 * time.Millisecond
+	conf.CheckUpdateInterval = 500 * time.Millisecond
 	dir, agent := makeAgent(t, conf)
 	defer os.RemoveAll(dir)
 	defer agent.Shutdown()
@@ -693,8 +694,8 @@ func TestAgentAntiEntropy_Check_DeferSync(t *testing.T) {
 	// Update the check output! Should be deferred
 	agent.state.UpdateCheck("web", structs.HealthPassing, "output")
 
-	// Should not update for 100 milliseconds
-	time.Sleep(50 * time.Millisecond)
+	// Should not update for 500 milliseconds
+	time.Sleep(250 * time.Millisecond)
 	if err := agent.RPC("Health.NodeChecks", &req, &checks); err != nil {
 		t.Fatalf("err: %v", err)
 	}
@@ -720,6 +721,112 @@ func TestAgentAntiEntropy_Check_DeferSync(t *testing.T) {
 			switch chk.CheckID {
 			case "web":
 				if chk.Output != "output" {
+					return false, fmt.Errorf("no update: %v", chk)
+				}
+			}
+		}
+
+		return true, nil
+	}, func(err error) {
+		t.Fatalf("err: %s", err)
+	})
+
+	// Change the output in the catalog to force it out of sync.
+	eCopy := check.Clone()
+	eCopy.Output = "changed"
+	reg := structs.RegisterRequest{
+		Datacenter:      agent.config.Datacenter,
+		Node:            agent.config.NodeName,
+		Address:         agent.config.AdvertiseAddr,
+		TaggedAddresses: agent.config.TaggedAddresses,
+		Check:           eCopy,
+		WriteRequest:    structs.WriteRequest{},
+	}
+	var out struct{}
+	if err := agent.RPC("Catalog.Register", &reg, &out); err != nil {
+		t.Fatalf("err: %s", err)
+	}
+
+	// Verify that the output is out of sync.
+	if err := agent.RPC("Health.NodeChecks", &req, &checks); err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	for _, chk := range checks.HealthChecks {
+		switch chk.CheckID {
+		case "web":
+			if chk.Output != "changed" {
+				t.Fatalf("unexpected update: %v", chk)
+			}
+		}
+	}
+
+	// Trigger anti-entropy run and wait.
+	agent.StartSync()
+	time.Sleep(200 * time.Millisecond)
+
+	// Verify that the output was synced back to the agent's value.
+	if err := agent.RPC("Health.NodeChecks", &req, &checks); err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	for _, chk := range checks.HealthChecks {
+		switch chk.CheckID {
+		case "web":
+			if chk.Output != "output" {
+				t.Fatalf("missed update: %v", chk)
+			}
+		}
+	}
+
+	// Reset the catalog again.
+	if err := agent.RPC("Catalog.Register", &reg, &out); err != nil {
+		t.Fatalf("err: %s", err)
+	}
+
+	// Verify that the output is out of sync.
+	if err := agent.RPC("Health.NodeChecks", &req, &checks); err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	for _, chk := range checks.HealthChecks {
+		switch chk.CheckID {
+		case "web":
+			if chk.Output != "changed" {
+				t.Fatalf("unexpected update: %v", chk)
+			}
+		}
+	}
+
+	// Now make an update that should be deferred.
+	agent.state.UpdateCheck("web", structs.HealthPassing, "deferred")
+
+	// Trigger anti-entropy run and wait.
+	agent.StartSync()
+	time.Sleep(200 * time.Millisecond)
+
+	// Verify that the output is still out of sync since there's a deferred
+	// update pending.
+	if err := agent.RPC("Health.NodeChecks", &req, &checks); err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	for _, chk := range checks.HealthChecks {
+		switch chk.CheckID {
+		case "web":
+			if chk.Output != "changed" {
+				t.Fatalf("unexpected update: %v", chk)
+			}
+		}
+	}
+
+	// Wait for the deferred update.
+	testutil.WaitForResult(func() (bool, error) {
+		if err := agent.RPC("Health.NodeChecks", &req, &checks); err != nil {
+			return false, err
+		}
+
+		// Verify updated
+		for _, chk := range checks.HealthChecks {
+			switch chk.CheckID {
+			case "web":
+				if chk.Output != "deferred" {
 					return false, fmt.Errorf("no update: %v", chk)
 				}
 			}
@@ -850,6 +957,66 @@ func TestAgent_checkTokens(t *testing.T) {
 	l.RemoveCheck("mem")
 	if token := l.CheckToken("mem"); token != "default" {
 		t.Fatalf("bad: %s", token)
+	}
+}
+
+func TestAgent_checkCriticalTime(t *testing.T) {
+	config := nextConfig()
+	l := new(localState)
+	l.Init(config, nil)
+
+	// Add a passing check and make sure it's not critical.
+	checkID := types.CheckID("redis:1")
+	chk := &structs.HealthCheck{
+		Node:      "node",
+		CheckID:   checkID,
+		Name:      "redis:1",
+		ServiceID: "redis",
+		Status:    structs.HealthPassing,
+	}
+	l.AddCheck(chk, "")
+	if checks := l.CriticalChecks(); len(checks) > 0 {
+		t.Fatalf("should not have any critical checks")
+	}
+
+	// Set it to warning and make sure that doesn't show up as critical.
+	l.UpdateCheck(checkID, structs.HealthWarning, "")
+	if checks := l.CriticalChecks(); len(checks) > 0 {
+		t.Fatalf("should not have any critical checks")
+	}
+
+	// Fail the check and make sure the time looks reasonable.
+	l.UpdateCheck(checkID, structs.HealthCritical, "")
+	if crit, ok := l.CriticalChecks()[checkID]; !ok {
+		t.Fatalf("should have a critical check")
+	} else if crit.CriticalFor > time.Millisecond {
+		t.Fatalf("bad: %#v", crit)
+	}
+
+	// Wait a while, then fail it again and make sure the time keeps track
+	// of the initial failure, and doesn't reset here.
+	time.Sleep(10 * time.Millisecond)
+	l.UpdateCheck(chk.CheckID, structs.HealthCritical, "")
+	if crit, ok := l.CriticalChecks()[checkID]; !ok {
+		t.Fatalf("should have a critical check")
+	} else if crit.CriticalFor < 5*time.Millisecond ||
+		crit.CriticalFor > 15*time.Millisecond {
+		t.Fatalf("bad: %#v", crit)
+	}
+
+	// Set it passing again.
+	l.UpdateCheck(checkID, structs.HealthPassing, "")
+	if checks := l.CriticalChecks(); len(checks) > 0 {
+		t.Fatalf("should not have any critical checks")
+	}
+
+	// Fail the check and make sure the time looks like it started again
+	// from the latest failure, not the original one.
+	l.UpdateCheck(checkID, structs.HealthCritical, "")
+	if crit, ok := l.CriticalChecks()[checkID]; !ok {
+		t.Fatalf("should have a critical check")
+	} else if crit.CriticalFor > time.Millisecond {
+		t.Fatalf("bad: %#v", crit)
 	}
 }
 

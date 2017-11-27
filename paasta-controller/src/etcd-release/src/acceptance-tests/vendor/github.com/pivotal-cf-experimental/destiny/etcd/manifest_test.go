@@ -80,6 +80,9 @@ var _ = Describe("Manifest", func() {
 					{
 						Name:    "consul_agent",
 						Release: "consul",
+						Consumes: core.JobConsumes{
+							Consul: "nil",
+						},
 					},
 				},
 				Properties: &core.JobProperties{
@@ -104,6 +107,9 @@ var _ = Describe("Manifest", func() {
 					{
 						Name:    "consul_agent",
 						Release: "consul",
+						Consumes: core.JobConsumes{
+							Consul: "nil",
+						},
 					},
 					{
 						Name:    "etcd",
@@ -134,6 +140,9 @@ var _ = Describe("Manifest", func() {
 					{
 						Name:    "consul_agent",
 						Release: "consul",
+						Consumes: core.JobConsumes{
+							Consul: "nil",
+						},
 					},
 					{
 						Name:    "etcd_testconsumer",
@@ -293,6 +302,9 @@ var _ = Describe("Manifest", func() {
 				Templates: []core.JobTemplate{{
 					Name:    "consul_agent",
 					Release: "consul",
+					Consumes: core.JobConsumes{
+						Consul: "nil",
+					},
 				}},
 				Properties: &core.JobProperties{
 					Consul: &core.JobPropertiesConsul{
@@ -316,6 +328,9 @@ var _ = Describe("Manifest", func() {
 					{
 						Name:    "consul_agent",
 						Release: "consul",
+						Consumes: core.JobConsumes{
+							Consul: "nil",
+						},
 					},
 					{
 						Name:    "etcd",
@@ -346,6 +361,9 @@ var _ = Describe("Manifest", func() {
 					{
 						Name:    "consul_agent",
 						Release: "consul",
+						Consumes: core.JobConsumes{
+							Consul: "nil",
+						},
 					},
 					{
 						Name:    "etcd_testconsumer",
@@ -867,6 +885,9 @@ var _ = Describe("Manifest", func() {
 								{
 									Name:    "consul_agent",
 									Release: "consul",
+									Consumes: core.JobConsumes{
+										Consul: "nil",
+									},
 								},
 							},
 						},
@@ -1054,6 +1075,9 @@ var _ = Describe("Manifest", func() {
 					{
 						Name:    "consul_agent",
 						Release: "consul",
+						Consumes: core.JobConsumes{
+							Consul: "nil",
+						},
 					},
 				},
 				Properties: &core.JobProperties{
@@ -1078,6 +1102,9 @@ var _ = Describe("Manifest", func() {
 					{
 						Name:    "consul_agent",
 						Release: "consul",
+						Consumes: core.JobConsumes{
+							Consul: "nil",
+						},
 					},
 					{
 						Name:    "etcd",
@@ -1108,6 +1135,9 @@ var _ = Describe("Manifest", func() {
 					{
 						Name:    "consul_agent",
 						Release: "consul",
+						Consumes: core.JobConsumes{
+							Consul: "nil",
+						},
 					},
 					{
 						Name:    "etcd_testconsumer",
@@ -1156,6 +1186,38 @@ var _ = Describe("Manifest", func() {
 				ServerCert:                      "etcd-server-cert",
 				ServerKey:                       "etcd-server-key",
 			}))
+		})
+
+		Context("configurable properties", func() {
+			var manifest etcd.Manifest
+			BeforeEach(func() {
+				var err error
+				manifest, err = etcd.NewTLSManifest(etcd.Config{
+					DirectorUUID: "some-director-uuid",
+					Name:         "etcd-some-random-guid",
+					IPRange:      "10.244.4.0/27",
+				}, iaas.NewWardenConfig())
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("can modify etcd listen ips", func() {
+				manifest.Properties.Etcd.ClientIP = "some-client-ip"
+				manifest.Properties.Etcd.PeerIP = "some-peer-ip"
+
+				Expect(manifest.Properties.Etcd.ClientIP).To(Equal("some-client-ip"))
+				Expect(manifest.Properties.Etcd.PeerIP).To(Equal("some-peer-ip"))
+			})
+
+			It("serializes etcd listen ips", func() {
+				manifest.Properties.Etcd.ClientIP = "some-client-ip"
+				manifest.Properties.Etcd.PeerIP = "some-peer-ip"
+
+				manifestYAML, err := manifest.ToYAML()
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(manifestYAML).To(ContainSubstring(`client_ip: some-client-ip`))
+				Expect(manifestYAML).To(ContainSubstring(`peer_ip: some-peer-ip`))
+			})
 		})
 
 		Context("failure cases", func() {

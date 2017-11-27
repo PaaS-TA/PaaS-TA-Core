@@ -47,7 +47,17 @@ class AppMaxMemoryPolicy < BaseMaxMemoryPolicy
 end
 
 class TaskMaxMemoryPolicy < BaseMaxMemoryPolicy
+  IGNORED_STATES = [
+    VCAP::CloudController::TaskModel::CANCELING_STATE,
+    VCAP::CloudController::TaskModel::SUCCEEDED_STATE,
+    VCAP::CloudController::TaskModel::FAILED_STATE,
+  ].freeze
+
   private
+
+  def additional_checks
+    IGNORED_STATES.exclude?(resource.state)
+  end
 
   def field
     :memory_in_mb

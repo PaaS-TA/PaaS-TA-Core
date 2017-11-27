@@ -24,6 +24,7 @@ import org.cloudfoundry.identity.uaa.scim.exception.InvalidPasswordException;
 import org.cloudfoundry.identity.uaa.scim.exception.ScimException;
 import org.cloudfoundry.identity.uaa.scim.exception.ScimResourceNotFoundException;
 import org.cloudfoundry.identity.uaa.util.JsonUtils;
+import org.cloudfoundry.identity.uaa.zone.IdentityZoneHolder;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageConverter;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -94,12 +95,21 @@ public class PasswordResetEndpoint {
         }
     }
 
+    private ExpiringCode getExpiringCode(String code) {
+        ExpiringCode expiringCode = codeStore.retrieveCode(code, IdentityZoneHolder.get().getId());
+        if (expiringCode == null) {
+            throw new InvalidCodeException("invalid_code", "Sorry, your reset password link is no longer valid. Please request a new one", 422);
+        }
+        return expiringCode;
+    }
+
     @RequestMapping(value = "/password_change", method = RequestMethod.POST)
     public ResponseEntity<LostPasswordChangeResponse> changePassword(@RequestBody LostPasswordChangeRequest passwordChangeRequest) {
         ResponseEntity<LostPasswordChangeResponse> responseEntity;
         if (passwordChangeRequest.getChangeCode() != null) {
             try {
-                ResetPasswordService.ResetPasswordResponse reset = resetPasswordService.resetPassword(passwordChangeRequest.getChangeCode(), passwordChangeRequest.getNewPassword());
+                ExpiringCode expiringCode = getExpiringCode(passwordChangeRequest.getChangeCode());
+                ResetPasswordService.ResetPasswordResponse reset = resetPasswordService.resetPassword(expiringCode, passwordChangeRequest.getNewPassword());
                 ScimUser user = reset.getUser();
                 ExpiringCode loginCode = getCode(user.getId(), user.getUserName(), reset.getClientId());
                 LostPasswordChangeResponse response = new LostPasswordChangeResponse();
@@ -129,7 +139,7 @@ public class PasswordResetEndpoint {
         codeData.put("username", username);
         codeData.put(OAuth2Utils.CLIENT_ID, clientId);
         codeData.put(OriginKeys.ORIGIN, OriginKeys.UAA);
-        return codeStore.generateCode(JsonUtils.writeValueAsString(codeData), new Timestamp(System.currentTimeMillis() + 5 * 60 * 1000), ExpiringCodeType.AUTOLOGIN.name());
+        return codeStore.generateCode(JsonUtils.writeValueAsString(codeData), new Timestamp(System.currentTimeMillis() + 5 * 60 * 1000), ExpiringCodeType.AUTOLOGIN.name(), IdentityZoneHolder.get().getId());
     }
 
     @ExceptionHandler(InvalidPasswordException.class)

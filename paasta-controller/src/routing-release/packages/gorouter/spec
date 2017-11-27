@@ -1,12 +1,11 @@
 ---
 name: gorouter
 dependencies:
-- golang1.6
+- golang1.8
 files:
   - routing-release/src/code.cloudfoundry.org/gorouter/**/*.{go,golden,proto,c,h,}
   - routing-release/src/code.cloudfoundry.org/gorouter/LICENSE
   - routing-release/src/code.cloudfoundry.org/gorouter/NOTICE
-  - routing-release/src/code.cloudfoundry.org/cflager/*.go # gosub
   - routing-release/src/code.cloudfoundry.org/clock/*.go # gosub
   - routing-release/src/code.cloudfoundry.org/debugserver/*.go # gosub
   - routing-release/src/code.cloudfoundry.org/gorouter/*.go # gosub
@@ -24,26 +23,27 @@ files:
   - routing-release/src/code.cloudfoundry.org/gorouter/common/uuid/*.go # gosub
   - routing-release/src/code.cloudfoundry.org/gorouter/config/*.go # gosub
   - routing-release/src/code.cloudfoundry.org/gorouter/handlers/*.go # gosub
+  - routing-release/src/code.cloudfoundry.org/gorouter/logger/*.go # gosub
+  - routing-release/src/code.cloudfoundry.org/gorouter/logger/fakes/*.go # gosub
+  - routing-release/src/code.cloudfoundry.org/gorouter/mbus/*.go # gosub
   - routing-release/src/code.cloudfoundry.org/gorouter/metrics/*.go # gosub
+  - routing-release/src/code.cloudfoundry.org/gorouter/metrics/fakes/*.go # gosub
   - routing-release/src/code.cloudfoundry.org/gorouter/metrics/monitor/*.go # gosub
-  - routing-release/src/code.cloudfoundry.org/gorouter/metrics/reporter/*.go # gosub
-  - routing-release/src/code.cloudfoundry.org/gorouter/metrics/reporter/fakes/*.go # gosub
   - routing-release/src/code.cloudfoundry.org/gorouter/proxy/*.go # gosub
   - routing-release/src/code.cloudfoundry.org/gorouter/proxy/handler/*.go # gosub
   - routing-release/src/code.cloudfoundry.org/gorouter/proxy/round_tripper/*.go # gosub
   - routing-release/src/code.cloudfoundry.org/gorouter/proxy/round_tripper/fakes/*.go # gosub
   - routing-release/src/code.cloudfoundry.org/gorouter/proxy/test_helpers/*.go # gosub
   - routing-release/src/code.cloudfoundry.org/gorouter/proxy/utils/*.go # gosub
-  - routing-release/src/code.cloudfoundry.org/gorouter/proxy/utils/fakes/*.go # gosub
   - routing-release/src/code.cloudfoundry.org/gorouter/registry/*.go # gosub
   - routing-release/src/code.cloudfoundry.org/gorouter/registry/container/*.go # gosub
   - routing-release/src/code.cloudfoundry.org/gorouter/registry/fakes/*.go # gosub
   - routing-release/src/code.cloudfoundry.org/gorouter/route/*.go # gosub
   - routing-release/src/code.cloudfoundry.org/gorouter/route/fakes/*.go # gosub
   - routing-release/src/code.cloudfoundry.org/gorouter/route_fetcher/*.go # gosub
-  - routing-release/src/code.cloudfoundry.org/gorouter/route_service/*.go # gosub
-  - routing-release/src/code.cloudfoundry.org/gorouter/route_service/header/*.go # gosub
   - routing-release/src/code.cloudfoundry.org/gorouter/router/*.go # gosub
+  - routing-release/src/code.cloudfoundry.org/gorouter/routeservice/*.go # gosub
+  - routing-release/src/code.cloudfoundry.org/gorouter/routeservice/header/*.go # gosub
   - routing-release/src/code.cloudfoundry.org/gorouter/stats/*.go # gosub
   - routing-release/src/code.cloudfoundry.org/gorouter/stats/container/*.go # gosub
   - routing-release/src/code.cloudfoundry.org/gorouter/test/*.go # gosub
@@ -76,8 +76,6 @@ files:
   - routing-release/src/github.com/cloudfoundry/dropsonde/metricbatcher/*.go # gosub
   - routing-release/src/github.com/cloudfoundry/dropsonde/metrics/*.go # gosub
   - routing-release/src/github.com/cloudfoundry/dropsonde/runtime_stats/*.go # gosub
-  - routing-release/src/github.com/cloudfoundry/gosteno/*.go # gosub
-  - routing-release/src/github.com/cloudfoundry/gosteno/syslog/*.go # gosub
   - routing-release/src/github.com/cloudfoundry/sonde-go/events/*.go # gosub
   - routing-release/src/github.com/codegangsta/cli/*.go # gosub
   - routing-release/src/github.com/dgrijalva/jwt-go/*.go # gosub
@@ -123,9 +121,11 @@ files:
   - routing-release/src/github.com/tedsuo/ifrit/http_server/*.go # gosub
   - routing-release/src/github.com/tedsuo/ifrit/sigmon/*.go # gosub
   - routing-release/src/github.com/tedsuo/rata/*.go # gosub
+  - routing-release/src/github.com/uber-go/atomic/*.go # gosub
+  - routing-release/src/github.com/uber-go/zap/*.go # gosub
   - routing-release/src/github.com/urfave/negroni/*.go # gosub
   - routing-release/src/github.com/vito/go-sse/sse/*.go # gosub
   - routing-release/src/golang.org/x/crypto/pbkdf2/*.go # gosub
   - routing-release/src/gopkg.in/yaml.v2/*.go # gosub
   - routing-release/src/github.com/shirou/gopsutil/**/*.go
-  - routing-release/src/github.com/bradfitz/**/*.go
+  - routing-release/src/golang.org/x/sys/**/*.*

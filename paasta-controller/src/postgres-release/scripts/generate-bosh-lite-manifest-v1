@@ -1,0 +1,8 @@
+#!/bin/bash
+set -e
+
+cd $(dirname $0)/..
+
+./scripts/generate-deployment-manifest-v1 \
+  -i ./templates/v1/bosh-lite/iaas-settings.yml \
+  -p ./templates/v1/bosh-lite/properties.yml

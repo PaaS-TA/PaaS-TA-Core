@@ -1,14 +1,6 @@
 ### Create a route mapping
 
 ```
-Definition
-```
-
-```http
-POST /v3/route_mappings HTTP/1.1
-```
-
-```
 Example Request
 ```
 
@@ -16,6 +8,7 @@ Example Request
 curl "https://api.example.org/v3/route_mappings" \
   -X POST \
   -H "Authorization: bearer [token]" \
+  -H "Content-type: application/json" \
   -d '{
     "relationships": {
       "app": {
@@ -34,49 +27,29 @@ Example Response
 
 ```http
 HTTP/1.1 201 Created
+Content-Type: application/json
 
 <%= yield_content :single_route_mapping %>
 ```
 
-This endpoint creates a new route mapping.
+#### Definition
+`POST /v3/route_mappings`
 
-#### Body Parameters
+#### Required Parameters
 
-<ul class="method-list-group">
-  <li class="method-list-item">
-    <h4 class="method-list-item-label">
-      app_port
+Name | Type | Description
+---- | ---- | -----------
+**app** | [_to-one relationship_](#to-one-relationships) | A relationship to an app.
+**route** | [_to-one relationship_](#to-one-relationships) | A relationship to a route.
 
-      <span class="method-list-item-type">optional</span>
-    </h4>
+#### Optional Parameters
 
-    <p class="method-list-item-description">The port that traffic will be routed to for the mapped process. Defaults to <code>8080</code></p>
-  </li>
-  <li class="method-list-item">
-    <h4 class="method-list-item-label">
-      relationships['app']['guid']
+Name | Type | Description | Default
+---- | ---- | ----------- | -------
+**process** | [_to-one relationship_](#to-one-relationships) | A relationship to a process. This relationship is specified by `type` instead of `guid`.
 
-      <span class="method-list-item-type method-list-item-type-required">required</span>
-    </h4>
-
-    <p class="method-list-item-description">Guid of the app to which you would like to map the route.</p>
-  </li>
-  <li class="method-list-item">
-    <h4 class="method-list-item-label">
-      relationships['route']['guid']
-
-      <span class="method-list-item-type method-list-item-type-required">required</span>
-    </h4>
-
-    <p class="method-list-item-description">Guid of the route to which you would like to map the app.</p>
-  </li>
-  <li class="method-list-item">
-    <h4 class="method-list-item-label">
-      relationships['process']['type']
-
-      <span class="method-list-item-type">optional</span>
-    </h4>
-
-    <p class="method-list-item-description">Type of the process on the app to which you would like to map the route. Defaults to <code>web</code></p>
-  </li>
-</ul>
+#### Permitted Roles
+ |
+--- | ---
+Space Developer |
+Admin |

@@ -83,3 +83,23 @@ func (c Client) Leader() (string, error) {
 
 	return string(body), nil
 }
+
+func (c Client) LeaderByNodeURL(nodeURL string) (string, error) {
+	endpoint := fmt.Sprintf("%s/leader?node=%s", c.testConsumerURL, nodeURL)
+
+	resp, err := http.Get(endpoint)
+	if err != nil {
+		return "", err
+	}
+
+	body, err := bodyReader(resp.Body)
+	if err != nil {
+		return "", err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("unexpected status: %d %s %s", resp.StatusCode, http.StatusText(resp.StatusCode), string(body))
+	}
+
+	return string(body), nil
+}

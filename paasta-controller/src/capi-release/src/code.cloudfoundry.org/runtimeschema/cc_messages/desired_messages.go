@@ -9,6 +9,7 @@ import (
 type HealthCheckType string
 
 const UnspecifiedHealthCheckType HealthCheckType = "" // backwards-compatibility
+const HTTPHealthCheckType HealthCheckType = "http"
 const PortHealthCheckType HealthCheckType = "port"
 const NoneHealthCheckType HealthCheckType = "none"
 
@@ -44,6 +45,7 @@ type DesireAppRequestFromCC struct {
 	AllowSSH                    bool                          `json:"allow_ssh"`
 	LogGuid                     string                        `json:"log_guid"`
 	HealthCheckType             HealthCheckType               `json:"health_check_type"`
+	HealthCheckHTTPEndpoint     string                        `json:"health_check_http_endpoint"`
 	HealthCheckTimeoutInSeconds uint                          `json:"health_check_timeout_in_seconds"`
 	EgressRules                 []*models.SecurityGroupRule   `json:"egress_rules,omitempty"`
 	ETag                        string                        `json:"etag"`
@@ -51,6 +53,7 @@ type DesireAppRequestFromCC struct {
 	LogSource                   string                        `json:"log_source,omitempty"`
 	Network                     *models.Network               `json:"network,omitempty"`
 	VolumeMounts                []*VolumeMount                `json:"volume_mounts"`
+	IsolationSegment            string                        `json:"isolation_segment"`
 }
 
 type CCRouteInfo map[string]*json.RawMessage
@@ -151,11 +154,14 @@ type TaskRequestFromCC struct {
 	DropletUri            string                        `json:"droplet_uri"`
 	DropletHash           string                        `json:"droplet_hash"`
 	DockerPath            string                        `json:"docker_path"`
+	DockerUser            string                        `json:"docker_user,omitempty"`
+	DockerPassword        string                        `json:"docker_password,omitempty"`
 	RootFs                string                        `json:"rootfs"`
 	CompletionCallbackUrl string                        `json:"completion_callback"`
 	Command               string                        `json:"command"`
 	LogSource             string                        `json:"log_source,omit_empty"`
 	VolumeMounts          []*VolumeMount                `json:"volume_mounts"`
+	IsolationSegment      string                        `json:"isolation_segment"`
 }
 
 type TaskFailResponseForCC struct {

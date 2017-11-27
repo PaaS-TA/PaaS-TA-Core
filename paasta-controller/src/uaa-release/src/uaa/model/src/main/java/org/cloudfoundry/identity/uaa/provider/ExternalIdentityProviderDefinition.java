@@ -1,15 +1,3 @@
-package org.cloudfoundry.identity.uaa.provider;
-
-import com.fasterxml.jackson.annotation.JsonIgnore;
-
-import java.util.Collections;
-import static java.util.Collections.emptyList;
-import static java.util.Collections.emptyMap;
-import java.util.HashMap;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
-
 /*******************************************************************************
  * Cloud Foundry
  * Copyright (c) [2009-2015] Pivotal Software, Inc. All Rights Reserved.
@@ -22,6 +10,21 @@ import java.util.Map;
  * subcomponents is subject to the terms and conditions of the
  * subcomponent's license, as noted in the LICENSE file.
  *******************************************************************************/
+package org.cloudfoundry.identity.uaa.provider;
+
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+
+import static java.util.Collections.emptyList;
+import static java.util.Collections.emptyMap;
+
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class ExternalIdentityProviderDefinition extends AbstractIdentityProviderDefinition {
     public static final String GROUP_ATTRIBUTE_NAME = "external_groups"; //can be a string or a list of strings
     public static final String EMAIL_ATTRIBUTE_NAME = "email"; //can be a string
@@ -31,12 +34,15 @@ public class ExternalIdentityProviderDefinition extends AbstractIdentityProvider
     public static final String USER_ATTRIBUTE_PREFIX = "user.attribute.";
     public static final String USER_NAME_ATTRIBUTE_NAME = "user_name";
 
+    public static final String STORE_CUSTOM_ATTRIBUTES_NAME = "storeCustomAttributes";
+
     public static final String EXTERNAL_GROUPS_WHITELIST = "externalGroupsWhitelist";
     public static final String ATTRIBUTE_MAPPINGS = "attributeMappings";
 
     private List<String> externalGroupsWhitelist = new LinkedList<>();
     private Map<String, Object> attributeMappings = new HashMap<>();
     private boolean addShadowUserOnLogin = true;
+    private boolean storeCustomAttributes = true;
 
     public List<String> getExternalGroupsWhitelist() {
         return Collections.unmodifiableList(externalGroupsWhitelist);
@@ -86,17 +92,27 @@ public class ExternalIdentityProviderDefinition extends AbstractIdentityProvider
 
         ExternalIdentityProviderDefinition that = (ExternalIdentityProviderDefinition) o;
 
+        if (addShadowUserOnLogin != that.addShadowUserOnLogin) return false;
+        if(this.isStoreCustomAttributes() != that.isStoreCustomAttributes()) return false;
         if (getExternalGroupsWhitelist() != null ? !getExternalGroupsWhitelist().equals(that.getExternalGroupsWhitelist()) : that.getExternalGroupsWhitelist() != null)
             return false;
-        return !(getAttributeMappings() != null ? !getAttributeMappings().equals(that.getAttributeMappings()) : that.getAttributeMappings() != null);
-
+        return attributeMappings != null ? attributeMappings.equals(that.attributeMappings) : that.attributeMappings == null;
     }
 
     @Override
     public int hashCode() {
         int result = super.hashCode();
-        result = 31 * result + (getExternalGroupsWhitelist() != null ? getExternalGroupsWhitelist().hashCode() : 0);
-        result = 31 * result + (getAttributeMappings() != null ? getAttributeMappings().hashCode() : 0);
+        result = 31 * result + (externalGroupsWhitelist != null ? externalGroupsWhitelist.hashCode() : 0);
+        result = 31 * result + (attributeMappings != null ? attributeMappings.hashCode() : 0);
+        result = 31 * result + (addShadowUserOnLogin ? 1 : 0);
         return result;
+    }
+
+    public boolean isStoreCustomAttributes() {
+        return storeCustomAttributes;
+    }
+
+    public void setStoreCustomAttributes(boolean storeCustomAttributes) {
+        this.storeCustomAttributes = storeCustomAttributes;
     }
 }

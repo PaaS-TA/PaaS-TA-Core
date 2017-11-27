@@ -2,10 +2,9 @@ module VCAP::CloudController
   class AppCreate
     class InvalidApp < StandardError; end
 
-    def initialize(user, user_email)
-      @user       = user
-      @user_email = user_email
-      @logger     = Steno.logger('cc.action.app_create')
+    def initialize(user_audit_info)
+      @user_audit_info = user_audit_info
+      @logger = Steno.logger('cc.action.app_create')
     end
 
     def create(message, lifecycle)
@@ -19,11 +18,12 @@ module VCAP::CloudController
 
         lifecycle.create_lifecycle_data_model(app)
 
+        raise CloudController::Errors::ApiError.new_from_details('CustomBuildpacksDisabled') if using_disabled_custom_buildpack?(app)
+
         Repositories::AppEventRepository.new.record_app_create(
           app,
           app.space,
-          @user.guid,
-          @user_email,
+          @user_audit_info,
           message.audit_hash
         )
       end
@@ -31,6 +31,16 @@ module VCAP::CloudController
       app
     rescue Sequel::ValidationFailed => e
       raise InvalidApp.new(e.message)
+    end
+
+    private
+
+    def using_disabled_custom_buildpack?(app)
+      app.lifecycle_data.using_custom_buildpack? && custom_buildpacks_disabled?
+    end
+
+    def custom_buildpacks_disabled?
+      VCAP::CloudController::Config.config[:disable_custom_buildpacks]
     end
   end
 end

@@ -16,6 +16,7 @@ import org.apache.commons.codec.binary.Base64;
 import org.cloudfoundry.identity.uaa.mock.InjectedMockContextTest;
 import org.cloudfoundry.identity.uaa.util.JsonUtils;
 import org.cloudfoundry.identity.uaa.util.MapCollector;
+import org.cloudfoundry.identity.uaa.zone.ClientServicesExtension;
 import org.cloudfoundry.identity.uaa.zone.IdentityZone;
 import org.cloudfoundry.identity.uaa.zone.IdentityZoneProvisioning;
 import org.cloudfoundry.identity.uaa.zone.TokenPolicy;
@@ -23,10 +24,8 @@ import org.junit.Before;
 import org.junit.Test;
 import org.springframework.http.MediaType;
 import org.springframework.security.oauth2.common.util.RandomValueStringGenerator;
-import org.springframework.security.oauth2.provider.ClientRegistrationService;
 import org.springframework.security.oauth2.provider.client.BaseClientDetails;
 import org.springframework.test.web.servlet.MvcResult;
-import org.springframework.util.Base64Utils;
 
 import java.util.Collections;
 import java.util.List;
@@ -122,7 +121,7 @@ public class TokenKeyEndpointMockMvcTests extends InjectedMockContextTest {
                                                          "client_credentials,password",
                                                          "uaa.none");
         client.setClientSecret("secret");
-        getWebApplicationContext().getBean(ClientRegistrationService.class).addClientDetails(client);
+        getWebApplicationContext().getBean(ClientServicesExtension.class).addClientDetails(client);
 
         String basicDigestHeaderValue = "Basic "
             + new String(Base64.encodeBase64((client.getClientId()+":secret").getBytes()));
@@ -148,7 +147,7 @@ public class TokenKeyEndpointMockMvcTests extends InjectedMockContextTest {
                                                              "client_credentials,password",
                                                              "uaa.none");
             client.setClientSecret("secret");
-            getWebApplicationContext().getBean(ClientRegistrationService.class).addClientDetails(client);
+            getWebApplicationContext().getBean(ClientServicesExtension.class).addClientDetails(client);
 
             String basicDigestHeaderValue = "Basic "
                 + new String(Base64.encodeBase64((client.getClientId() + ":secret").getBytes()));
@@ -232,7 +231,7 @@ public class TokenKeyEndpointMockMvcTests extends InjectedMockContextTest {
         //optional - algorithm of key
         assertNotNull(alg);
         assertTrue(alg instanceof String);
-        assertEquals("SHA256withRSA", alg);
+        assertEquals("RS256", alg);
 
         Object kid = key.get("kid");
         //optional - indicates the id for a certain key
@@ -286,7 +285,9 @@ public class TokenKeyEndpointMockMvcTests extends InjectedMockContextTest {
     }
 
     private void isUrlSafeBase64(String base64) {
-        assertEquals(base64, Base64Utils.encodeToUrlSafeString(Base64Utils.decodeFromUrlSafeString(base64)));
+        java.util.Base64.Encoder encoder = java.util.Base64.getUrlEncoder().withoutPadding();
+        java.util.Base64.Decoder decoder = java.util.Base64.getUrlDecoder();
+        assertEquals(base64, encoder.encodeToString(decoder.decode(base64)));
     }
 
 }

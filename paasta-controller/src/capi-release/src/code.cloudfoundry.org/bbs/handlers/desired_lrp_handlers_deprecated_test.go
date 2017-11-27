@@ -794,6 +794,7 @@ var _ = Describe("DesiredLRP Handlers", func() {
 						Resource: rep.Resource{
 							MemoryMB: desiredLRP.MemoryMb,
 							DiskMB:   desiredLRP.DiskMb,
+							MaxPids:  desiredLRP.MaxPids,
 						},
 						PlacementConstraint: rep.PlacementConstraint{
 							RootFs:        desiredLRP.RootFs,
@@ -803,7 +804,7 @@ var _ = Describe("DesiredLRP Handlers", func() {
 					}
 
 					Expect(fakeAuctioneerClient.RequestLRPAuctionsCallCount()).To(Equal(1))
-					startAuctions := fakeAuctioneerClient.RequestLRPAuctionsArgsForCall(0)
+					_, startAuctions := fakeAuctioneerClient.RequestLRPAuctionsArgsForCall(0)
 					Expect(startAuctions).To(HaveLen(1))
 					Expect(startAuctions[0].ProcessGuid).To(Equal(expectedStartRequest.ProcessGuid))
 					Expect(startAuctions[0].Domain).To(Equal(expectedStartRequest.Domain))

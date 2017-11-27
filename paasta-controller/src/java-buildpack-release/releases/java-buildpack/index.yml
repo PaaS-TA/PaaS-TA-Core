@@ -2,4 +2,22 @@
 builds:
   377afa9b-eb12-4b6d-b970-5a41f0bf7d27:
     version: '3.10'
+  5805c33f-6a27-4e58-b897-845315c4b89b:
+    version: '3.11'
+  bc6b7f8d-fb4a-4871-85a7-042bfcd008b6:
+    version: '3.12'
+  4ce59350-a0fb-4816-bdb7-1eda969ce071:
+    version: '3.13'
+  bca734ec-9d61-47db-9685-e66701c6d726:
+    version: '3.14'
+  1cdd854e-012e-49bd-acb3-9b753f18e98b:
+    version: '3.15'
+  d1d8320b-ea9c-406d-a5d4-c844b4c2208e:
+    version: '3.16'
+  399364fa-8e8a-4a4a-86ad-ac41ac5d1afa:
+    version: '3.17'
+  da890326-a6c2-42e6-a530-7693ea2bef73:
+    version: '3.18'
+  88f67d77-8c34-4c05-a9a0-f286086c1393:
+    version: '3.19'
 format-version: '2'

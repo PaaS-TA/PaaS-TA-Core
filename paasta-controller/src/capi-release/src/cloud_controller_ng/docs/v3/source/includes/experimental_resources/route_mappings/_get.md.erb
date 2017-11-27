@@ -1,14 +1,6 @@
 ### Get a route mapping
 
 ```
-Definition
-```
-
-```http
-GET /v3/route_mappings/:guid HTTP/1.1
-```
-
-```
 Example Request
 ```
 
@@ -24,16 +16,21 @@ Example Response
 
 ```http
 HTTP/1.1 200 OK
+Content-Type: application/json
 
 <%= yield_content :single_route_mapping %>
 ```
 
-This endpoint retrieves a specific route mapping.
+#### Definition
+`GET /v3/route_mappings/:guid`
 
-#### Body Parameters
-
-<p class='no-body-parameters-outer'>
-  <span class='no-body-parameters-required'>
-    No arguments
-  </span>
-</p>
+#### Permitted Roles
+ |
+--- | ---
+Space Developer |
+Space Manager |
+Space Auditor |
+Org Manager |
+Admin |
+Admin Read-Only |
+Global Auditor |

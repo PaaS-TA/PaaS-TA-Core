@@ -4,7 +4,7 @@ module VCAP::CloudController
   module Jobs::Runtime
     RSpec.describe DeleteExpiredDropletBlob do
       subject(:job) { described_class.new(droplet.guid) }
-      let(:droplet) { DropletModel.make(:staged) }
+      let(:droplet) { DropletModel.make }
 
       it { is_expected.to be_a_valid_job }
 
@@ -13,8 +13,8 @@ module VCAP::CloudController
         job.perform
       end
 
-      it 'nils the droplet_hash' do
-        expect { job.perform }.to change { droplet.reload.droplet_hash }.to(nil)
+      it 'nils the droplet checksums' do
+        expect { job.perform }.to change { [droplet.reload.droplet_hash, droplet.reload.sha256_checksum] }.to([nil, nil])
       end
 
       context 'when the droplet does not exist' do

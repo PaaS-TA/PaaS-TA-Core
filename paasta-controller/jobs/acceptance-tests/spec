@@ -4,8 +4,9 @@ name: acceptance-tests
 description: "The acceptance tests errand can be configured to run full acceptance test suite against a specific Cloud Foundry API endpoint. Consider running smoke tests errand for a smaller set of tests."
 
 packages:
-  - golang1.7
+  - golang1.8.3
   - cli
+  - cli-network-policy-plugin
   - acceptance-tests
 
 templates:
@@ -63,6 +64,16 @@ properties:
     description: Flag for using HTTP when making api and application requests rather than the default HTTPS
   acceptance_tests.include_privileged_container_support:
     description: Flag for running tests that depend on privileged container support being enabled in your Cloud Foundry.
+  acceptance_tests.include_container_networking:
+    description: Flag for running tests that depend on container networking support being enabled in your Cloud Foundry.
+  acceptance_tests.include_isolation_segments:
+    description: Flag for running tests that depend on having isolation segments in your Cloud Foundry.
+  acceptance_tests.isolation_segment_name:
+    description: The name of the isolation segment to use for running isolation segment tests.
+  acceptance_tests.isolation_segment_domain:
+    description: The domain that routes to the isolated router for running isolation segment tests.
+  acceptance_tests.include_persistent_app:
+    description: Flag to include the persistent app test.
   acceptance_tests.skip_regex:
     description: Regex for tests that should be skipped
   acceptance_tests.default_timeout:
@@ -107,4 +118,12 @@ properties:
   acceptance_tests.persistent_app_quota_name:
     description: "The default name for the persistent app quota name."
   acceptance_tests.cf_dial_timeout_in_seconds:
-    description: Sets the cli timeout (CF_DIAL_TIMEOUT)
+    description: "Sets the cli timeout (CF_DIAL_TIMEOUT)."
+  acceptance_tests.detect_timeout:
+    description: "Timeout for buildpack detection."
+  acceptance_tests.timeout_scale:
+    description: "Used primarily to scale default timeouts for test setup and teardown actions (e.g. creating an org) as opposed to main test actions (e.g. pushing an app)."
+  acceptance_tests.sleep_timeout:
+    description: "Configures SleepTimeout variable used by some tests that wait for some actions to happen."
+  acceptance_tests.test_password:
+    description: "Password to use for temporary user created during tests."

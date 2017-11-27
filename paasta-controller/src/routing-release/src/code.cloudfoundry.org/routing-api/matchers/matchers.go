@@ -21,6 +21,9 @@ func MatchTcpRoute(target models.TcpRouteMapping) types.GomegaMatcher {
 		WithTransform(func(t models.TcpRouteMapping) uint16 {
 			return t.ExternalPort
 		}, Equal(target.ExternalPort)),
+		WithTransform(func(t models.TcpRouteMapping) string {
+			return t.IsolationSegment
+		}, Equal(target.IsolationSegment)),
 	)
 }
 

@@ -5,6 +5,8 @@ import (
 
 	. "github.com/cloudfoundry/cf-acceptance-tests/cats_suite_helpers"
 
+	"path/filepath"
+
 	. "code.cloudfoundry.org/cf-routing-test-helpers/helpers"
 	"github.com/cloudfoundry-incubator/cf-test-helpers/helpers"
 	"github.com/cloudfoundry/cf-acceptance-tests/helpers/assets"
@@ -16,9 +18,9 @@ import (
 
 var _ = RoutingDescribe("Multiple App Ports", func() {
 	var (
-		app             string
-		secondRoute     string
-		latticeAppAsset = assets.NewAssets().LatticeApp
+		app               string
+		secondRoute       string
+		multiPortAppAsset = assets.NewAssets().MultiPortApp
 	)
 
 	BeforeEach(func() {
@@ -26,9 +28,9 @@ var _ = RoutingDescribe("Multiple App Ports", func() {
 			Skip(skip_messages.SkipDiegoMessage)
 		}
 		app = random_name.CATSRandomName("APP")
-		cmd := fmt.Sprintf("lattice-app --ports=7777,8888,8080")
+		cmd := fmt.Sprintf("go-online --ports=7777,8888,8080")
 
-		PushAppNoStart(app, latticeAppAsset, Config.GetGoBuildpackName(), Config.GetAppsDomain(), Config.CfPushTimeoutDuration(), DEFAULT_MEMORY_LIMIT, "-c", cmd)
+		PushAppNoStart(app, multiPortAppAsset, Config.GetGoBuildpackName(), Config.GetAppsDomain(), Config.CfPushTimeoutDuration(), DEFAULT_MEMORY_LIMIT, "-c", cmd, "-f", filepath.Join(multiPortAppAsset, "manifest.yml"))
 		EnableDiego(app, Config.DefaultTimeoutDuration())
 		StartApp(app, APP_START_TIMEOUT)
 	})
@@ -62,16 +64,12 @@ var _ = RoutingDescribe("Multiple App Ports", func() {
 
 		It("should listen on multiple ports", func() {
 			Eventually(func() string {
-				return helpers.CurlApp(Config, app, "/")
-			}, Config.DefaultTimeoutDuration(), "5s").Should(ContainSubstring("Lattice"))
+				return helpers.CurlApp(Config, secondRoute, "/port")
+			}, Config.DefaultTimeoutDuration(), "5s").Should(ContainSubstring("7777"))
 
 			Consistently(func() string {
 				return helpers.CurlApp(Config, app, "/port")
 			}, Config.SleepTimeoutDuration(), "5s").Should(ContainSubstring("8080"))
-
-			Eventually(func() string {
-				return helpers.CurlApp(Config, secondRoute, "/port")
-			}, Config.DefaultTimeoutDuration(), "5s").Should(ContainSubstring("7777"))
 		})
 	})
 })

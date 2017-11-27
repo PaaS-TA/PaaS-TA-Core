@@ -1,0 +1,101 @@
+### Create a package
+
+```
+Example Request (buildpack app)
+```
+
+```shell
+curl "https://api.example.org/v3/packages" \
+  -X POST \
+  -H "Authorization: bearer [token]" \
+  -H "Content-type: application/json" \
+  -d '{
+    "type": "bits",
+    "relationships": {
+      "app": {
+        "data": {
+          "guid": "[guid]"
+        }
+      }
+    }
+  }'
+```
+
+```
+Example Response
+```
+
+```http
+HTTP/1.1 201 Created
+Content-Type: application/json
+
+<%= yield_content :single_bits_package %>
+```
+
+```
+Example Request (docker app)
+```
+
+```shell
+curl "https://api.example.org/v3/packages" \
+  -X POST \
+  -H "Authorization: bearer [token]" \
+  -H "Content-type: application/json" \
+  -d '{
+    "type": "docker",
+    "relationships": {
+      "app": {
+        "data": {
+          "guid": "[guid]"
+        }
+      }
+    },
+    "data": {
+      "image": "registry/image:latest",
+      "username": "username",
+      "password": "password"
+    }
+  }'
+```
+
+```
+Example Response
+```
+
+```http
+HTTP/1.1 201 Created
+Content-Type: application/json
+
+<%= yield_content :single_docker_package %>
+```
+
+#### Definition
+`POST /v3/packages`
+
+#### Required Parameters
+
+Name | Type | Description
+---- | ---- | -----------
+**type** | _string_ | Type of the package. Valid values are `bits`, `docker`.
+**app** | [_to-one relationship_](#to-one-relationships) | A relationship to an app.
+
+#### Optional Parameters
+
+Name | Type | Description | Default
+---- | ---- | ----------- | -------
+**data** | _object_ | Data for package type. | `{}`
+
+
+#### Conditional Parameters
+
+Name | Type | Description
+---- | ---- | -----------
+**data.image** | _string_ | Required when `type` is `docker`. The registry address of the image.
+**data.username** | _string_ | Optional when `type` is `docker` and accessing a secured registry.
+**data.password** | _string_ | Optional when `type` is `docker` and accessing a secured registry.
+
+#### Permitted Roles
+ |
+--- | ---
+Space Developer |
+Admin |

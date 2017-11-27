@@ -1,8 +1,9 @@
-require 'queries/log_access_fetcher'
+require 'fetchers/log_access_fetcher'
 
 module VCAP::CloudController
   class LogAccessController < RestController::BaseController
     get '/internal/log_access/:guid', :lookup
+    get '/internal/v4/log_access/:guid', :lookup
     def lookup(guid)
       check_read_permissions!
 

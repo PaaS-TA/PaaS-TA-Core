@@ -3,14 +3,16 @@ package deploy_test
 import (
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
-	etcdclient "acceptance-tests/testing/etcd"
-	"acceptance-tests/testing/helpers"
+	etcdclient "github.com/cloudfoundry-incubator/etcd-release/src/acceptance-tests/testing/etcd"
+
+	"github.com/cloudfoundry-incubator/etcd-release/src/acceptance-tests/testing/helpers"
 
 	"github.com/pivotal-cf-experimental/bosh-test/bosh"
-	"github.com/pivotal-cf-experimental/destiny/etcd"
+	"github.com/pivotal-cf-experimental/destiny/ops"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -18,7 +20,9 @@ import (
 
 var _ = Describe("Multiple instance rolling upgrade", func() {
 	var (
-		manifest   etcd.Manifest
+		manifest     string
+		manifestName string
+
 		etcdClient etcdclient.Client
 		spammer    *helpers.Spammer
 
@@ -33,56 +37,59 @@ var _ = Describe("Multiple instance rolling upgrade", func() {
 		testKey = "etcd-key-" + guid
 		testValue = "etcd-value-" + guid
 
+		releaseNumber := os.Getenv("LATEST_ETCD_RELEASE_VERSION")
+
+		enableSSL := true
+		manifest, err = helpers.DeployEtcdWithInstanceCountAndReleaseVersion("multiple-instance-rolling-upgrade", 3, enableSSL, boshClient, releaseNumber)
+		Expect(err).NotTo(HaveOccurred())
+
+		manifestName, err = ops.ManifestName(manifest)
+		Expect(err).NotTo(HaveOccurred())
+
+		Eventually(func() ([]bosh.VM, error) {
+			return helpers.DeploymentVMs(boshClient, manifestName)
+		}, "1m", "10s").Should(ConsistOf(helpers.GetVMsFromManifest(manifest)))
+
+		testConsumerIPs, err := helpers.GetVMIPs(boshClient, manifestName, "testconsumer")
+		Expect(err).NotTo(HaveOccurred())
+
+		etcdClient = etcdclient.NewClient(fmt.Sprintf("http://%s:6769", testConsumerIPs[0]))
+
+		spammer = helpers.NewSpammer(etcdClient, 1*time.Second, "multiple-instance-rolling-upgrade")
 	})
 
 	AfterEach(func() {
 		if !CurrentGinkgoTestDescription().Failed {
-			err := client.DeleteDeployment(manifest.Name)
+			err := boshClient.DeleteDeployment(manifestName)
 			Expect(err).NotTo(HaveOccurred())
 		}
 	})
 
 	It("persists data throughout the rolling upgrade", func() {
-		By("deploying the latest final build of etcd-release", func() {
-			enableSSL := true
-			releaseNumber, err := helpers.DownloadLatestEtcdRelease(client)
-			Expect(err).NotTo(HaveOccurred())
-
-			manifest, err = helpers.DeployEtcdWithInstanceCountAndReleaseVersion("multiple_instance_rolling_upgrade", 3, client, config, enableSSL, releaseNumber)
-			Expect(err).NotTo(HaveOccurred())
-
-			Eventually(func() ([]bosh.VM, error) {
-				return helpers.DeploymentVMs(client, manifest.Name)
-			}, "1m", "10s").Should(ConsistOf(helpers.GetVMsFromManifest(manifest)))
-
-			testConsumerIndex, err := helpers.FindJobIndexByName(manifest, "testconsumer_z1")
-			Expect(err).NotTo(HaveOccurred())
-			etcdClient = etcdclient.NewClient(fmt.Sprintf("http://%s:6769", manifest.Jobs[testConsumerIndex].Networks[0].StaticIPs[0]))
-			spammer = helpers.NewSpammer(etcdClient, 1*time.Second, "multiple-instance-rolling-upgrade")
-		})
-
 		By("setting a persistent value", func() {
 			err := etcdClient.Set(testKey, testValue)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		By("deploying the latest dev build of etcd-release", func() {
-			for i := range manifest.Releases {
-				if manifest.Releases[i].Name == "etcd" {
-					manifest.Releases[i].Version = helpers.EtcdDevReleaseVersion()
-				}
-			}
+			var err error
+			manifest, err = ops.ApplyOp(manifest, ops.Op{
+				Type:  "replace",
+				Path:  "/releases/name=etcd/version",
+				Value: helpers.EtcdDevReleaseVersion(),
+			})
+			Expect(err).NotTo(HaveOccurred())
 
 			spammer.Spam()
 
-			err := helpers.ResolveVersionsAndDeploy(manifest, client)
+			_, err = boshClient.Deploy([]byte(manifest))
 			Expect(err).NotTo(HaveOccurred())
 
 			Eventually(func() ([]bosh.VM, error) {
-				return helpers.DeploymentVMs(client, manifest.Name)
+				return helpers.DeploymentVMs(boshClient, manifestName)
 			}, "1m", "10s").Should(ConsistOf(helpers.GetVMsFromManifest(manifest)))
 
-			err = helpers.VerifyDeploymentRelease(client, manifest.Name, helpers.EtcdDevReleaseVersion())
+			err = helpers.VerifyDeploymentRelease(boshClient, manifestName, helpers.EtcdDevReleaseVersion())
 			Expect(err).NotTo(HaveOccurred())
 
 			spammer.Stop()

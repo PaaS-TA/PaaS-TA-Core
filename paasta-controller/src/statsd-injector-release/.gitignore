@@ -1,0 +1,23 @@
+
+# golang
+pkg/
+/bin/
+*.prof
+*.mprof
+*.coverprofile
+*.test
+
+# bosh
+.blobs
+blobs
+.dev_builds
+dev_releases
+config/dev.yml
+config/private.yml
+releases/*.tgz
+releases/**/*.tgz
+
+statsd-injector-certs
+src/github.com/square/certstrap
+src/github.com/codegangsta/cli
+src/github.com/vito/gosub

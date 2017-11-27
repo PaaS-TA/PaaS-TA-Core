@@ -11,10 +11,13 @@ RSpec.describe ServiceBindingsController, type: :controller do
     let(:req_body) do
       {
         type: service_binding_type,
-        relationships:
-        {
-          app: { guid: app_model.guid },
-          service_instance: { guid: service_instance.guid }
+        relationships: {
+          app: {
+            data: { guid: app_model.guid },
+          },
+          service_instance: {
+            data: { guid: service_instance.guid },
+          },
         }
       }
     end
@@ -34,7 +37,7 @@ RSpec.describe ServiceBindingsController, type: :controller do
     let(:user) { set_current_user(VCAP::CloudController::User.make) }
 
     before do
-      allow_user_read_access(user, space: space)
+      allow_user_read_access_for(user, spaces: [space])
       allow_user_write_access(user, space: space)
       stub_bind(service_instance, opts)
       service_instance.service.requires = ['syslog_drain']
@@ -56,7 +59,7 @@ RSpec.describe ServiceBindingsController, type: :controller do
     context 'permissions' do
       context 'when the user has read, but not write permissions to the space' do
         before do
-          allow_user_read_access(user, space: space)
+          allow_user_read_access_for(user, spaces: [space])
           disallow_user_write_access(user, space: space)
         end
 
@@ -85,8 +88,7 @@ RSpec.describe ServiceBindingsController, type: :controller do
     context 'when the request is missing required fields' do
       let(:req_body) do
         {
-          relationships:
-          {
+          relationships: {
             app: { guid: app_model.guid },
             service_instance: { guid: service_instance.guid }
           }
@@ -105,8 +107,7 @@ RSpec.describe ServiceBindingsController, type: :controller do
       let(:req_body) do
         {
           type: 1234,
-          relationships:
-          {
+          relationships: {
             app: { guid: app_model.guid },
             service_instance: { guid: service_instance.guid }
           }
@@ -126,10 +127,10 @@ RSpec.describe ServiceBindingsController, type: :controller do
         {
           type: 'app',
           relationships:
-          {
-            app: { guid: app_model.guid },
-            service_instance: { guid: service_instance.guid }
-          },
+            {
+              app: { guid: app_model.guid },
+              service_instance: { guid: service_instance.guid }
+            },
           potato: 'tomato'
         }
       end
@@ -146,10 +147,13 @@ RSpec.describe ServiceBindingsController, type: :controller do
       let(:req_body) do
         {
           type: service_binding_type,
-          relationships:
-          {
-            app: { guid: 'schmuid' },
-            service_instance: { guid: service_instance.guid }
+          relationships: {
+            app: {
+              data: { guid: 'schmuid' },
+            },
+            service_instance: {
+              data: { guid: service_instance.guid },
+            },
           }
         }
       end
@@ -167,10 +171,13 @@ RSpec.describe ServiceBindingsController, type: :controller do
       let(:req_body) do
         {
           type: service_binding_type,
-          relationships:
-          {
-            app: { guid: app_model.guid },
-            service_instance: { guid: 'schmuid' }
+          relationships: {
+            app: {
+              data: { guid: app_model.guid },
+            },
+            service_instance: {
+              data: { guid: 'schmuid' },
+            },
           }
         }
       end
@@ -188,10 +195,13 @@ RSpec.describe ServiceBindingsController, type: :controller do
       let(:req_body) do
         {
           type: 'app',
-          relationships:
-          {
-            app: { guid: app_model.guid },
-            service_instance: { guid: service_instance.guid }
+          relationships: {
+            app: {
+              data: { guid: app_model.guid },
+            },
+            service_instance: {
+              data: { guid: service_instance.guid },
+            },
           },
           data: {
             parameters: {
@@ -215,10 +225,13 @@ RSpec.describe ServiceBindingsController, type: :controller do
         let(:req_body) do
           {
             type: 'app',
-            relationships:
-            {
-              app: { guid: app_model.guid },
-              service_instance: { guid: service_instance.guid }
+            relationships: {
+              app: {
+                data: { guid: app_model.guid }
+              },
+              service_instance: {
+                data: { guid: service_instance.guid }
+              },
             },
             data: {
               sparameters: {
@@ -310,7 +323,7 @@ RSpec.describe ServiceBindingsController, type: :controller do
     let(:user) { set_current_user(VCAP::CloudController::User.make) }
 
     before do
-      allow_user_read_access(user, space: space)
+      allow_user_read_access_for(user, spaces: [space])
       allow_user_secret_access(user, space: space)
     end
 
@@ -327,7 +340,7 @@ RSpec.describe ServiceBindingsController, type: :controller do
     context 'permissions' do
       context 'when the user has read-only permissions' do
         before do
-          allow_user_read_access(user, space: space)
+          allow_user_read_access_for(user, spaces: [space])
           allow_user_secret_access(user, space: space)
           disallow_user_write_access(user, space: space)
         end
@@ -389,7 +402,7 @@ RSpec.describe ServiceBindingsController, type: :controller do
     let(:user) { set_current_user(VCAP::CloudController::User.make) }
 
     before do
-      stub_readable_space_guids_for(user, allowed_space)
+      stub_readable_space_guids_for(user, [allowed_space])
     end
 
     it 'returns a 200 and all service bindings the user is allowed to see' do
@@ -400,31 +413,13 @@ RSpec.describe ServiceBindingsController, type: :controller do
       expect(response_guids).to match_array([allowed_binding_1, allowed_binding_2, allowed_binding_3].map(&:guid))
     end
 
-    context 'admin' do
+    context 'when the user has global read access' do
       let(:expected_service_binding_guids) do
         [allowed_binding_1, allowed_binding_2, allowed_binding_3, binding_in_unauthorized_space].map(&:guid)
       end
 
       before do
-        set_current_user_as_admin
-      end
-
-      it 'returns all service bindings' do
-        get :index
-
-        expect(response.status).to eq 200
-        response_guids = parsed_body['resources'].map { |r| r['guid'] }
-        expect(response_guids).to match_array(expected_service_binding_guids)
-      end
-    end
-
-    context 'admin read only' do
-      let(:expected_service_binding_guids) do
-        [allowed_binding_1, allowed_binding_2, allowed_binding_3, binding_in_unauthorized_space].map(&:guid)
-      end
-
-      before do
-        set_current_user_as_admin_read_only
+        allow_user_global_read_access(user)
       end
 
       it 'returns all service bindings' do
@@ -497,7 +492,7 @@ RSpec.describe ServiceBindingsController, type: :controller do
     let(:user) { set_current_user(VCAP::CloudController::User.make) }
 
     before do
-      allow_user_read_access(user, space: space)
+      allow_user_read_access_for(user, spaces: [space])
       allow_user_write_access(user, space: space)
       stub_unbind(service_binding)
     end
@@ -519,7 +514,7 @@ RSpec.describe ServiceBindingsController, type: :controller do
 
       context 'when the user has read, but not write persimmons on the space' do
         before do
-          allow_user_read_access(user, space: space)
+          allow_user_read_access_for(user, spaces: [space])
           disallow_user_write_access(user, space: space)
         end
 

@@ -169,6 +169,15 @@ var _ = Describe("Buildpack Recipe Builder", func() {
 
 				Expect(varNames).NotTo(ContainElement("PORT"))
 			})
+
+			It("does not include a VCAP_APP_PORT environment variable", func() {
+				varNames := []string{}
+				for _, envVar := range desiredLRP.EnvironmentVariables {
+					varNames = append(varNames, envVar.Name)
+				}
+
+				Expect(varNames).NotTo(ContainElement("VCAP_APP_PORT"))
+			})
 		})
 
 		Context("when everything is correct", func() {
@@ -212,6 +221,8 @@ var _ = Describe("Buildpack Recipe Builder", func() {
 				)
 				Expect(desiredLRP.Setup.GetValue()).To(Equal(expectedSetup))
 
+				Expect(desiredLRP.PlacementTags).To(BeEmpty())
+
 				expectedCacheDependencies := []*models.CachedDependency{
 					&models.CachedDependency{
 						From:     "http://file-server.com/v1/static/some-lifecycle.tgz",
@@ -244,7 +255,7 @@ var _ = Describe("Buildpack Recipe Builder", func() {
 							},
 						},
 					},
-					30*time.Second,
+					10*time.Minute,
 				)))
 
 				Expect(runAction.Path).To(Equal("/tmp/lifecycle/launcher"))
@@ -269,6 +280,16 @@ var _ = Describe("Buildpack Recipe Builder", func() {
 				Expect(runAction.Env).To(ContainElement(&models.EnvironmentVariable{
 					Name:  "PORT",
 					Value: "8080",
+				}))
+
+				Expect(runAction.Env).To(ContainElement(&models.EnvironmentVariable{
+					Name:  "VCAP_APP_PORT",
+					Value: "8080",
+				}))
+
+				Expect(runAction.Env).To(ContainElement(&models.EnvironmentVariable{
+					Name:  "VCAP_APP_HOST",
+					Value: "0.0.0.0",
 				}))
 
 				Expect(desiredLRP.EgressRules).To(ConsistOf(egressRules))
@@ -333,8 +354,38 @@ var _ = Describe("Buildpack Recipe Builder", func() {
 								},
 							},
 						},
-						30*time.Second,
+						10*time.Minute,
 					)))
+				})
+			})
+
+			Context("when the 'http' health check is specified", func() {
+				BeforeEach(func() {
+					desiredAppReq.HealthCheckType = cc_messages.HTTPHealthCheckType
+					desiredAppReq.HealthCheckHTTPEndpoint = "/healthz"
+				})
+
+				It("builds a valid monitor value", func() {
+					Expect(desiredLRP.Monitor.GetValue()).To(Equal(models.Timeout(
+						&models.ParallelAction{
+							Actions: []*models.Action{
+								&models.Action{
+									RunAction: &models.RunAction{
+										User:      "vcap",
+										Path:      "/tmp/lifecycle/healthcheck",
+										Args:      []string{"-port=8080", "-uri=/healthz"},
+										LogSource: "HEALTH",
+										ResourceLimits: &models.ResourceLimits{
+											Nofile: &defaultNofile,
+										},
+										SuppressLogOutput: true,
+									},
+								},
+							},
+						},
+						10*time.Minute,
+					)))
+
 				})
 			})
 
@@ -408,6 +459,8 @@ var _ = Describe("Buildpack Recipe Builder", func() {
 							Env: []*models.EnvironmentVariable{
 								{Name: "foo", Value: "bar"},
 								{Name: "PORT", Value: "8080"},
+								{Name: "VCAP_APP_PORT", Value: "8080"},
+								{Name: "VCAP_APP_HOST", Value: "0.0.0.0"},
 							},
 							ResourceLimits: &models.ResourceLimits{
 								Nofile: &expectedNumFiles,
@@ -427,6 +480,8 @@ var _ = Describe("Buildpack Recipe Builder", func() {
 							Env: []*models.EnvironmentVariable{
 								{Name: "foo", Value: "bar"},
 								{Name: "PORT", Value: "8080"},
+								{Name: "VCAP_APP_PORT", Value: "8080"},
+								{Name: "VCAP_APP_HOST", Value: "0.0.0.0"},
 							},
 							ResourceLimits: &models.ResourceLimits{
 								Nofile: &expectedNumFiles,
@@ -526,6 +581,16 @@ var _ = Describe("Buildpack Recipe Builder", func() {
 						expectedWeight := (100 * desiredAppReq.MemoryMB) / recipebuilder.MaxCpuProxy
 						Expect(desiredLRP.CpuWeight).To(BeEquivalentTo(expectedWeight))
 					})
+				})
+			})
+
+			Context("when an IsolationSegment is specified", func() {
+				BeforeEach(func() {
+					desiredAppReq.IsolationSegment = "foo"
+				})
+
+				It("includes the the correct segment in the desiredLRP", func() {
+					Expect(desiredLRP.PlacementTags).To(ContainElement("foo"))
 				})
 			})
 		})
@@ -633,7 +698,7 @@ var _ = Describe("Buildpack Recipe Builder", func() {
 							},
 						},
 					},
-					30*time.Second,
+					10*time.Minute,
 				)))
 			})
 		})
@@ -791,6 +856,7 @@ var _ = Describe("Buildpack Recipe Builder", func() {
 			Expect(taskDefinition.EgressRules).To(ConsistOf(egressRules))
 			Expect(taskDefinition.TrustedSystemCertificatesPath).To(Equal(recipebuilder.TrustedSystemCertificatesPath))
 			Expect(taskDefinition.LogSource).To(Equal("APP/TASK/my-task"))
+			Expect(taskDefinition.PlacementTags).To(BeEmpty())
 
 			expectedAction := models.Serial(&models.DownloadAction{
 				From:              newTaskReq.DropletUri,
@@ -840,6 +906,16 @@ var _ = Describe("Buildpack Recipe Builder", func() {
 
 			It("returns an error", func() {
 				Expect(err).To(Equal(recipebuilder.ErrMultipleAppSources))
+			})
+		})
+
+		Context("when the isolation segment is specified", func() {
+			BeforeEach(func() {
+				newTaskReq.IsolationSegment = "foo"
+			})
+
+			It("includes the correct isolation segment in the placement tags", func() {
+				Expect(taskDefinition.PlacementTags).To(ContainElement("foo"))
 			})
 		})
 

@@ -1,8 +1,8 @@
 package cc_client_test
 
 import (
+	"crypto/tls"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"net/url"
 
@@ -30,7 +30,12 @@ var _ = Describe("CC Client", func() {
 		logger = lager.NewLogger("fakelogger")
 		logger.RegisterSink(lager.NewWriterSink(GinkgoWriter, lager.DEBUG))
 
-		ccClient = cc_client.NewCcClient(fakeCC.URL(), "username", "password", true)
+		tlsConfig, err := cc_client.NewTLSConfig(
+			"../fixtures/watcher_cc_client.crt",
+			"../fixtures/watcher_cc_client.key",
+			"../fixtures/watcher_cc_ca.crt")
+		Expect(err).NotTo(HaveOccurred())
+		ccClient = cc_client.NewCcClient(fakeCC.URL(), tlsConfig)
 	})
 
 	AfterEach(func() {
@@ -40,14 +45,12 @@ var _ = Describe("CC Client", func() {
 	})
 
 	Describe("Successfully calling the Cloud Controller", func() {
-
 		var expectedBody = []byte(`{"instance":"","index":1,"reason":"","crash_count":0,"crash_timestamp":0}`)
 
 		BeforeEach(func() {
 			fakeCC.AppendHandlers(
 				ghttp.CombineHandlers(
-					ghttp.VerifyRequest("POST", "/internal/apps/"+guid+"/crashed"),
-					ghttp.VerifyBasicAuth("username", "password"),
+					ghttp.VerifyRequest("POST", "/internal/v4/apps/"+guid+"/crashed"),
 					ghttp.RespondWith(200, `{}`),
 					func(w http.ResponseWriter, req *http.Request) {
 						body, err := ioutil.ReadAll(req.Body)
@@ -68,53 +71,11 @@ var _ = Describe("CC Client", func() {
 		})
 	})
 
-	Describe("TLS certificate validation", func() {
-		BeforeEach(func() {
-			fakeCC = ghttp.NewTLSServer() // self-signed certificate
-			fakeCC.AppendHandlers(
-				ghttp.CombineHandlers(
-					ghttp.VerifyRequest("POST", "/internal/apps/"+guid+"/crashed"),
-					ghttp.VerifyBasicAuth("username", "password"),
-					ghttp.RespondWith(200, `{}`),
-				),
-			)
-
-			// muffle server-side log of certificate error
-			fakeCC.HTTPTestServer.Config.ErrorLog = log.New(ioutil.Discard, "", log.Flags())
-		})
-
-		Context("when certificate verfication is enabled", func() {
-			BeforeEach(func() {
-				ccClient = cc_client.NewCcClient(fakeCC.URL(), "username", "password", false)
-			})
-
-			It("fails with a self-signed certificate", func() {
-				err := ccClient.AppCrashed(guid, cc_messages.AppCrashedRequest{
-					Index: 1,
-				}, logger)
-				Expect(err).To(HaveOccurred())
-			})
-		})
-
-		Context("when certificate verfication is disabled", func() {
-			BeforeEach(func() {
-				ccClient = cc_client.NewCcClient(fakeCC.URL(), "username", "password", true)
-			})
-
-			It("Attempts to validate SSL certificates", func() {
-				err := ccClient.AppCrashed(guid, cc_messages.AppCrashedRequest{
-					Index: 1,
-				}, logger)
-				Expect(err).NotTo(HaveOccurred())
-			})
-		})
-	})
-
 	Describe("Error conditions", func() {
 		Context("when the request couldn't be completed", func() {
 			BeforeEach(func() {
 				bogusURL := "http://0.0.0.0.0:80"
-				ccClient = cc_client.NewCcClient(bogusURL, "username", "password", true)
+				ccClient = cc_client.NewCcClient(bogusURL, &tls.Config{})
 			})
 
 			It("percolates the error", func() {
@@ -130,7 +91,7 @@ var _ = Describe("CC Client", func() {
 			BeforeEach(func() {
 				fakeCC.AppendHandlers(
 					ghttp.CombineHandlers(
-						ghttp.VerifyRequest("POST", "/internal/apps/"+guid+"/crashed"),
+						ghttp.VerifyRequest("POST", "/internal/v4/apps/"+guid+"/crashed"),
 						ghttp.RespondWith(500, `{}`),
 					),
 				)

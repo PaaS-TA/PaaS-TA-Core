@@ -20,7 +20,7 @@ module VCAP::CloudController
         attributes_to_update = service_key.client.create_service_key(service_key, arbitrary_parameters: arbitrary_parameters)
 
         begin
-          service_key.set_all(attributes_to_update)
+          service_key.set(attributes_to_update)
           service_key.save
         rescue => e
           @logger.error "Failed to save state of create for service key #{service_key.guid} with exception: #{e}"
@@ -28,7 +28,6 @@ module VCAP::CloudController
           orphan_mitigator.attempt_delete_key(service_key)
           raise e
         end
-
       rescue => e
         errors << e
       end

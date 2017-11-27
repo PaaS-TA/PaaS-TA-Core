@@ -38,7 +38,7 @@ function main() {
 
 
       "${PKG_DIR}/bin/etcd-consistency-checker" \
-        --cluster-members "${cluster_members}" \
+        --cluster-members "${consistency_checker_cluster_members}" \
         ${tls_flags} \
         2> >(tee -a ${LOG_DIR}/etcd_consistency_checker.stderr.log | logger -p user.error -t vcap.etcd_consistency_checker) \
         1> >(tee -a ${LOG_DIR}/etcd_consistency_checker.stdout.log | logger -p user.info  -t vcap.etcd_consistency_checker) &

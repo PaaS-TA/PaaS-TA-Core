@@ -4,10 +4,8 @@ RSpec.describe 'Processes' do
   let(:space) { VCAP::CloudController::Space.make }
   let(:app_model) { VCAP::CloudController::AppModel.make(space: space, name: 'my_app') }
   let(:developer) { make_developer_for_space(space) }
-  let(:developer_headers) { headers_for(developer) }
-  let(:scheme) { TestConfig.config[:external_protocol] }
-  let(:host) { TestConfig.config[:external_domain] }
-  let(:link_prefix) { "#{scheme}://#{host}" }
+  let(:developer_headers) { headers_for(developer, user_name: user_name) }
+  let(:user_name) { 'ProcHudson' }
 
   describe 'GET /v3/processes' do
     let!(:web_process) {
@@ -55,20 +53,20 @@ RSpec.describe 'Processes' do
             'instances'    => 2,
             'memory_in_mb' => 1024,
             'disk_in_mb'   => 1024,
-            'ports'        => [8080],
             'health_check' => {
               'type' => 'port',
               'data' => {
-                'timeout' => nil
+                'timeout' => nil,
+                'endpoint' => nil
               }
             },
             'created_at'   => iso8601,
             'updated_at'   => iso8601,
             'links'        => {
               'self'  => { 'href' => "#{link_prefix}/v3/processes/#{web_process.guid}" },
-              'scale' => { 'href' => "#{link_prefix}/v3/processes/#{web_process.guid}/scale", 'method' => 'PUT' },
+              'scale' => { 'href' => "#{link_prefix}/v3/processes/#{web_process.guid}/actions/scale", 'method' => 'POST' },
               'app'   => { 'href' => "#{link_prefix}/v3/apps/#{app_model.guid}" },
-              'space' => { 'href' => "#{link_prefix}/v2/spaces/#{space.guid}" },
+              'space' => { 'href' => "#{link_prefix}/v3/spaces/#{space.guid}" },
               'stats' => { 'href' => "#{link_prefix}/v3/processes/#{web_process.guid}/stats" },
             },
           },
@@ -79,20 +77,20 @@ RSpec.describe 'Processes' do
             'instances'    => 1,
             'memory_in_mb' => 100,
             'disk_in_mb'   => 200,
-            'ports'        => [],
             'health_check' => {
               'type' => 'port',
               'data' => {
-                'timeout' => nil
+                'timeout' => nil,
+                'endpoint' => nil
               }
             },
             'created_at'   => iso8601,
             'updated_at'   => iso8601,
             'links'        => {
               'self'  => { 'href' => "#{link_prefix}/v3/processes/#{worker_process.guid}" },
-              'scale' => { 'href' => "#{link_prefix}/v3/processes/#{worker_process.guid}/scale", 'method' => 'PUT' },
+              'scale' => { 'href' => "#{link_prefix}/v3/processes/#{worker_process.guid}/actions/scale", 'method' => 'POST' },
               'app'   => { 'href' => "#{link_prefix}/v3/apps/#{app_model.guid}" },
-              'space' => { 'href' => "#{link_prefix}/v2/spaces/#{space.guid}" },
+              'space' => { 'href' => "#{link_prefix}/v3/spaces/#{space.guid}" },
               'stats' => { 'href' => "#{link_prefix}/v3/processes/#{worker_process.guid}/stats" },
             },
           }
@@ -290,20 +288,20 @@ RSpec.describe 'Processes' do
         'instances'    => 2,
         'memory_in_mb' => 1024,
         'disk_in_mb'   => 1024,
-        'ports'        => [8080],
         'health_check' => {
           'type' => 'port',
           'data' => {
-            'timeout' => nil
+            'timeout' => nil,
+            'endpoint' => nil
           }
         },
         'created_at'   => iso8601,
         'updated_at'   => iso8601,
         'links'        => {
           'self'  => { 'href' => "#{link_prefix}/v3/processes/#{process.guid}" },
-          'scale' => { 'href' => "#{link_prefix}/v3/processes/#{process.guid}/scale", 'method' => 'PUT' },
+          'scale' => { 'href' => "#{link_prefix}/v3/processes/#{process.guid}/actions/scale", 'method' => 'POST' },
           'app'   => { 'href' => "#{link_prefix}/v3/apps/#{app_model.guid}" },
-          'space' => { 'href' => "#{link_prefix}/v2/spaces/#{space.guid}" },
+          'space' => { 'href' => "#{link_prefix}/v3/spaces/#{space.guid}" },
           'stats' => { 'href' => "#{link_prefix}/v3/processes/#{process.guid}/stats" },
         },
       }
@@ -440,7 +438,6 @@ RSpec.describe 'Processes' do
 
       update_request = {
         command:      'new command',
-        ports:        [1234, 5678],
         health_check: {
           type: 'process',
           data: {
@@ -458,20 +455,20 @@ RSpec.describe 'Processes' do
         'instances'    => 2,
         'memory_in_mb' => 1024,
         'disk_in_mb'   => 1024,
-        'ports'        => [1234, 5678],
         'health_check' => {
           'type' => 'process',
           'data' => {
-            'timeout' => 20
+            'timeout' => 20,
+            'endpoint' => nil
           }
         },
         'created_at'   => iso8601,
         'updated_at'   => iso8601,
         'links'        => {
           'self'  => { 'href' => "#{link_prefix}/v3/processes/#{process.guid}" },
-          'scale' => { 'href' => "#{link_prefix}/v3/processes/#{process.guid}/scale", 'method' => 'PUT' },
+          'scale' => { 'href' => "#{link_prefix}/v3/processes/#{process.guid}/actions/scale", 'method' => 'POST' },
           'app'   => { 'href' => "#{link_prefix}/v3/apps/#{app_model.guid}" },
-          'space' => { 'href' => "#{link_prefix}/v2/spaces/#{space.guid}" },
+          'space' => { 'href' => "#{link_prefix}/v3/spaces/#{space.guid}" },
           'stats' => { 'href' => "#{link_prefix}/v3/processes/#{process.guid}/stats" },
         },
       }
@@ -485,7 +482,6 @@ RSpec.describe 'Processes' do
       expect(process.command).to eq('new command')
       expect(process.health_check_type).to eq('process')
       expect(process.health_check_timeout).to eq(20)
-      expect(process.ports).to match_array([1234, 5678])
 
       event = VCAP::CloudController::Event.last
       expect(event.values).to include({
@@ -495,6 +491,7 @@ RSpec.describe 'Processes' do
         actee_name:        'my_app',
         actor:             developer.guid,
         actor_type:        'user',
+        actor_username:    user_name,
         space_guid:        space.guid,
         organization_guid: space.organization.guid
       })
@@ -503,7 +500,6 @@ RSpec.describe 'Processes' do
         'process_type' => 'web',
         'request'      => {
           'command'      => 'PRIVATE DATA HIDDEN',
-          'ports'        => [1234, 5678],
           'health_check' => {
             'type' => 'process',
             'data' => {
@@ -515,7 +511,7 @@ RSpec.describe 'Processes' do
     end
   end
 
-  describe 'PUT /v3/processes/:guid/scale' do
+  describe 'POST /v3/processes/:guid/actions/scale' do
     it 'scales the process' do
       process = VCAP::CloudController::ProcessModel.make(
         :process,
@@ -533,7 +529,7 @@ RSpec.describe 'Processes' do
         disk_in_mb:   20,
       }
 
-      put "/v3/processes/#{process.guid}/scale", scale_request, developer_headers
+      post "/v3/processes/#{process.guid}/actions/scale", scale_request.to_json, developer_headers
 
       expected_response = {
         'guid'         => process.guid,
@@ -542,20 +538,20 @@ RSpec.describe 'Processes' do
         'instances'    => 5,
         'memory_in_mb' => 10,
         'disk_in_mb'   => 20,
-        'ports'        => [8080],
         'health_check' => {
           'type' => 'port',
           'data' => {
-            'timeout' => nil
+            'timeout' => nil,
+            'endpoint' => nil
           }
         },
         'created_at'   => iso8601,
         'updated_at'   => iso8601,
         'links'        => {
           'self'  => { 'href' => "#{link_prefix}/v3/processes/#{process.guid}" },
-          'scale' => { 'href' => "#{link_prefix}/v3/processes/#{process.guid}/scale", 'method' => 'PUT' },
+          'scale' => { 'href' => "#{link_prefix}/v3/processes/#{process.guid}/actions/scale", 'method' => 'POST' },
           'app'   => { 'href' => "#{link_prefix}/v3/apps/#{app_model.guid}" },
-          'space' => { 'href' => "#{link_prefix}/v2/spaces/#{space.guid}" },
+          'space' => { 'href' => "#{link_prefix}/v3/spaces/#{space.guid}" },
           'stats' => { 'href' => "#{link_prefix}/v3/processes/#{process.guid}/stats" },
         },
       }
@@ -580,6 +576,7 @@ RSpec.describe 'Processes' do
         actee_name:        'my_app',
         actor:             developer.guid,
         actor_type:        'user',
+        actor_username:    user_name,
         space_guid:        space.guid,
         organization_guid: space.organization.guid
       })
@@ -587,9 +584,9 @@ RSpec.describe 'Processes' do
         'process_guid' => process.guid,
         'process_type' => 'web',
         'request'      => {
-          'instances'    => '5',
-          'memory_in_mb' => '10',
-          'disk_in_mb'   => '20'
+          'instances'    => 5,
+          'memory_in_mb' => 10,
+          'disk_in_mb'   => 20
         }
       })
     end
@@ -615,6 +612,7 @@ RSpec.describe 'Processes' do
         actee_name:        'my_app',
         actor:             developer.guid,
         actor_type:        'user',
+        actor_username:    user_name,
         space_guid:        space.guid,
         organization_guid: space.organization.guid
       })
@@ -675,20 +673,20 @@ RSpec.describe 'Processes' do
             'instances'    => 2,
             'memory_in_mb' => 1024,
             'disk_in_mb'   => 1024,
-            'ports'        => [8080],
             'health_check' => {
               'type' => 'port',
               'data' => {
-                'timeout' => nil
+                'timeout' => nil,
+                'endpoint' => nil
               }
             },
             'created_at'   => iso8601,
             'updated_at'   => iso8601,
             'links'        => {
               'self'  => { 'href' => "#{link_prefix}/v3/processes/#{process1.guid}" },
-              'scale' => { 'href' => "#{link_prefix}/v3/processes/#{process1.guid}/scale", 'method' => 'PUT' },
+              'scale' => { 'href' => "#{link_prefix}/v3/processes/#{process1.guid}/actions/scale", 'method' => 'POST' },
               'app'   => { 'href' => "#{link_prefix}/v3/apps/#{app_model.guid}" },
-              'space' => { 'href' => "#{link_prefix}/v2/spaces/#{space.guid}" },
+              'space' => { 'href' => "#{link_prefix}/v3/spaces/#{space.guid}" },
               'stats' => { 'href' => "#{link_prefix}/v3/processes/#{process1.guid}/stats" },
             },
           },
@@ -699,20 +697,20 @@ RSpec.describe 'Processes' do
             'instances'    => 1,
             'memory_in_mb' => 100,
             'disk_in_mb'   => 200,
-            'ports'        => [],
             'health_check' => {
               'type' => 'port',
               'data' => {
-                'timeout' => nil
+                'timeout' => nil,
+                'endpoint' => nil
               }
             },
             'created_at'   => iso8601,
             'updated_at'   => iso8601,
             'links'        => {
               'self'  => { 'href' => "#{link_prefix}/v3/processes/#{process2.guid}" },
-              'scale' => { 'href' => "#{link_prefix}/v3/processes/#{process2.guid}/scale", 'method' => 'PUT' },
+              'scale' => { 'href' => "#{link_prefix}/v3/processes/#{process2.guid}/actions/scale", 'method' => 'POST' },
               'app'   => { 'href' => "#{link_prefix}/v3/apps/#{app_model.guid}" },
-              'space' => { 'href' => "#{link_prefix}/v2/spaces/#{space.guid}" },
+              'space' => { 'href' => "#{link_prefix}/v3/spaces/#{space.guid}" },
               'stats' => { 'href' => "#{link_prefix}/v3/processes/#{process2.guid}/stats" },
             },
           }
@@ -795,20 +793,20 @@ RSpec.describe 'Processes' do
         'instances'    => 2,
         'memory_in_mb' => 1024,
         'disk_in_mb'   => 1024,
-        'ports'        => [8080],
         'health_check' => {
           'type' => 'port',
           'data' => {
-            'timeout' => nil
+            'timeout' => nil,
+            'endpoint' => nil
           }
         },
         'created_at'   => iso8601,
         'updated_at'   => iso8601,
         'links'        => {
           'self'  => { 'href' => "#{link_prefix}/v3/processes/#{process.guid}" },
-          'scale' => { 'href' => "#{link_prefix}/v3/processes/#{process.guid}/scale", 'method' => 'PUT' },
+          'scale' => { 'href' => "#{link_prefix}/v3/processes/#{process.guid}/actions/scale", 'method' => 'POST' },
           'app'   => { 'href' => "#{link_prefix}/v3/apps/#{app_model.guid}" },
-          'space' => { 'href' => "#{link_prefix}/v2/spaces/#{space.guid}" },
+          'space' => { 'href' => "#{link_prefix}/v3/spaces/#{space.guid}" },
           'stats' => { 'href' => "#{link_prefix}/v3/processes/#{process.guid}/stats" },
         },
       }
@@ -832,6 +830,99 @@ RSpec.describe 'Processes' do
 
       expect(last_response.status).to eq(200)
       expect(parsed_response['command']).to eq('[PRIVATE DATA HIDDEN]')
+    end
+  end
+
+  describe 'PATCH /v3/apps/:guid/processes/:type' do
+    it 'updates the process' do
+      process = VCAP::CloudController::ProcessModel.make(
+        :process,
+        app:                  app_model,
+        type:                 'web',
+        instances:            2,
+        memory:               1024,
+        disk_quota:           1024,
+        command:              'rackup',
+        ports:                [4444, 5555],
+        health_check_type:    'port',
+        health_check_timeout: 10
+      )
+
+      update_request = {
+        command:      'new command',
+        health_check: {
+          type: 'http',
+          data: {
+            timeout: 20,
+            endpoint: '/healthcheck'
+          }
+        }
+      }.to_json
+
+      patch "/v3/apps/#{app_model.guid}/processes/web", update_request, developer_headers.merge('CONTENT_TYPE' => 'application/json')
+
+      expected_response = {
+        'guid'         => process.guid,
+        'type'         => 'web',
+        'command'      => 'new command',
+        'instances'    => 2,
+        'memory_in_mb' => 1024,
+        'disk_in_mb'   => 1024,
+        'health_check' => {
+          'type' => 'http',
+          'data' => {
+            'timeout' => 20,
+            'endpoint' => '/healthcheck'
+          }
+        },
+        'created_at'   => iso8601,
+        'updated_at'   => iso8601,
+        'links'        => {
+          'self'  => { 'href' => "#{link_prefix}/v3/processes/#{process.guid}" },
+          'scale' => { 'href' => "#{link_prefix}/v3/processes/#{process.guid}/actions/scale", 'method' => 'POST' },
+          'app'   => { 'href' => "#{link_prefix}/v3/apps/#{app_model.guid}" },
+          'space' => { 'href' => "#{link_prefix}/v3/spaces/#{space.guid}" },
+          'stats' => { 'href' => "#{link_prefix}/v3/processes/#{process.guid}/stats" },
+        },
+      }
+
+      parsed_response = MultiJson.load(last_response.body)
+
+      expect(last_response.status).to eq(200)
+      expect(parsed_response).to be_a_response_like(expected_response)
+
+      process.reload
+      expect(process.command).to eq('new command')
+      expect(process.health_check_type).to eq('http')
+      expect(process.health_check_timeout).to eq(20)
+      expect(process.health_check_http_endpoint).to eq('/healthcheck')
+
+      event = VCAP::CloudController::Event.last
+      expect(event.values).to include({
+        type:              'audit.app.process.update',
+        actee:             app_model.guid,
+        actee_type:        'app',
+        actee_name:        'my_app',
+        actor:             developer.guid,
+        actor_type:        'user',
+        actor_username:    user_name,
+        space_guid:        space.guid,
+        organization_guid: space.organization.guid
+      })
+      expect(event.metadata).to eq({
+        'process_guid' => process.guid,
+        'process_type' => 'web',
+        'request'      => {
+          'command'      => 'PRIVATE DATA HIDDEN',
+          'health_check' => {
+            'type' => 'http',
+            'data' => {
+              'timeout' => 20,
+              'endpoint' => '/healthcheck',
+            }
+          }
+        }
+      })
     end
   end
 
@@ -928,7 +1019,7 @@ RSpec.describe 'Processes' do
     end
   end
 
-  describe 'PUT /v3/apps/:guid/processes/:type/scale' do
+  describe 'POST /v3/apps/:guid/processes/:type/actions/scale' do
     it 'scales the process belonging to an app' do
       process = VCAP::CloudController::ProcessModel.make(
         :process,
@@ -946,7 +1037,7 @@ RSpec.describe 'Processes' do
         disk_in_mb:   20,
       }
 
-      put "/v3/apps/#{app_model.guid}/processes/web/scale", scale_request, developer_headers
+      post "/v3/apps/#{app_model.guid}/processes/web/actions/scale", scale_request.to_json, developer_headers
 
       expected_response = {
         'guid'         => process.guid,
@@ -955,20 +1046,20 @@ RSpec.describe 'Processes' do
         'instances'    => 5,
         'memory_in_mb' => 10,
         'disk_in_mb'   => 20,
-        'ports'        => [8080],
         'health_check' => {
           'type' => 'port',
           'data' => {
-            'timeout' => nil
+            'timeout' => nil,
+            'endpoint' => nil
           }
         },
         'created_at'   => iso8601,
         'updated_at'   => iso8601,
         'links'        => {
           'self'  => { 'href' => "#{link_prefix}/v3/processes/#{process.guid}" },
-          'scale' => { 'href' => "#{link_prefix}/v3/processes/#{process.guid}/scale", 'method' => 'PUT' },
+          'scale' => { 'href' => "#{link_prefix}/v3/processes/#{process.guid}/actions/scale", 'method' => 'POST' },
           'app'   => { 'href' => "#{link_prefix}/v3/apps/#{app_model.guid}" },
-          'space' => { 'href' => "#{link_prefix}/v2/spaces/#{space.guid}" },
+          'space' => { 'href' => "#{link_prefix}/v3/spaces/#{space.guid}" },
           'stats' => { 'href' => "#{link_prefix}/v3/processes/#{process.guid}/stats" },
         },
       }
@@ -993,6 +1084,7 @@ RSpec.describe 'Processes' do
         actee_name:        'my_app',
         actor:             developer.guid,
         actor_type:        'user',
+        actor_username:    user_name,
         space_guid:        space.guid,
         organization_guid: space.organization.guid
       })
@@ -1000,9 +1092,9 @@ RSpec.describe 'Processes' do
         'process_guid' => process.guid,
         'process_type' => 'web',
         'request'      => {
-          'instances'    => '5',
-          'memory_in_mb' => '10',
-          'disk_in_mb'   => '20'
+          'instances'    => 5,
+          'memory_in_mb' => 10,
+          'disk_in_mb'   => 20
         }
       })
     end
@@ -1028,6 +1120,7 @@ RSpec.describe 'Processes' do
         actee_name:        'my_app',
         actor:             developer.guid,
         actor_type:        'user',
+        actor_username:    user_name,
         space_guid:        space.guid,
         organization_guid: space.organization.guid
       })

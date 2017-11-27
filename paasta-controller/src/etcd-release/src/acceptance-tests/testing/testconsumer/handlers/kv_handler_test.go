@@ -1,13 +1,14 @@
 package handlers_test
 
 import (
-	"acceptance-tests/testing/testconsumer/handlers"
 	"crypto/tls"
 	"errors"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+
+	"github.com/cloudfoundry-incubator/etcd-release/src/acceptance-tests/testing/testconsumer/handlers"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"

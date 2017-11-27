@@ -1,5 +1,5 @@
 require 'spec_helper'
-require 'messages/app_update_message'
+require 'messages/apps/app_update_message'
 
 module VCAP::CloudController
   RSpec.describe AppUpdateMessage do
@@ -10,12 +10,9 @@ module VCAP::CloudController
           'lifecycle' => {
             'type' => 'buildpack',
             'data' => {
-              'buildpack' => 'some-buildpack',
+              'buildpacks' => ['some-buildpack'],
               'stack' => 'some-stack'
             }
-          },
-          'environment_variables' => {
-            'ENVVAR' => 'env-val'
           }
         }
       }
@@ -25,9 +22,8 @@ module VCAP::CloudController
 
         expect(message).to be_a(AppUpdateMessage)
         expect(message.name).to eq('some-name')
-        expect(message.lifecycle['data']['buildpack']).to eq('some-buildpack')
-        expect(message.lifecycle['data']['stack']).to eq('some-stack')
-        expect(message.environment_variables).to eq({ 'ENVVAR' => 'env-val' })
+        expect(message.lifecycle[:data][:buildpacks].first).to eq('some-buildpack')
+        expect(message.lifecycle[:data][:stack]).to eq('some-stack')
       end
 
       it 'converts requested keys to symbols' do
@@ -35,7 +31,6 @@ module VCAP::CloudController
 
         expect(message.requested?(:name)).to be_truthy
         expect(message.requested?(:lifecycle)).to be_truthy
-        expect(message.requested?(:environment_variables)).to be_truthy
       end
     end
 
@@ -62,17 +57,6 @@ module VCAP::CloudController
         end
       end
 
-      context 'when environment_variables is not a hash' do
-        let(:params) { { environment_variables: 'potato' } }
-
-        it 'is not valid' do
-          message = AppUpdateMessage.new(params)
-
-          expect(message).not_to be_valid
-          expect(message.errors_on(:environment_variables)[0]).to include('must be a hash')
-        end
-      end
-
       describe 'lifecycle' do
         context 'when lifecycle is provided' do
           let(:params) do
@@ -81,7 +65,7 @@ module VCAP::CloudController
               lifecycle: {
                 type: 'buildpack',
                 data: {
-                  buildpack: 'java',
+                  buildpacks: ['java'],
                   stack: 'cflinuxfs2'
                 }
               }
@@ -100,7 +84,7 @@ module VCAP::CloudController
               lifecycle: {
                 type: 'buildpack',
                 data: {
-                  buildpack: 123,
+                  buildpacks: [123],
                   stack: 324
                 }
               }
@@ -110,7 +94,7 @@ module VCAP::CloudController
           it 'must provide a valid buildpack value' do
             message = AppUpdateMessage.new(params)
             expect(message).not_to be_valid
-            expect(message.errors_on(:lifecycle)).to include('Buildpack must be a string')
+            expect(message.errors_on(:lifecycle)).to include('Buildpacks can only contain strings')
           end
 
           it 'must provide a valid stack name' do
@@ -121,7 +105,9 @@ module VCAP::CloudController
         end
 
         context 'when data is not provided' do
-          let(:params) do { lifecycle: { type: 'buildpack' } } end
+          let(:params) do
+            { lifecycle: { type: 'buildpack' } }
+          end
 
           it 'is not valid' do
             message = AppUpdateMessage.new(params)

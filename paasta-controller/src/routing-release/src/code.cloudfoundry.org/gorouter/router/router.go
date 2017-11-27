@@ -4,7 +4,6 @@ import (
 	"io/ioutil"
 	"os"
 	"strconv"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -17,26 +16,22 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"net/url"
 	"time"
 
 	"code.cloudfoundry.org/gorouter/common"
 	"code.cloudfoundry.org/gorouter/common/health"
-	router_http "code.cloudfoundry.org/gorouter/common/http"
 	"code.cloudfoundry.org/gorouter/common/schema"
 	"code.cloudfoundry.org/gorouter/config"
 	"code.cloudfoundry.org/gorouter/handlers"
+	"code.cloudfoundry.org/gorouter/logger"
 	"code.cloudfoundry.org/gorouter/metrics/monitor"
 	"code.cloudfoundry.org/gorouter/proxy"
 	"code.cloudfoundry.org/gorouter/registry"
-	"code.cloudfoundry.org/gorouter/route"
 	"code.cloudfoundry.org/gorouter/varz"
-	"code.cloudfoundry.org/lager"
-	"code.cloudfoundry.org/localip"
-	"code.cloudfoundry.org/routing-api/models"
 	"github.com/armon/go-proxyproto"
 	"github.com/cloudfoundry/dropsonde"
 	"github.com/nats-io/nats"
+	"github.com/uber-go/zap"
 )
 
 var DrainTimeout = errors.New("router: Drain timeout")
@@ -69,28 +64,17 @@ type Router struct {
 	stopLock         sync.Mutex
 	uptimeMonitor    *monitor.Uptime
 	HeartbeatOK      *int32
-	logger           lager.Logger
+	logger           logger.Logger
 	errChan          chan error
+	NatsHost         *atomic.Value
 }
 
-type RegistryMessage struct {
-	Host                    string            `json:"host"`
-	Port                    uint16            `json:"port"`
-	Uris                    []route.Uri       `json:"uris"`
-	Tags                    map[string]string `json:"tags"`
-	App                     string            `json:"app"`
-	StaleThresholdInSeconds int               `json:"stale_threshold_in_seconds"`
-	RouteServiceUrl         string            `json:"route_service_url"`
-	PrivateInstanceId       string            `json:"private_instance_id"`
-	PrivateInstanceIndex    string            `json:"private_instance_index"`
-}
-
-func NewRouter(logger lager.Logger, cfg *config.Config, p proxy.Proxy, mbusClient *nats.Conn, r *registry.RouteRegistry,
+func NewRouter(logger logger.Logger, cfg *config.Config, p proxy.Proxy, mbusClient *nats.Conn, r *registry.RouteRegistry,
 	v varz.Varz, heartbeatOK *int32, logCounter *schema.LogCounter, errChan chan error) (*Router, error) {
 
 	var host string
 	if cfg.Status.Port != 0 {
-		host = fmt.Sprintf(":%d", cfg.Status.Port)
+		host = fmt.Sprintf("%s:%d", cfg.Status.Host, cfg.Status.Port)
 	}
 
 	varz := &health.Varz{
@@ -105,7 +89,7 @@ func NewRouter(logger lager.Logger, cfg *config.Config, p proxy.Proxy, mbusClien
 	}
 
 	healthz := &health.Healthz{}
-	health := handlers.NewHealthcheck("", heartbeatOK, logger)
+	health := handlers.NewHealthcheck(heartbeatOK, logger)
 	component := &common.VcapComponent{
 		Config:  cfg,
 		Varz:    varz,
@@ -149,14 +133,10 @@ func NewRouter(logger lager.Logger, cfg *config.Config, p proxy.Proxy, mbusClien
 
 type gorouterHandler struct {
 	handler http.Handler
-	logger  lager.Logger
+	logger  logger.Logger
 }
 
 func (h *gorouterHandler) ServeHTTP(res http.ResponseWriter, req *http.Request) {
-	// The X-Vcap-Request-Id must be set before the request is passed into the
-	// dropsonde InstrumentedHandler
-	router_http.SetVcapRequestIdHeader(req, h.logger)
-
 	h.handler.ServeHTTP(res, req)
 }
 
@@ -165,51 +145,11 @@ func (r *Router) Run(signals <-chan os.Signal, ready chan<- struct{}) error {
 
 	r.RegisterComponent()
 
-	// Subscribe register/unregister router
-	r.SubscribeRegister()
-	r.HandleGreetings()
-	r.SubscribeUnregister()
-
-	// Kickstart sending start messages
-	r.SendStartMessage()
-
-	r.mbusClient.Opts.ReconnectedCB = func(conn *nats.Conn) {
-		natsUrl, err := url.Parse(conn.ConnectedUrl())
-		natsHost := ""
-		if err != nil {
-			r.logger.Fatal("nats-url-parse-error", err)
-		} else {
-			natsHost = natsUrl.Host
-		}
-
-		r.logger.Info(fmt.Sprintf("Reconnecting to NATS server %s...", natsHost))
-		r.SendStartMessage()
-	}
-
 	// Schedule flushing active app's app_id
 	r.ScheduleFlushApps()
 
-	lbOKDelay := r.config.StartResponseDelayInterval - r.config.LoadBalancerHealthyThreshold
-
-	totalWaitDelay := r.config.LoadBalancerHealthyThreshold
-	if lbOKDelay > 0 {
-		totalWaitDelay = r.config.StartResponseDelayInterval
-	}
-
-	r.logger.Info(fmt.Sprintf("Waiting %s before listening...", totalWaitDelay),
-		lager.Data{"route_registration_interval": r.config.StartResponseDelayInterval.String(),
-			"load_balancer_healthy_threshold": r.config.LoadBalancerHealthyThreshold.String()})
-
-	if lbOKDelay > 0 {
-		r.logger.Debug(fmt.Sprintf("Sleeping for %d, before enabling /health endpoint", lbOKDelay))
-		time.Sleep(lbOKDelay)
-	}
-
-	atomic.StoreInt32(r.HeartbeatOK, 1)
-	r.logger.Debug("Gorouter reporting healthy")
-	time.Sleep(r.config.LoadBalancerHealthyThreshold)
-
-	r.logger.Info("completed-wait")
+	r.logger.Debug("Sleeping before returning success on /health endpoint to preload routing table", zap.Float64("sleep_time_seconds", r.config.StartResponseDelayInterval.Seconds()))
+	time.Sleep(r.config.StartResponseDelayInterval)
 
 	handler := gorouterHandler{handler: dropsonde.InstrumentedHandler(r.proxy), logger: r.logger}
 
@@ -229,6 +169,7 @@ func (r *Router) Run(signals <-chan os.Signal, ready chan<- struct{}) error {
 		return err
 	}
 
+	atomic.StoreInt32(r.HeartbeatOK, 1)
 	// create pid file
 	err = r.writePidFile(r.config.PidFile)
 	if err != nil {
@@ -260,7 +201,7 @@ func (r *Router) OnErrOrSignal(signals <-chan os.Signal, errChan chan error) {
 	select {
 	case err := <-errChan:
 		if err != nil {
-			r.logger.Error("Error occurred: ", err)
+			r.logger.Error("Error occurred", zap.Error(err))
 			r.DrainAndStop()
 		}
 	case sig := <-signals:
@@ -268,9 +209,7 @@ func (r *Router) OnErrOrSignal(signals <-chan os.Signal, errChan chan error) {
 			for sig := range signals {
 				r.logger.Info(
 					"gorouter.signal.ignored",
-					lager.Data{
-						"signal": sig.String(),
-					},
+					zap.String("signal", sig.String()),
 				)
 			}
 		}()
@@ -287,11 +226,9 @@ func (r *Router) DrainAndStop() {
 	drainWait := r.config.DrainWait
 	drainTimeout := r.config.DrainTimeout
 	r.logger.Info(
-		"gorouter.draining",
-		lager.Data{
-			"wait":    (drainWait).String(),
-			"timeout": (drainTimeout).String(),
-		},
+		"gorouter-draining",
+		zap.Float64("wait_seconds", drainWait.Seconds()),
+		zap.Float64("timeout_seconds", drainTimeout.Seconds()),
 	)
 
 	r.Drain(drainWait, drainTimeout)
@@ -304,11 +241,12 @@ func (r *Router) serveHTTPS(server *http.Server, errChan chan error) error {
 		tlsConfig := &tls.Config{
 			Certificates: []tls.Certificate{r.config.SSLCertificate},
 			CipherSuites: r.config.CipherSuites,
+			MinVersion:   tls.VersionTLS12,
 		}
 
 		listener, err := net.Listen("tcp", fmt.Sprintf(":%d", r.config.SSLPort))
 		if err != nil {
-			r.logger.Fatal("tcp-listener-error", err)
+			r.logger.Fatal("tcp-listener-error", zap.Error(err))
 			return err
 		}
 
@@ -321,7 +259,7 @@ func (r *Router) serveHTTPS(server *http.Server, errChan chan error) error {
 
 		r.tlsListener = tls.NewListener(listener, tlsConfig)
 
-		r.logger.Info("tls-listener-started", lager.Data{"address": r.tlsListener.Addr()})
+		r.logger.Info("tls-listener-started", zap.Object("address", r.tlsListener.Addr()))
 
 		go func() {
 			err := server.Serve(r.tlsListener)
@@ -339,7 +277,7 @@ func (r *Router) serveHTTPS(server *http.Server, errChan chan error) error {
 func (r *Router) serveHTTP(server *http.Server, errChan chan error) error {
 	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", r.config.Port))
 	if err != nil {
-		r.logger.Fatal("tcp-listener-error", err)
+		r.logger.Fatal("tcp-listener-error", zap.Error(err))
 		return err
 	}
 
@@ -351,7 +289,7 @@ func (r *Router) serveHTTP(server *http.Server, errChan chan error) error {
 		}
 	}
 
-	r.logger.Info("tcp-listener-started", lager.Data{"address": r.listener.Addr()})
+	r.logger.Info("tcp-listener-started", zap.Object("address", r.listener.Addr()))
 
 	go func() {
 		err := server.Serve(r.listener)
@@ -414,9 +352,7 @@ func (r *Router) Stop() {
 	r.uptimeMonitor.Stop()
 	r.logger.Info(
 		"gorouter.stopped",
-		lager.Data{
-			"took": time.Since(stoppingAt).String(),
-		},
+		zap.Duration("took", time.Since(stoppingAt)),
 	)
 }
 
@@ -446,54 +382,6 @@ func (r *Router) stopListening() {
 
 func (r *Router) RegisterComponent() {
 	r.component.Register(r.mbusClient)
-}
-
-func (r *Router) SubscribeRegister() {
-	r.subscribeRegistry("router.register", func(registryMessage *RegistryMessage) {
-		for _, uri := range registryMessage.Uris {
-			r.registry.Register(
-				uri,
-				registryMessage.makeEndpoint(),
-			)
-		}
-	})
-}
-
-func (r *Router) SubscribeUnregister() {
-	r.subscribeRegistry("router.unregister", func(registryMessage *RegistryMessage) {
-		r.logger.Info("unregister-route", lager.Data{"message": registryMessage})
-		for _, uri := range registryMessage.Uris {
-			r.registry.Unregister(
-				uri,
-				registryMessage.makeEndpoint(),
-			)
-		}
-	})
-}
-
-func (r *Router) HandleGreetings() {
-	r.mbusClient.Subscribe("router.greet", func(msg *nats.Msg) {
-		if msg.Reply == "" {
-			r.logger.Info(fmt.Sprintf("Received message with empty reply on subject %s", msg.Subject))
-			return
-		}
-
-		response, _ := r.greetMessage()
-		r.mbusClient.Publish(msg.Reply, response)
-	})
-}
-
-func (r *Router) SendStartMessage() {
-	b, err := r.greetMessage()
-	if err != nil {
-		panic(err)
-	}
-
-	// Send start message once at start
-	err = r.mbusClient.Publish("router.start", b)
-	if err != nil {
-		r.logger.Error("failed-to-publish-greet-message", err)
-	}
 }
 
 func (r *Router) ScheduleFlushApps() {
@@ -573,67 +461,7 @@ func (r *Router) flushApps(t time.Time) {
 
 	z := b.Bytes()
 
-	r.logger.Debug("Debug Info", lager.Data{"Active apps": len(x), "message size:": len(z)})
+	r.logger.Debug("Debug Info", zap.Int("Active apps", len(x)), zap.Int("message size:", len(z)))
 
 	r.mbusClient.Publish("router.active_apps", z)
-}
-
-func (r *Router) greetMessage() ([]byte, error) {
-	host, err := localip.LocalIP()
-	if err != nil {
-		return nil, err
-	}
-
-	d := common.RouterStart{
-		Id:    r.component.Varz.UUID,
-		Hosts: []string{host},
-		MinimumRegisterIntervalInSeconds: int(r.config.StartResponseDelayInterval.Seconds()),
-		PruneThresholdInSeconds:          int(r.config.DropletStaleThreshold.Seconds()),
-	}
-	return json.Marshal(d)
-}
-
-func (r *Router) subscribeRegistry(subject string, successCallback func(*RegistryMessage)) {
-	callback := func(message *nats.Msg) {
-		payload := message.Data
-
-		var msg RegistryMessage
-
-		err := json.Unmarshal(payload, &msg)
-		if err != nil {
-			logMessage := fmt.Sprintf("%s: Error unmarshalling JSON (%d; %s): %s", subject, len(payload), payload, err)
-			r.logger.Info(logMessage, lager.Data{"payload": string(payload)})
-			return
-		}
-
-		if !msg.ValidateMessage() {
-			logMessage := fmt.Sprintf("%s: Unable to validate message. route_service_url must be https", subject)
-			r.logger.Info(logMessage, lager.Data{"message": msg})
-			return
-		}
-
-		successCallback(&msg)
-	}
-
-	_, err := r.mbusClient.Subscribe(subject, callback)
-	if err != nil {
-		r.logger.Error(fmt.Sprintf("Error subscribing to %s ", subject), err)
-	}
-}
-
-func (rm *RegistryMessage) makeEndpoint() *route.Endpoint {
-	return route.NewEndpoint(
-		rm.App,
-		rm.Host,
-		rm.Port,
-		rm.PrivateInstanceId,
-		rm.PrivateInstanceIndex,
-		rm.Tags,
-		rm.StaleThresholdInSeconds,
-		rm.RouteServiceUrl,
-		models.ModificationTag{})
-}
-
-func (rm *RegistryMessage) ValidateMessage() bool {
-	return rm.RouteServiceUrl == "" || strings.HasPrefix(rm.RouteServiceUrl, "https")
 }

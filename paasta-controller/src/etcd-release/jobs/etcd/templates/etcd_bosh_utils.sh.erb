@@ -4,7 +4,6 @@ LOG_DIR=/var/vcap/sys/log/etcd
 STORE_DIR=/var/vcap/store
 DATA_DIR=${STORE_DIR}/etcd
 
-node_name="<%= name.gsub('_', '-') %>-<%= spec.index %>"
 <%
   def discover_external_ip
     networks = spec.networks.marshal_dump
@@ -24,38 +23,85 @@ node_name="<%= name.gsub('_', '-') %>-<%= spec.index %>"
     network.ip
   end
 
-  client_protocol = p("etcd.require_ssl") ? "https" : "http"
-  peer_protocol = p("etcd.peer_require_ssl") ? "https" : "http"
+  def node_name
+    "#{name.gsub('_', '-')}-#{spec.index}"
+  end
 
-  if p("etcd.require_ssl") || p("etcd.peer_require_ssl")
-    cluster_members = p("etcd.cluster").map do |zone|
-      result = []
-      for i in 0..zone["instances"]-1
-        result << "#{client_protocol}://#{zone["name"].gsub('_', '-')}-#{i}.#{p("etcd.advertise_urls_dns_suffix")}:4001"
+  def peer_protocol
+    p("etcd.peer_require_ssl") ? "https" : "http"
+  end
+
+  def client_protocol
+    p("etcd.require_ssl") ? "https" : "http"
+  end
+
+  def advertise_peer_url
+    if p("etcd.require_ssl") || p("etcd.peer_require_ssl")
+      "#{peer_protocol}://#{node_name}.#{p("etcd.advertise_urls_dns_suffix")}:7001"
+    else
+      my_ip = discover_external_ip
+      "http://#{my_ip}:7001"
+    end
+  end
+
+  def advertise_client_url
+    if p("etcd.require_ssl") || p("etcd.peer_require_ssl")
+      "#{client_protocol}://#{node_name}.#{p("etcd.advertise_urls_dns_suffix")}:4001"
+    else
+      my_ip = discover_external_ip
+      "http://#{my_ip}:4001"
+    end
+  end
+
+  def cluster_member_ips
+    ips = nil
+    if_p("etcd.machines") { |machines| ips = machines.map { |m| "http://#{m}:4001" } }
+    unless ips
+      ips = link("etcd").instances.map { |i| "http://#{i.address}:4001" }
+    end
+    ips
+  end
+
+  def cluster_members
+    if p("etcd.require_ssl") || p("etcd.peer_require_ssl")
+      cluster_url = "#{client_protocol}://#{p("etcd.advertise_urls_dns_suffix")}:4001"
+      return cluster_url
+    else
+      cluster_member_ips.join(" ")
+    end
+  end
+
+  def consistency_checker_cluster_members
+    if p("etcd.require_ssl") || p("etcd.peer_require_ssl")
+      cluster_member_urls = nil
+      if_link("etcd") do |etcd_link|
+        urls = []
+        etcd_link.instances.size.times do |i|
+          urls << "#{client_protocol}://#{name.gsub('_', '-')}-#{i}.#{p("etcd.advertise_urls_dns_suffix")}:4001"
+        end
+        cluster_member_urls = urls.flatten.join(",")
       end
-      result
-    end.flatten.join(" ")
-  else
-    my_ip = discover_external_ip
-    cluster_members = p("etcd.machines").map { |m| "http://#{m}:4001" }.join(" ")
+      unless cluster_member_urls
+        cluster_member_urls = p("etcd.cluster").map do |zone|
+          result = []
+          for i in 0..zone["instances"]-1
+            result << "#{client_protocol}://#{zone["name"].gsub('_', '-')}-#{i}.#{p("etcd.advertise_urls_dns_suffix")}:4001"
+          end
+          result
+        end.flatten.join(",")
+      end
+      return cluster_member_urls
+    else
+      cluster_member_ips.flatten.join(",")
+    end
   end
 %>
 
-client_protocol=<%= client_protocol %>
-peer_protocol=<%= peer_protocol %>
-listen_peer_url="${peer_protocol}://<%= p("etcd.peer_ip") %>:7001"
-cluster_members=<%= cluster_members.gsub(" ", ",") %>
-
-<% if p("etcd.require_ssl") || p("etcd.peer_require_ssl") %>
-advertise_peer_url="${peer_protocol}://${node_name}.<%= p("etcd.advertise_urls_dns_suffix") %>:7001"
-advertise_client_url="${client_protocol}://${node_name}.<%= p("etcd.advertise_urls_dns_suffix") %>:4001"
-<% else %>
-advertise_peer_url="http://<%= my_ip %>:7001"
-advertise_client_url="http://<%= my_ip %>:4001"
-<% end %>
-
-listen_client_url="${client_protocol}://<%= p("etcd.client_ip") %>:4001"
+node_name="<%= node_name %>"
+advertise_peer_url="<%= advertise_peer_url %>"
+advertise_client_url="<%= advertise_client_url %>"
 this_node="${node_name}=${advertise_peer_url}"
+consistency_checker_cluster_members="<%= consistency_checker_cluster_members %>"
 
 <% if p("etcd.require_ssl") || p("etcd.peer_require_ssl") %>
 CERT_DIR=/var/vcap/jobs/etcd/config/certs
@@ -64,7 +110,7 @@ CERT_DIR=/var/vcap/jobs/etcd/config/certs
 <% if p("etcd.require_ssl") %>
 ca_cert_file=${CERT_DIR}/server-ca.crt
 server_cert_file=${CERT_DIR}/server.crt
-  server_key_file=${CERT_DIR}/server.key
+server_key_file=${CERT_DIR}/server.key
 client_cert_file=${CERT_DIR}/client.crt
 client_key_file=${CERT_DIR}/client.key
 
@@ -98,7 +144,7 @@ etcd_sec_flags="${etcd_sec_flags} ${etcd_peer_sec_flags}"
 
 create_cert_files() {
   true
-
+  set +x
   <% if p("etcd.require_ssl") %>
   echo -n '<%= p("etcd.ca_cert") %>' > ${ca_cert_file}
   echo -n '<%= p("etcd.server_cert") %>' > ${server_cert_file}
@@ -117,6 +163,7 @@ create_cert_files() {
   chown vcap:vcap ${CERT_DIR}/*.{crt,key}
   chmod 640 ${CERT_DIR}/*.{crt,key}
   <% end %>
+  set -x
 }
 
 member_list() {
@@ -164,10 +211,6 @@ extract_cluster_from_member_list() {
   echo "$name_peerURL_pairs" | tr -s "\n" "," | sed 's/,$//'
 }
 
-prior_cluster_had_other_nodes() {
-  [ "$( wc -l <<< "$1" )" -ne 1 ] || ! grep ${advertise_peer_url} <<< "$1"
-}
-
 extract_my_id() {
   echo "$1" | grep ${advertise_peer_url} | sed 's/:.*//' | sed 's/\[.*\]//'
 }
@@ -180,4 +223,8 @@ safe_teardown() {
     fi
     rm -rf ${DATA_DIR}/*
   fi
+}
+
+prior_cluster_had_other_nodes() {
+  [ "$( wc -l <<< "$1" )" -ne 1 ] || ! grep ${advertise_peer_url} <<< "$1"
 }

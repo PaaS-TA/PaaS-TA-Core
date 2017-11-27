@@ -1,0 +1,75 @@
+#!/bin/bash -exu
+
+source /var/vcap/jobs/postgres/bin/pgconfig.sh
+
+function pgexec() {
+  local database
+  database="${1}"
+
+  local command
+  command="${2}"
+
+  "${PACKAGE_DIR}/bin/psql" \
+    -U "vcap" \
+    -p "${PORT}" \
+    -d "${database}" \
+    -c "${command}"
+}
+
+function is_major() {
+  [ "${pgversion_current%.*}" != "${pgversion_upgrade_from%.*}" ]
+}
+
+function create_roles() {
+  echo "Creating roles..."
+  <% p("databases.roles", []).each do |role| %>
+    echo "Trying to create role <%= role["name"] %>..."
+    set +e
+    # TODO remove unused roles automatically
+    # Default permissions are: nosuperuser nologin inherit nocreatedb.
+    # Will fail if role already exists, which is OK
+    pgexec postgres "CREATE ROLE \"<%= role["name"] %>\" WITH LOGIN"
+    set -e
+    <% if role["password"] %>
+      echo "Setting password for role <%= role["name"] %>..."
+      pgexec postgres "ALTER ROLE \"<%= role["name"] %>\" WITH LOGIN PASSWORD '<%= role["password"] %>'"
+    <% end %>
+    <% if role["permissions"] %>
+      echo "Adding permissions <%= role["permissions"].join(' ') %> for role <%= role["name"] %>..."
+      pgexec postgres "ALTER ROLE \"<%= role["name"] %>\" WITH <%= role["permissions"].join(' ') %>"
+    <% end %>
+  <% end %>
+}
+
+function create_databases() {
+  echo "Creating databases..."
+  <% p("databases.databases", []).each do |database| %>
+    echo "Trying to create database <%= database["name"] %>..."
+    set +e
+    "${PACKAGE_DIR}/bin/createdb" "<%= database["name"] %>" -p ${PORT}
+    set -e
+
+    <% if database["citext"] %>
+      echo "Trying to install citext..."
+      set +e
+      pgexec "<%= database["name"] %>" "CREATE EXTENSION citext"
+      pgexec "<%= database["name"] %>" "CREATE EXTENSION citext FROM UNPACKAGED"
+      set -e
+    <% end %>
+
+    echo "Enabling pgcrypto extension..."
+    pgexec "<%= database["name"] %>" "CREATE EXTENSION IF NOT EXISTS pgcrypto"
+
+
+    <% if p("databases.collect_statement_statistics") %>
+      echo "Enabling pg_stat_statements extension..."
+      pgexec "<%= database["name"] %>" "CREATE EXTENSION IF NOT EXISTS pg_stat_statements"
+    <% end %>
+
+    <% if database["run_on_every_startup"] %>
+      <% database["run_on_every_startup"].each do |query| %>
+        pgexec "<%= database["name"] %>" "<%= query %>"
+      <% end %>
+    <% end %>
+  <% end %>
+}

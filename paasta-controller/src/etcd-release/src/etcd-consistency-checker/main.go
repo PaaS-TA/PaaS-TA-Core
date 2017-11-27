@@ -1,11 +1,12 @@
 package main
 
 import (
-	"etcd-consistency-checker/app"
 	"flag"
 	"log"
 	"strings"
 	"time"
+
+	"github.com/cloudfoundry-incubator/etcd-release/src/etcd-consistency-checker/app"
 )
 
 type Flags struct {

@@ -89,7 +89,7 @@
                   <span class="name">q</span>
               </td>
               <td>
-                  <span class="description">Parameters used to filter the result set.<br/>Format queries as &lt;filter&gt;&lt;op&gt;&lt;value&gt;<br/> Valid ops: : &gt;= &lt;= &lt; &gt; IN<br/> Valid filters: timestamp, type, actee</span>
+                  <span class="description">Parameters used to filter the result set.<br/>Format queries as &lt;filter&gt;&lt;op&gt;&lt;value&gt;<br/> Valid ops: : &gt;= &lt;= &lt; &gt; IN<br/> Valid filters: timestamp, type, actee, space_guid, organization_guid</span>
               </td>
               <td>
                 <ul class="valid_values">
@@ -144,6 +144,24 @@
               </td>
               <td>
                 <ul class="valid_values">
+                </ul>
+              </td>
+              <td>
+                <ul class="example_values">
+                </ul>
+              </td>
+            </tr>
+            <tr class="">
+              <td class=" ">
+                <span class="name">order-by</span>
+              </td>
+              <td>
+                <span class="description">Attribute to order results by</span>
+              </td>
+              <td>
+                <ul class="valid_values">
+                  <li>timestamp</li>
+                  <li>id</li>
                 </ul>
               </td>
               <td>
@@ -570,7 +588,8 @@ Cookie: </pre>
             "memory": 84,
             "state": "STOPPED",
             "environment_json": "PRIVATE DATA HIDDEN",
-            "docker_credentials_json": "PRIVATE DATA HIDDEN"
+            "docker_image": "cloudfoundry/example-docker-app",
+            "docker_credentials": "PRIVATE DATA HIDDEN"
           }
         },
         "space_guid": "c5080860-98dd-4ffe-b3ea-3260d408a3d3",

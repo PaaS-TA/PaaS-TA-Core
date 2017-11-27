@@ -17,7 +17,7 @@ module VCAP::CloudController::RestController
     include Routes
     extend Forwardable
 
-    def_delegators :@sinatra, :redirect
+    def_delegators :@sinatra, :redirect, :request
 
     # Create a new rest api endpoint.
     #
@@ -58,8 +58,7 @@ module VCAP::CloudController::RestController
 
     # Override this to set dependencies
     #
-    def inject_dependencies(dependencies={})
-    end
+    def inject_dependencies(dependencies={}); end
 
     # Main entry point for the rest routes.  Acts as the final location
     # for catching any unhandled sequel and db exceptions.  By calling
@@ -134,20 +133,20 @@ module VCAP::CloudController::RestController
       if VCAP::CloudController::SecurityContext.missing_token?
         raise CloudController::Errors::NotAuthenticated
       elsif VCAP::CloudController::SecurityContext.invalid_token?
-        raise CloudController::Errors::ApiError.new_from_details('InvalidAuthToken')
+        raise CloudController::Errors::InvalidAuthToken
       else
         logger.error 'Unexpected condition: valid token with no user/client id ' \
                        "or admin scope. Token hash: #{VCAP::CloudController::SecurityContext.token}"
-        raise CloudController::Errors::ApiError.new_from_details('InvalidAuthToken')
+        raise CloudController::Errors::InvalidAuthToken
       end
     end
 
     def v2_api?
-      env['PATH_INFO'] =~ /^#{V2_ROUTE_PREFIX}/
+      env['PATH_INFO'] =~ /\A#{V2_ROUTE_PREFIX}/
     end
 
     def unversioned_api?
-      !(env['PATH_INFO'] =~ %r{^/v\d})
+      env['PATH_INFO'] !~ %r{\A/v\d}
     end
 
     def recursive_delete?
@@ -159,20 +158,16 @@ module VCAP::CloudController::RestController
     end
 
     # hook called before +create+
-    def before_create
-    end
+    def before_create; end
 
     # hook called after +create+
-    def after_create(obj)
-    end
+    def after_create(obj); end
 
     # hook called before +update+, +add_related+ or +remove_related+
-    def before_update(obj)
-    end
+    def before_update(obj); end
 
     # hook called after +update+, +add_related+ or +remove_related+
-    def after_update(obj)
-    end
+    def after_update(obj); end
 
     def check_write_permissions!
       admin       = SecurityContext.roles.admin?

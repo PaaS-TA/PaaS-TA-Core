@@ -49,7 +49,7 @@ var _ = Describe("DockerBackend", func() {
 		docker = backend.NewDockerBackend(config, logger)
 	})
 
-	Describe("BuildBackend", func() {
+	Describe("BuildRecipe", func() {
 		var (
 			stagingRequest cc_messages.StagingRequestFromCC
 			dockerImageUrl string
@@ -186,6 +186,31 @@ var _ = Describe("DockerBackend", func() {
 			Expect(*cachedDependencies[0]).To(Equal(dockerCachedDependency))
 		})
 
+		Context("when docker credentials are given", func() {
+			BeforeEach(func() {
+				dockerUser = "dockerusername"
+				dockerPassword = "dockerpassword"
+			})
+
+			It("includes the docker credentials in the run action args", func() {
+				taskDef, _, _, err := docker.BuildRecipe("staging-guid", stagingRequest)
+				Expect(err).NotTo(HaveOccurred())
+
+				actions := actionsFromTaskDef(taskDef)
+				Expect(actions).To(HaveLen(1))
+				emitProgressAction := actions[0].GetEmitProgressAction()
+				Expect(emitProgressAction).NotTo(BeNil())
+				Expect(emitProgressAction.Action).NotTo(BeNil())
+				Expect(emitProgressAction.Action.RunAction).NotTo(BeNil())
+				Expect(emitProgressAction.Action.RunAction.Args).To(ConsistOf(
+					"-outputMetadataJSONFilename", "/tmp/docker-result/result.json",
+					"-dockerRef", "busybox",
+					"-insecureDockerRegistries", "http://registry-1.com,http://registry-2.com",
+					"-dockerUser", "dockerusername",
+					"-dockerPassword", "dockerpassword"))
+			})
+		})
+
 		It("sets the task RunAction", func() {
 			taskDef, _, _, err := docker.BuildRecipe("staging-guid", stagingRequest)
 			Expect(err).NotTo(HaveOccurred())
@@ -273,6 +298,26 @@ var _ = Describe("DockerBackend", func() {
 			Expect(taskDef.TrustedSystemCertificatesPath).To(Equal(backend.TrustedSystemCertificatesPath))
 		})
 
+		It("does not set any Isolation Segments", func() {
+			taskDef, _, _, err := docker.BuildRecipe("staging-guid", stagingRequest)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(taskDef.PlacementTags).To(BeEmpty())
+		})
+
+		Context("When the request has an Isolation Segment", func() {
+			JustBeforeEach(func() {
+				stagingRequest.IsolationSegment = "foo"
+			})
+
+			It("sets the Isolation Segment on the task definition", func() {
+				taskDef, _, _, err := docker.BuildRecipe("staging-guid", stagingRequest)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(taskDef.PlacementTags).To(ContainElement("foo"))
+			})
+		})
+
 		Context("with a missing app id", func() {
 			BeforeEach(func() {
 				appID = ""
@@ -295,10 +340,9 @@ var _ = Describe("DockerBackend", func() {
 			})
 		})
 
-		Context("with password and email but no user", func() {
+		Context("with password but no user", func() {
 			BeforeEach(func() {
 				dockerPassword = "password"
-				dockerEmail = "email@example.com"
 			})
 
 			It("returns an error", func() {
@@ -307,22 +351,9 @@ var _ = Describe("DockerBackend", func() {
 			})
 		})
 
-		Context("with user and email but no password", func() {
+		Context("with user but no password", func() {
 			BeforeEach(func() {
 				dockerUser = "user"
-				dockerEmail = "email@example.com"
-			})
-
-			It("returns an error", func() {
-				_, _, _, err := docker.BuildRecipe("staging-guid", stagingRequest)
-				Expect(err).To(Equal(backend.ErrMissingDockerCredentials))
-			})
-		})
-
-		Context("with user and password but no email", func() {
-			BeforeEach(func() {
-				dockerUser = "user"
-				dockerPassword = "password"
 			})
 
 			It("returns an error", func() {

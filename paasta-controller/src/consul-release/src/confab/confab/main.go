@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"time"
 
 	"code.cloudfoundry.org/clock"
@@ -18,13 +20,11 @@ import (
 	"github.com/cloudfoundry-incubator/consul-release/src/confab/status"
 	"github.com/cloudfoundry-incubator/consul-release/src/confab/utils"
 	"github.com/hashicorp/consul/api"
-
-	consulagent "github.com/hashicorp/consul/command/agent"
 )
 
 type runner interface {
 	Start(config.Config, utils.Timeout) error
-	Stop() error
+	Stop()
 }
 
 type stringSlice []string
@@ -40,9 +40,10 @@ func (ss *stringSlice) Set(value string) error {
 }
 
 var (
-	recursors  stringSlice
-	configFile string
-	foreground bool
+	recursors            stringSlice
+	configFile           string
+	configConsulLinkFile string
+	foreground           bool
 
 	stdout = log.New(os.Stdout, "", 0)
 	stderr = log.New(os.Stderr, "", 0)
@@ -52,6 +53,7 @@ func main() {
 	flagSet := flag.NewFlagSet("flags", flag.ContinueOnError)
 	flagSet.Var(&recursors, "recursor", "specifies the address of an upstream DNS `server`, may be specified multiple times")
 	flagSet.StringVar(&configFile, "config-file", "", "specifies the config `file`")
+	flagSet.StringVar(&configConsulLinkFile, "config-consul-link-file", "", "specifies the consul link config `file`")
 	flagSet.BoolVar(&foreground, "foreground", false, "if true confab will wait for consul to exit")
 
 	if len(os.Args) < 2 {
@@ -68,7 +70,13 @@ func main() {
 		os.Exit(1)
 	}
 
-	cfg, err := config.ConfigFromJSON(configFileContents)
+	configConsulLinkFileContents, err := ioutil.ReadFile(configConsulLinkFile)
+	if err != nil {
+		stderr.Printf("error reading configuration file: %s", err)
+		os.Exit(1)
+	}
+
+	cfg, err := config.ConfigFromJSON(configFileContents, configConsulLinkFileContents)
 	if err != nil {
 		stderr.Printf("error reading configuration file: %s", err)
 		os.Exit(1)
@@ -96,16 +104,36 @@ func main() {
 		Logger:    logger,
 	}
 
-	consulAPIClient, err := api.NewClient(api.DefaultConfig())
+	clientConfig := api.DefaultConfig()
+	if cfg.Consul.Agent.RequireSSL {
+		clientConfig.Scheme = "https"
+		certsDir := filepath.Join(cfg.Path.ConsulConfigDir, "certs")
+		tlsConfig := api.TLSConfig{
+			Address:  clientConfig.Address,
+			CAFile:   filepath.Join(certsDir, "ca.crt"),
+			CertFile: filepath.Join(certsDir, "agent.crt"),
+			KeyFile:  filepath.Join(certsDir, "agent.key"),
+		}
+		tlsClientConfig, err := api.SetupTLSConfig(&tlsConfig)
+		if err != nil {
+			stderr.Printf("error setting up TLS config: %s", err)
+			os.Exit(1)
+		}
+		if transport, ok := clientConfig.HttpClient.Transport.(*http.Transport); ok {
+			transport.TLSClientConfig = tlsClientConfig
+		}
+	}
+
+	consulAPIClient, err := api.NewClient(clientConfig)
 	if err != nil {
 		panic(err) // not tested, NewClient never errors
 	}
 
 	agentClient := &agent.Client{
-		ExpectedMembers: cfg.Consul.Agent.Servers.LAN,
-		ConsulAPIAgent:  consulAPIClient.Agent(),
-		ConsulRPCClient: nil,
-		Logger:          logger,
+		ExpectedMembers:   cfg.Consul.Agent.Servers.LAN,
+		ConsulAPIAgent:    consulAPIClient.Agent(),
+		ConsulAPIOperator: consulAPIClient.Operator(),
+		Logger:            logger,
 	}
 
 	retrier := utils.NewRetrier(clock.NewClock(), 1*time.Second)
@@ -124,10 +152,10 @@ func main() {
 	keyringRemover := chaperon.NewKeyringRemover(cfg.Path.KeyringFile, logger)
 	configWriter := chaperon.NewConfigWriter(cfg.Path.ConsulConfigDir, logger)
 
-	var r runner = chaperon.NewClient(controller, consulagent.NewRPCClient, keyringRemover, configWriter)
+	var r runner = chaperon.NewClient(controller, keyringRemover, configWriter)
 	if controller.Config.Consul.Agent.Mode == "server" {
 		bootstrapChecker := chaperon.NewBootstrapChecker(logger, agentClient, status.Client{ConsulAPIStatus: consulAPIClient.Status()}, time.Sleep)
-		r = chaperon.NewServer(controller, configWriter, consulagent.NewRPCClient, bootstrapChecker)
+		r = chaperon.NewServer(controller, configWriter, bootstrapChecker)
 	}
 
 	switch os.Args[1] {
@@ -162,10 +190,7 @@ func main() {
 			}
 		}
 	case "stop":
-		if err := r.Stop(); err != nil {
-			stderr.Printf("error during stop: %s", err)
-			os.Exit(1)
-		}
+		r.Stop()
 	default:
 		printUsageAndExit(fmt.Sprintf("invalid COMMAND %q", os.Args[1]), flagSet)
 	}

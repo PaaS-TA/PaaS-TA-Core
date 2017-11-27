@@ -15,13 +15,19 @@
 //		logs.SendAppErrorLog(appID, message, sourceType, sourceInstance)
 package logs
 
-import "io"
+import (
+	"io"
+
+	"github.com/cloudfoundry/dropsonde/log_sender"
+	"github.com/cloudfoundry/sonde-go/events"
+)
 
 type LogSender interface {
 	SendAppLog(appID, message, sourceType, sourceInstance string) error
 	SendAppErrorLog(appID, message, sourceType, sourceInstance string) error
 	ScanLogStream(appID, sourceType, sourceInstance string, reader io.Reader)
 	ScanErrorLogStream(appID, sourceType, sourceInstance string, reader io.Reader)
+	LogMessage(msg []byte, msgType events.LogMessage_MessageType) log_sender.LogChainer
 }
 
 var logSender LogSender
@@ -68,4 +74,10 @@ func ScanErrorLogStream(appID, sourceType, sourceInstance string, reader io.Read
 		return
 	}
 	logSender.ScanErrorLogStream(appID, sourceType, sourceInstance, reader)
+}
+
+// LogMessage creates a log message that can be manipulated via cascading calls
+// and then sent.
+func LogMessage(msg []byte, msgType events.LogMessage_MessageType) log_sender.LogChainer {
+	return logSender.LogMessage(msg, msgType)
 }

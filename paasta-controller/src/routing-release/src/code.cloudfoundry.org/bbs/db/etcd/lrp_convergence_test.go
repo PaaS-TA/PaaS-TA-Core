@@ -725,8 +725,11 @@ var _ = Describe("LRPConvergence", func() {
 			cellPresence := models.NewCellPresence(
 				cellId,
 				"cell.example.com",
+				"",
 				"the-zone",
 				models.CellCapacity{MemoryMb: 128, DiskMb: 1024, Containers: 3},
+				[]string{},
+				[]string{},
 				[]string{},
 				[]string{},
 			)
@@ -752,7 +755,7 @@ var _ = Describe("LRPConvergence", func() {
 				actualLRP := &models.ActualLRP{
 					ActualLRPKey:         models.NewActualLRPKey(desiredLRP.ProcessGuid, 0, desiredLRP.Domain),
 					ActualLRPInstanceKey: models.NewActualLRPInstanceKey("some-instance-guid", cellId),
-					ActualLRPNetInfo:     models.NewActualLRPNetInfo("1.2.3.4", &models.PortMapping{ContainerPort: 1234, HostPort: 5678}),
+					ActualLRPNetInfo:     models.NewActualLRPNetInfo("1.2.3.4", "2.2.2.2", &models.PortMapping{ContainerPort: 1234, HostPort: 5678}),
 					State:                models.ActualLRPStateRunning,
 					Since:                clock.Now().Add(-time.Minute).UnixNano(),
 				}
@@ -885,8 +888,11 @@ var _ = Describe("LRPConvergence", func() {
 			cellPresence := models.NewCellPresence(
 				"cell-id",
 				"cell.example.com",
+				"",
 				"the-zone",
 				models.CellCapacity{MemoryMb: 128, DiskMb: 1024, Containers: 3},
+				[]string{},
+				[]string{},
 				[]string{},
 				[]string{},
 			)
@@ -1001,7 +1007,17 @@ var _ = Describe("LRPConvergence", func() {
 
 				BeforeEach(func() {
 					cells = models.CellSet{}
-					cellPresence = models.NewCellPresence("cell-id", "cell.example.com", "the-zone", models.NewCellCapacity(128, 1024, 3), []string{}, []string{})
+					cellPresence = models.NewCellPresence(
+						"cell-id",
+						"cell.example.com",
+						"",
+						"the-zone",
+						models.NewCellCapacity(128, 1024, 3),
+						[]string{},
+						[]string{},
+						[]string{},
+						[]string{},
+					)
 				})
 
 				JustBeforeEach(func() {
@@ -1079,7 +1095,17 @@ var _ = Describe("LRPConvergence", func() {
 				)
 
 				JustBeforeEach(func() {
-					cellPresence = models.NewCellPresence("cell-id", "cell.example.com", "the-zone", models.NewCellCapacity(128, 1024, 3), []string{}, []string{})
+					cellPresence = models.NewCellPresence(
+						"cell-id",
+						"cell.example.com",
+						"",
+						"the-zone",
+						models.NewCellCapacity(128, 1024, 3),
+						[]string{},
+						[]string{},
+						[]string{},
+						[]string{},
+					)
 					cells = models.CellSet{}
 					cells["cell-id"] = &cellPresence
 
@@ -1087,7 +1113,7 @@ var _ = Describe("LRPConvergence", func() {
 					Expect(err).NotTo(HaveOccurred())
 
 					instanceKey := models.NewActualLRPInstanceKey("instance-guid", cellPresence.CellId)
-					netInfo := models.NewActualLRPNetInfo("host", &models.PortMapping{HostPort: 1234, ContainerPort: 5678})
+					netInfo := models.NewActualLRPNetInfo("host", "container", &models.PortMapping{HostPort: 1234, ContainerPort: 5678})
 					_, _, err = etcdDB.ClaimActualLRP(
 						logger,
 						actualLRPGroup.Instance.ProcessGuid,
@@ -1190,7 +1216,17 @@ var _ = Describe("LRPConvergence", func() {
 				)
 
 				JustBeforeEach(func() {
-					cellPresence = models.NewCellPresence("cell-id", "cell.example.com", "the-zone", models.NewCellCapacity(128, 1024, 100), []string{}, []string{})
+					cellPresence = models.NewCellPresence(
+						"cell-id",
+						"cell.example.com",
+						"",
+						"the-zone",
+						models.NewCellCapacity(128, 1024, 100),
+						[]string{},
+						[]string{},
+						[]string{},
+						[]string{},
+					)
 					cells = models.CellSet{}
 					cells["cell-id"] = &cellPresence
 
@@ -1246,7 +1282,17 @@ var _ = Describe("LRPConvergence", func() {
 				)
 
 				JustBeforeEach(func() {
-					cellPresence = models.NewCellPresence("cell-id", "cell.example.com", "the-zone", models.NewCellCapacity(124, 1024, 6), []string{}, []string{})
+					cellPresence = models.NewCellPresence(
+						"cell-id",
+						"cell.example.com",
+						"",
+						"the-zone",
+						models.NewCellCapacity(124, 1024, 6),
+						[]string{},
+						[]string{},
+						[]string{},
+						[]string{},
+					)
 					cells = models.CellSet{}
 					cells["cell-id"] = &cellPresence
 
@@ -1255,7 +1301,7 @@ var _ = Describe("LRPConvergence", func() {
 					higherIndexActualLRP := &models.ActualLRP{
 						ActualLRPKey:         models.NewActualLRPKey(desiredLRP.ProcessGuid, index, desiredLRP.Domain),
 						ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
-						ActualLRPNetInfo:     models.NewActualLRPNetInfo("127.0.0.1", &models.PortMapping{ContainerPort: 8080, HostPort: 80}),
+						ActualLRPNetInfo:     models.NewActualLRPNetInfo("127.0.0.1", "2.2.2.2", &models.PortMapping{ContainerPort: 8080, HostPort: 80}),
 						State:                models.ActualLRPStateRunning,
 						Since:                clock.Now().UnixNano(),
 					}
@@ -1266,7 +1312,7 @@ var _ = Describe("LRPConvergence", func() {
 					Expect(err).NotTo(HaveOccurred())
 
 					instanceKey := models.NewActualLRPInstanceKey("instance-guid", cellPresence.CellId)
-					netInfo := models.NewActualLRPNetInfo("host", &models.PortMapping{HostPort: 1234, ContainerPort: 5678})
+					netInfo := models.NewActualLRPNetInfo("host", "2.2.2.2", &models.PortMapping{HostPort: 1234, ContainerPort: 5678})
 					_, _, err = etcdDB.ClaimActualLRP(
 						logger,
 						actualLRPGroup.Instance.ActualLRPKey.ProcessGuid,
@@ -1712,7 +1758,7 @@ func newStableRunningActualLRP(lrp *models.DesiredLRP, cellID string, index int3
 	return &models.ActualLRP{
 		ActualLRPKey:         *actualLRPKey(lrp, index),
 		ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", cellID),
-		ActualLRPNetInfo:     models.NewActualLRPNetInfo("1.2.3.4", &models.PortMapping{}),
+		ActualLRPNetInfo:     models.NewActualLRPNetInfo("1.2.3.4", "2.2.2.2", &models.PortMapping{}),
 		State:                models.ActualLRPStateRunning,
 		Since:                1138 - (30 * time.Minute).Nanoseconds(),
 	}
@@ -1722,7 +1768,7 @@ func newRunningActualLRP(d *models.DesiredLRP, cellID string, index int32) *mode
 	return &models.ActualLRP{
 		ActualLRPKey:         models.NewActualLRPKey(d.ProcessGuid, index, d.Domain),
 		ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", cellID),
-		ActualLRPNetInfo:     models.NewActualLRPNetInfo("1.2.3.4", &models.PortMapping{}),
+		ActualLRPNetInfo:     models.NewActualLRPNetInfo("1.2.3.4", "2.2.2.2", &models.PortMapping{}),
 		State:                models.ActualLRPStateRunning,
 		Since:                1138,
 	}
@@ -1747,7 +1793,17 @@ func newUnstartableCrashedActualLRP(d *models.DesiredLRP, index int32) *models.A
 }
 
 func newCellPresence(cellID string) *models.CellPresence {
-	cellPresence := models.NewCellPresence(cellID, "1.2.3.4", "az-1", models.NewCellCapacity(128, 1024, 3), []string{}, nil)
+	cellPresence := models.NewCellPresence(
+		cellID,
+		"1.2.3.4",
+		"",
+		"az-1",
+		models.NewCellCapacity(128, 1024, 3),
+		[]string{},
+		nil,
+		nil,
+		nil,
+	)
 	return &cellPresence
 }
 

@@ -21,8 +21,8 @@ module VCAP::CloudController
 
     def inject_dependencies(dependencies)
       super
-      @app_event_repository = dependencies.fetch(:app_event_repository)
-      @routing_api_client = dependencies.fetch(:routing_api_client)
+      @app_event_repository   = dependencies.fetch(:app_event_repository)
+      @routing_api_client     = dependencies.fetch(:routing_api_client)
       @route_event_repository = dependencies.fetch(:route_event_repository)
     end
 
@@ -30,7 +30,7 @@ module VCAP::CloudController
     # rubocop:disable Metrics/MethodLength
     def self.translate_validation_exception(e, attributes)
       if e.errors.on(:routing_api) == [:routing_api_disabled]
-        return CloudController::Errors::ApiError.new_from_details('TcpRoutingDisabled')
+        return CloudController::Errors::ApiError.new_from_details('RoutingApiDisabled')
       end
 
       if e.errors.on(:routing_api) == [:uaa_unavailable]
@@ -63,8 +63,9 @@ module VCAP::CloudController
 
       if e.errors.on(:port) == [:port_unavailable]
         return CloudController::Errors::ApiError.new_from_details('RouteInvalid',
-                 'The requested port is not available for reservation. ' \
-                 'Try a different port or request a random one be generated for you.')
+          'The requested port is not available for reservation. ' \
+          'Try a different port or request a random one be generated for you.'
+        )
       end
       if e.errors.on(:host) == [:host_and_path_domain_tcp]
         return CloudController::Errors::ApiError.new_from_details('RouteInvalid', 'Host and path are not supported, as domain belongs to a TCP router group.')
@@ -77,7 +78,7 @@ module VCAP::CloudController
 
       if e.errors.on(:host) == [:system_hostname_conflict]
         return CloudController::Errors::ApiError.new_from_details('RouteHostTaken',
-                                                                  "#{attributes['host']} is a system domain")
+          "#{attributes['host']} is a system domain")
       end
 
       path_errors = e.errors.on([:host, :domain_id, :path])
@@ -106,7 +107,7 @@ module VCAP::CloudController
       host_and_domain_taken_error = e.errors.on([:domain_id, :host])
       if host_and_domain_taken_error
         return CloudController::Errors::ApiError.new_from_details('RouteInvalid',
-                                                 'Routes for this host and domain have been reserved for another space.')
+          'Routes for this host and domain have been reserved for another space.')
       end
 
       path_error = e.errors.on(:path)
@@ -121,6 +122,7 @@ module VCAP::CloudController
 
       CloudController::Errors::ApiError.new_from_details('RouteInvalid', e.errors.full_messages)
     end
+
     # rubocop:enable Metrics/CyclomaticComplexity
 
     def create
@@ -151,8 +153,7 @@ module VCAP::CloudController
       route_delete_action = RouteDelete.new(
         app_event_repository:   app_event_repository,
         route_event_repository: route_event_repository,
-        user:                   SecurityContext.current_user,
-        user_email:             SecurityContext.current_user_email)
+        user_audit_info:        UserAuditInfo.from_context(SecurityContext))
 
       if async?
         job = route_delete_action.delete_async(route: route, recursive: recursive_delete?)
@@ -166,7 +167,8 @@ module VCAP::CloudController
     end
 
     def get_filtered_dataset_for_enumeration(model, ds, qp, opts)
-      org_index = opts[:q].index { |query| query.start_with?('organization_guid:') } if opts[:q]
+      orig_query = opts[:q] && opts[:q].clone
+      org_index  = opts[:q].index { |query| query.start_with?('organization_guid:') } if opts[:q]
       orgs_index = opts[:q].index { |query| query.start_with?('organization_guid IN ') } if opts[:q]
 
       org_guids = []
@@ -183,6 +185,7 @@ module VCAP::CloudController
       end
 
       filtered_dataset = super(model, ds, qp, opts)
+      opts[:q]         = orig_query
 
       if org_guids.any?
         filtered_dataset.
@@ -196,6 +199,7 @@ module VCAP::CloudController
     end
 
     get "#{path}/reserved/domain/:domain_guid", :route_reserved
+
     def route_reserved(domain_guid)
       host = params['host'] || ''
       path = params['path']
@@ -205,42 +209,44 @@ module VCAP::CloudController
     end
 
     get "#{path}/reserved/domain/:domain_guid/host/:host", :http_route_reserved
+
     def http_route_reserved(domain_guid, host)
       path = params['path']
       check_route_reserved(domain_guid, host, path, nil)
     end
 
     def after_create(route)
-      @route_event_repository.record_route_create(route, SecurityContext.current_user, SecurityContext.current_user_email, request_attrs)
+      @route_event_repository.record_route_create(route, UserAuditInfo.from_context(SecurityContext), request_attrs)
     end
 
     def after_update(route)
-      @route_event_repository.record_route_update(route, SecurityContext.current_user, SecurityContext.current_user_email, request_attrs)
+      @route_event_repository.record_route_update(route, UserAuditInfo.from_context(SecurityContext), request_attrs)
     end
 
-    put '/v2/routes/:route_guid/apps/:app_guid', :add_app
-    def add_app(route_guid, app_guid)
-      logger.debug 'cc.association.add', guid: route_guid, association: 'apps', other_guid: app_guid
-      @request_attrs = { 'app' => app_guid, verb: 'add', relation: 'apps', related_guid: app_guid }
+    put '/v2/routes/:route_guid/apps/:process_guid', :add_app
+
+    def add_app(route_guid, process_guid)
+      logger.debug 'cc.association.add', guid: route_guid, association: 'apps', other_guid: process_guid
+      @request_attrs = { 'app' => process_guid, verb: 'add', relation: 'apps', related_guid: process_guid }
 
       route = find_guid(route_guid, Route)
       validate_access(:read_related_object_for_update, route, request_attrs)
 
       before_update(route)
 
-      app = App.find(guid: request_attrs['app'])
-      raise CloudController::Errors::ApiError.new_from_details('AppNotFound', app_guid) unless app
+      process = ProcessModel.find(guid: request_attrs['app'])
+      raise CloudController::Errors::ApiError.new_from_details('AppNotFound', process_guid) unless process
 
       begin
-        V2::RouteMappingCreate.new(SecurityContext.current_user, SecurityContext.current_user_email, route, app).add(request_attrs)
-      rescue RouteMappingCreate::DuplicateRouteMapping
+        V2::RouteMappingCreate.new(UserAuditInfo.from_context(SecurityContext), route, process, request_attrs).add
+      rescue ::VCAP::CloudController::V2::RouteMappingCreate::DuplicateRouteMapping
         # the route is already mapped, consider the request successful
-      rescue V2::RouteMappingCreate::TcpRoutingDisabledError
-        raise CloudController::Errors::ApiError.new_from_details('TcpRoutingDisabled')
-      rescue RouteMappingCreate::SpaceMismatch
-        raise CloudController::Errors::InvalidAppRelation.new(app.guid)
-      rescue V2::RouteMappingCreate::RouteServiceNotSupportedError
-        raise CloudController::Errors::InvalidAppRelation.new("#{app.guid} - Route services are only supported for apps on Diego")
+      rescue ::VCAP::CloudController::V2::RouteMappingCreate::RoutingApiDisabledError
+        raise CloudController::Errors::ApiError.new_from_details('RoutingApiDisabled')
+      rescue ::VCAP::CloudController::V2::RouteMappingCreate::SpaceMismatch => e
+        raise CloudController::Errors::InvalidAppRelation.new(e.message)
+      rescue ::VCAP::CloudController::V2::RouteMappingCreate::RouteServiceNotSupportedError
+        raise CloudController::Errors::InvalidAppRelation.new("#{process.guid} - Route services are only supported for apps on Diego")
       end
 
       after_update(route)
@@ -248,21 +254,22 @@ module VCAP::CloudController
       [HTTP::CREATED, object_renderer.render_json(self.class, route, @opts)]
     end
 
-    delete '/v2/routes/:route_guid/apps/:app_guid', :remove_app
-    def remove_app(route_guid, app_guid)
-      logger.debug 'cc.association.remove', guid: route_guid, association: 'apps', other_guid: app_guid
-      @request_attrs = { 'app' => app_guid, verb: 'remove', relation: 'apps', related_guid: app_guid }
+    delete '/v2/routes/:route_guid/apps/:process_guid', :remove_app
+
+    def remove_app(route_guid, process_guid)
+      logger.debug 'cc.association.remove', guid: route_guid, association: 'apps', other_guid: process_guid
+      @request_attrs = { 'app' => process_guid, verb: 'remove', relation: 'apps', related_guid: process_guid }
 
       route = find_guid(route_guid, Route)
       validate_access(:can_remove_related_object, route, request_attrs)
 
       before_update(route)
 
-      process = App.find(guid: request_attrs['app'])
-      raise CloudController::Errors::ApiError.new_from_details('AppNotFound', app_guid) unless process
+      process = ProcessModel.find(guid: request_attrs['app'])
+      raise CloudController::Errors::ApiError.new_from_details('AppNotFound', process_guid) unless process
 
       route_mapping = RouteMappingModel.find(app: process.app, route: route, process: process)
-      RouteMappingDelete.new(SecurityContext.current_user, SecurityContext.current_user_email).delete(route_mapping)
+      RouteMappingDelete.new(UserAuditInfo.from_context(SecurityContext)).delete(route_mapping)
 
       after_update(route)
 
@@ -307,18 +314,20 @@ module VCAP::CloudController
     def validated_router_group
       @router_group ||=
         begin
-          router_group = routing_api_client.router_group(validated_domain.router_group_guid)
-          raise CloudController::Errors::ApiError.new_from_details('RouterGroupNotFound', validated_domain.router_group_guid.to_s) if router_group.nil?
-          router_group
+          routing_api_client.router_group(validated_domain.router_group_guid)
         rescue RoutingApi::RoutingApiDisabled
-          raise CloudController::Errors::ApiError.new_from_details('TcpRoutingDisabled')
+          raise CloudController::Errors::ApiError.new_from_details('RoutingApiDisabled')
         end
     end
 
     def validated_domain
       domain_guid = @request_attrs['domain_guid']
-      domain = Domain.find(guid: domain_guid)
+      domain      = Domain.find(guid: domain_guid)
       domain_invalid!(domain_guid) if domain.nil?
+
+      if routing_api_client.router_group(domain.router_group_guid).nil?
+        raise CloudController::Errors::ApiError.new_from_details('RouterGroupNotFound', domain.router_group_guid.to_s)
+      end
 
       unless domain.shared? && domain.tcp?
         raise CloudController::Errors::ApiError.new_from_details('RouteInvalid', 'Port is supported for domains of TCP router groups only.')
@@ -341,17 +350,18 @@ module VCAP::CloudController
 
     def self.path_errors(path_error, attributes)
       if path_error.include?(:single_slash)
-        return CloudController::Errors::ApiError.new_from_details('PathInvalid', 'the path cannot be a single slash')
+        CloudController::Errors::ApiError.new_from_details('PathInvalid', 'the path cannot be a single slash')
       elsif path_error.include?(:missing_beginning_slash)
-        return CloudController::Errors::ApiError.new_from_details('PathInvalid', 'the path must start with a "/"')
+        CloudController::Errors::ApiError.new_from_details('PathInvalid', 'the path must start with a "/"')
       elsif path_error.include?(:path_contains_question)
-        return CloudController::Errors::ApiError.new_from_details('PathInvalid', 'illegal "?" character')
+        CloudController::Errors::ApiError.new_from_details('PathInvalid', 'illegal "?" character')
       elsif path_error.include?(:path_exceeds_valid_length)
-        return CloudController::Errors::ApiError.new_from_details('PathInvalid', 'the path exceeds 128 characters')
+        CloudController::Errors::ApiError.new_from_details('PathInvalid', 'the path exceeds 128 characters')
       elsif path_error.include?(:invalid_path)
-        return CloudController::Errors::ApiError.new_from_details('PathInvalid', attributes['path'])
+        CloudController::Errors::ApiError.new_from_details('PathInvalid', attributes['path'])
       end
     end
+
     private_class_method :path_errors
   end
 end

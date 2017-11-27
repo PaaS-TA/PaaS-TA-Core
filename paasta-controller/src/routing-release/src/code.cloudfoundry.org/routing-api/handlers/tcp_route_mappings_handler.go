@@ -36,7 +36,13 @@ func (h *TcpRouteMappingsHandler) List(w http.ResponseWriter, req *http.Request)
 		handleUnauthorizedError(w, err, log)
 		return
 	}
-	routes, err := h.db.ReadTcpRouteMappings()
+	query := req.URL.Query()
+	var routes []models.TcpRouteMapping
+	if len(query["isolation_segment"]) > 0 {
+		routes, err = h.db.ReadFilteredTcpRouteMappings("isolation_segment", query["isolation_segment"])
+	} else {
+		routes, err = h.db.ReadTcpRouteMappings()
+	}
 	if err != nil {
 		handleDBCommunicationError(w, err, log)
 		return
@@ -50,18 +56,18 @@ func (h *TcpRouteMappingsHandler) List(w http.ResponseWriter, req *http.Request)
 
 func (h *TcpRouteMappingsHandler) Upsert(w http.ResponseWriter, req *http.Request) {
 	log := h.logger.Session("create-tcp-route-mappings")
-	decoder := json.NewDecoder(req.Body)
 
-	var tcpMappings []models.TcpRouteMapping
-	err := decoder.Decode(&tcpMappings)
+	err := h.uaaClient.DecodeToken(req.Header.Get("Authorization"), RoutingRoutesWriteScope)
 	if err != nil {
-		handleProcessRequestError(w, err, log)
+		handleUnauthorizedError(w, err, log)
 		return
 	}
 
-	err = h.uaaClient.DecodeToken(req.Header.Get("Authorization"), RoutingRoutesWriteScope)
+	decoder := json.NewDecoder(req.Body)
+	var tcpMappings []models.TcpRouteMapping
+	err = decoder.Decode(&tcpMappings)
 	if err != nil {
-		handleUnauthorizedError(w, err, log)
+		handleProcessRequestError(w, err, log)
 		return
 	}
 
@@ -102,22 +108,22 @@ func (h *TcpRouteMappingsHandler) Upsert(w http.ResponseWriter, req *http.Reques
 
 func (h *TcpRouteMappingsHandler) Delete(w http.ResponseWriter, req *http.Request) {
 	log := h.logger.Session("delete-tcp-route-mappings")
+
+	err := h.uaaClient.DecodeToken(req.Header.Get("Authorization"), RoutingRoutesWriteScope)
+	if err != nil {
+		handleUnauthorizedError(w, err, log)
+		return
+	}
 	decoder := json.NewDecoder(req.Body)
 
 	var tcpMappings []models.TcpRouteMapping
-	err := decoder.Decode(&tcpMappings)
+	err = decoder.Decode(&tcpMappings)
 	if err != nil {
 		handleProcessRequestError(w, err, log)
 		return
 	}
 
 	log.Info("request", lager.Data{"tcp_mapping_deletion": tcpMappings})
-
-	err = h.uaaClient.DecodeToken(req.Header.Get("Authorization"), RoutingRoutesWriteScope)
-	if err != nil {
-		handleUnauthorizedError(w, err, log)
-		return
-	}
 
 	apiErr := h.validator.ValidateDeleteTcpRouteMapping(tcpMappings)
 	if apiErr != nil {

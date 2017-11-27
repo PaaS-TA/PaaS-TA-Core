@@ -3,9 +3,10 @@ require 'actions/package_delete'
 
 module VCAP::CloudController
   RSpec.describe PackageDelete do
-    subject(:package_delete) { PackageDelete.new(user_guid, user_email) }
+    subject(:package_delete) { PackageDelete.new(user_audit_info) }
     let(:user_guid) { 'schmuid' }
     let(:user_email) { 'amandaplease@gmail.com' }
+    let(:user_audit_info) { UserAuditInfo.new(user_email: user_email, user_guid: user_guid) }
 
     describe '#delete' do
       context 'when the package exists' do
@@ -36,11 +37,14 @@ module VCAP::CloudController
         it 'creates an v3 audit event' do
           expect(Repositories::PackageEventRepository).to receive(:record_app_package_delete).with(
             instance_of(PackageModel),
-            user_guid,
-            user_email
+            user_audit_info
           )
 
           package_delete.delete(package)
+        end
+
+        it 'returns an empty error list' do
+          expect(package_delete.delete(package)).to be_empty
         end
       end
 

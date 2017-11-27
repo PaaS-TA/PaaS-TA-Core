@@ -1,18 +1,20 @@
 require 'actions/isolation_segment_assign'
 require 'actions/isolation_segment_unassign'
 require 'actions/isolation_segment_update'
+require 'actions/isolation_segment_delete'
 
-require 'messages/isolation_segment_relationship_org_message'
-require 'messages/isolation_segment_create_message'
-require 'messages/isolation_segment_update_message'
-require 'messages/isolation_segments_list_message'
+require 'messages/isolation_segments/isolation_segment_relationship_org_message'
+require 'messages/isolation_segments/isolation_segment_create_message'
+require 'messages/isolation_segments/isolation_segment_update_message'
+require 'messages/isolation_segments/isolation_segments_list_message'
 
 require 'presenters/v3/isolation_segment_presenter'
 require 'presenters/v3/relationship_presenter'
+require 'presenters/v3/to_many_relationship_presenter'
 
-require 'queries/isolation_segment_list_fetcher'
-require 'queries/isolation_segment_organizations_fetcher'
-require 'queries/isolation_segment_spaces_fetcher'
+require 'fetchers/isolation_segment_list_fetcher'
+require 'fetchers/isolation_segment_organizations_fetcher'
+require 'fetchers/isolation_segment_spaces_fetcher'
 
 class IsolationSegmentsController < ApplicationController
   def create
@@ -35,7 +37,7 @@ class IsolationSegmentsController < ApplicationController
 
   def show
     isolation_segment_model = find_isolation_segment(params[:guid])
-    resource_not_found!(:isolation_segment) unless can_read_isolation_segment?(isolation_segment_model)
+    resource_not_found!(:isolation_segment) unless can_read_from_isolation_segment?(isolation_segment_model)
 
     render status: :ok, json: Presenters::V3::IsolationSegmentPresenter.new(isolation_segment_model)
   end
@@ -43,11 +45,10 @@ class IsolationSegmentsController < ApplicationController
   def index
     message = IsolationSegmentsListMessage.from_params(query_params)
     invalid_param!(message.errors.full_messages) unless message.valid?
-    invalid_param!(message.pagination_options.errors.full_messages) unless message.pagination_options.valid?
 
     fetcher = IsolationSegmentListFetcher.new(message: message)
 
-    dataset = if roles.admin? || roles.admin_read_only?
+    dataset = if can_read_globally?
                 fetcher.fetch_all
               else
                 fetcher.fetch_for_organizations(org_guids: readable_org_guids)
@@ -60,24 +61,17 @@ class IsolationSegmentsController < ApplicationController
     unauthorized! unless roles.admin?
 
     isolation_segment_model = find_isolation_segment(params[:guid])
-
-    unprocessable!("Cannot delete the #{isolation_segment_model.name} Isolation Segment") if
-      isolation_segment_model.guid.eql?(VCAP::CloudController::IsolationSegmentModel::SHARED_ISOLATION_SEGMENT_GUID)
-
-    isolation_segment_model.db.transaction do
-      isolation_segment_model.lock!
-      isolation_segment_model.destroy
-    end
+    IsolationSegmentDelete.new.delete(isolation_segment_model)
 
     head :no_content
+  rescue IsolationSegmentDelete::AssociationNotEmptyError => e
+    unprocessable!(e.message)
   end
 
   def update
     unauthorized! unless roles.admin?
 
     isolation_segment_model = find_isolation_segment(params[:guid])
-    unprocessable!("Cannot update the #{isolation_segment_model.name} Isolation Segment") if
-      isolation_segment_model.guid.eql?(VCAP::CloudController::IsolationSegmentModel::SHARED_ISOLATION_SEGMENT_GUID)
 
     message = IsolationSegmentUpdateMessage.create_from_http_request(params[:body])
     unprocessable!(message.errors.full_messages) unless message.valid?
@@ -96,27 +90,30 @@ class IsolationSegmentsController < ApplicationController
     resource_not_found!(:isolation_segment) unless can_list_organizations?(isolation_segment_model)
 
     fetcher = IsolationSegmentOrganizationsFetcher.new(isolation_segment_model)
-    organizations = if roles.admin? || roles.admin_read_only?
+    organizations = if can_read_globally?
                       fetcher.fetch_all
                     else
                       fetcher.fetch_for_organizations(org_guids: readable_org_guids)
                     end
 
-    render status: :ok, json: Presenters::V3::RelationshipPresenter.new('organizations', organizations)
+    render status: :ok, json: Presenters::V3::ToManyRelationshipPresenter.new(
+      "isolation_segments/#{isolation_segment_model.guid}", organizations, 'organizations')
   end
 
   def relationships_spaces
     isolation_segment_model = find_isolation_segment(params[:guid])
-    resource_not_found!(:isolation_segment) unless can_read_isolation_segment?(isolation_segment_model)
+    resource_not_found!(:isolation_segment) unless can_read_from_isolation_segment?(isolation_segment_model)
 
     fetcher = IsolationSegmentSpacesFetcher.new(isolation_segment_model)
-    spaces = if roles.admin? || roles.admin_read_only?
+    spaces = if can_read_globally?
                fetcher.fetch_all
              else
                fetcher.fetch_for_spaces(space_guids: readable_space_guids)
              end
 
-    render status: :ok, json: Presenters::V3::RelationshipPresenter.new('spaces', spaces)
+    render status: :ok, json: Presenters::V3::ToManyRelationshipPresenter.new(
+      "isolation_segments/#{isolation_segment_model.guid}", spaces, 'spaces',
+      build_related: false)
   end
 
   def assign_allowed_organizations
@@ -125,18 +122,22 @@ class IsolationSegmentsController < ApplicationController
 
     organization_assigner.assign(isolation_segment_model, orgs)
 
-    render status: :created, json: Presenters::V3::IsolationSegmentPresenter.new(isolation_segment_model)
+    render status: :ok, json: Presenters::V3::ToManyRelationshipPresenter.new(
+      "isolation_segments/#{isolation_segment_model.guid}", isolation_segment_model.organizations, 'organizations')
   end
 
-  def unassign_allowed_organizations
+  def unassign_allowed_organization
     unauthorized! unless roles.admin?
-    isolation_segment_model, orgs = organizations_lookup
 
-    organization_unassigner.unassign(isolation_segment_model, orgs)
+    isolation_segment_model = IsolationSegmentModel.first(guid: params[:guid])
+    resource_not_found!(:isolation_segment) unless isolation_segment_model
+
+    org = Organization.first(guid: params[:org_guid])
+    resource_not_found!(:org) unless org
+
+    organization_unassigner.unassign(isolation_segment_model, org)
 
     head :no_content
-  rescue IsolationSegmentUnassign::IsolationSegmentUnassignError => e
-    unprocessable!(e.message)
   end
 
   private
@@ -157,19 +158,17 @@ class IsolationSegmentsController < ApplicationController
     unprocessable!(message.errors.full_messages) unless message.valid?
 
     organizations = Organization.where(guid: message.guids).all
-    resources_not_found!("Organization guids: #{message.guids - organizations.map(&:guid)} cannot be found") unless organizations.length == message.guids.length
+    missing_guids = message.guids - organizations.map(&:guid)
+    unless missing_guids.empty?
+      guid_list = missing_guids.map { |g| "'#{g}'" }.join(', ')
+      unprocessable!("Unable to entitle organizations [#{guid_list}] for the isolation segment. Ensure the organizations exist.")
+    end
 
     [isolation_segment_model, organizations]
   end
 
-  def can_read_isolation_segment?(isolation_segment)
-    roles.admin? ||
-      isolation_segment.spaces.any? { |space| can_read?(space.guid, space.organization.guid) } ||
-      isolation_segment.organizations.any? { |org| can_read_from_org?(org.guid) }
-  end
-
   def can_list_organizations?(isolation_segment)
-    roles.admin? || isolation_segment.organizations.any? { |org| can_read_from_org?(org.guid) }
+    can_read_globally? || isolation_segment.organizations.any? { |org| can_read_from_org?(org.guid) }
   end
 
   def find_isolation_segment(guid)

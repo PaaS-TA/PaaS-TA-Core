@@ -4,7 +4,6 @@ import (
 	"github.com/cloudfoundry/dropsonde/dropsonde_marshaller"
 	"github.com/cloudfoundry/dropsonde/factories"
 	"github.com/cloudfoundry/dropsonde/metrics"
-	"github.com/cloudfoundry/loggregatorlib/loggertesthelper"
 	"github.com/cloudfoundry/sonde-go/events"
 
 	"github.com/gogo/protobuf/proto"
@@ -27,7 +26,7 @@ var _ = Describe("DropsondeMarshaller", func() {
 		inputChan = make(chan *events.Envelope, 100)
 		outputChan = make(chan []byte, 10)
 		runComplete = make(chan struct{})
-		marshaller = dropsonde_marshaller.NewDropsondeMarshaller(loggertesthelper.Logger())
+		marshaller = dropsonde_marshaller.NewDropsondeMarshaller(Logger())
 		mockBatcher = newMockMetricBatcher()
 		metrics.Initialize(nil, mockBatcher)
 

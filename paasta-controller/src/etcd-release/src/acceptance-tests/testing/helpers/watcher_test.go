@@ -1,10 +1,11 @@
 package helpers_test
 
 import (
-	"acceptance-tests/testing/helpers"
-	"acceptance-tests/testing/helpers/fakes"
 	"errors"
 	"fmt"
+
+	"github.com/cloudfoundry-incubator/etcd-release/src/acceptance-tests/testing/helpers"
+	"github.com/cloudfoundry-incubator/etcd-release/src/acceptance-tests/testing/helpers/fakes"
 
 	goetcd "github.com/coreos/go-etcd/etcd"
 

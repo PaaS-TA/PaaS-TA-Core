@@ -9,8 +9,7 @@ import (
 	"net/http/httptest"
 	"strings"
 
-	"acceptance-tests/testing/iptables_agent/handlers"
-
+	"github.com/cloudfoundry-incubator/etcd-release/src/acceptance-tests/testing/iptables_agent/handlers"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"

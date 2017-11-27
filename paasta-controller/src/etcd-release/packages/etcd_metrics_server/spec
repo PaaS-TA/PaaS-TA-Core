@@ -2,9 +2,10 @@
 name: etcd_metrics_server
 
 dependencies:
-  - golang1.7
+  - golang1.8
 
 files:
   - etcd-metrics-server/**/*.go
   - etcd-metrics-server/**/LICENSE
   - etcd-metrics-server/**/NOTICE
+  - etcd-metrics-server/vendor/golang.org/x/sys/**/*.*

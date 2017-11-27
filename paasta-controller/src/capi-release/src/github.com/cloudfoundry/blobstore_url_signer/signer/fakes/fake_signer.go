@@ -17,6 +17,17 @@ type FakeSigner struct {
 	signReturns struct {
 		result1 string
 	}
+	SignForPutStub        func(string, string) string
+	signForPutMutex       sync.RWMutex
+	signForPutArgsForCall []struct {
+		arg1 string
+		arg2 string
+	}
+	signForPutReturns struct {
+		result1 string
+	}
+	invocations      map[string][][]interface{}
+	invocationsMutex sync.RWMutex
 }
 
 func (fake *FakeSigner) Sign(arg1 string, arg2 string) string {
@@ -25,6 +36,7 @@ func (fake *FakeSigner) Sign(arg1 string, arg2 string) string {
 		arg1 string
 		arg2 string
 	}{arg1, arg2})
+	fake.recordInvocation("Sign", []interface{}{arg1, arg2})
 	fake.signMutex.Unlock()
 	if fake.SignStub != nil {
 		return fake.SignStub(arg1, arg2)
@@ -50,6 +62,62 @@ func (fake *FakeSigner) SignReturns(result1 string) {
 	fake.signReturns = struct {
 		result1 string
 	}{result1}
+}
+
+func (fake *FakeSigner) SignForPut(arg1 string, arg2 string) string {
+	fake.signForPutMutex.Lock()
+	fake.signForPutArgsForCall = append(fake.signForPutArgsForCall, struct {
+		arg1 string
+		arg2 string
+	}{arg1, arg2})
+	fake.recordInvocation("SignForPut", []interface{}{arg1, arg2})
+	fake.signForPutMutex.Unlock()
+	if fake.SignForPutStub != nil {
+		return fake.SignForPutStub(arg1, arg2)
+	} else {
+		return fake.signForPutReturns.result1
+	}
+}
+
+func (fake *FakeSigner) SignForPutCallCount() int {
+	fake.signForPutMutex.RLock()
+	defer fake.signForPutMutex.RUnlock()
+	return len(fake.signForPutArgsForCall)
+}
+
+func (fake *FakeSigner) SignForPutArgsForCall(i int) (string, string) {
+	fake.signForPutMutex.RLock()
+	defer fake.signForPutMutex.RUnlock()
+	return fake.signForPutArgsForCall[i].arg1, fake.signForPutArgsForCall[i].arg2
+}
+
+func (fake *FakeSigner) SignForPutReturns(result1 string) {
+	fake.SignForPutStub = nil
+	fake.signForPutReturns = struct {
+		result1 string
+	}{result1}
+}
+
+func (fake *FakeSigner) Invocations() map[string][][]interface{} {
+	fake.invocationsMutex.RLock()
+	defer fake.invocationsMutex.RUnlock()
+	fake.signMutex.RLock()
+	defer fake.signMutex.RUnlock()
+	fake.signForPutMutex.RLock()
+	defer fake.signForPutMutex.RUnlock()
+	return fake.invocations
+}
+
+func (fake *FakeSigner) recordInvocation(key string, args []interface{}) {
+	fake.invocationsMutex.Lock()
+	defer fake.invocationsMutex.Unlock()
+	if fake.invocations == nil {
+		fake.invocations = map[string][][]interface{}{}
+	}
+	if fake.invocations[key] == nil {
+		fake.invocations[key] = [][]interface{}{}
+	}
+	fake.invocations[key] = append(fake.invocations[key], args)
 }
 
 var _ signer.Signer = new(FakeSigner)

@@ -1,0 +1,36 @@
+name: postgres
+
+update:
+  canaries: 1
+  canary_watch_time: 30000-600000
+  max_in_flight: 1
+  serial: true
+  update_watch_time: 5000-600000
+
+releases:
+- name: postgres
+  version: latest
+
+stemcells:
+- alias: default
+  os: ubuntu-trusty
+  version: latest
+
+instance_groups:
+- name: postgres
+  instances: 1
+  stemcell: default
+  networks:
+  - name: default
+  azs:
+  - z1
+  vm_type: m3.large
+  persistent_disk_type: 10GB
+  jobs:
+  - name: postgres
+    release: postgres
+    provides:
+      postgres: {as: postgres-database}
+    properties:
+      databases:
+        port: 5524

@@ -22,8 +22,9 @@ type JobNetwork struct {
 }
 
 type JobTemplate struct {
-	Name    string `yaml:"name"`
-	Release string `yaml:"release"`
+	Name     string      `yaml:"name"`
+	Release  string      `yaml:"release"`
+	Consumes JobConsumes `yaml:"consumes,omitempty"`
 }
 
 type JobProperties struct {

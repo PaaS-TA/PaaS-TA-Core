@@ -38,6 +38,17 @@ func AppsDescribe(description string, callback func()) bool {
 	})
 }
 
+func IsolationSegmentsDescribe(description string, callback func()) bool {
+	return Describe("[isolation_segments] "+description, func() {
+		BeforeEach(func() {
+			if !Config.GetIncludeIsolationSegments() {
+				Skip(`Skipping this test because Config.IncludeIsolationSegments is set to 'false'.`)
+			}
+		})
+		callback()
+	})
+}
+
 func BackendCompatibilityDescribe(description string, callback func()) bool {
 	return Describe("[backend_compatibility] "+description, func() {
 		BeforeEach(func() {
@@ -113,6 +124,17 @@ func RoutingDescribe(description string, callback func()) bool {
 	})
 }
 
+func RoutingIsolationSegmentsDescribe(description string, callback func()) bool {
+	return Describe("[routing_isolation_segments] "+description, func() {
+		BeforeEach(func() {
+			if !Config.GetIncludeRoutingIsolationSegments() {
+				Skip(`Skipping this test because Config.IncludeRoutingIsolationSegments is set to 'false'.`)
+			}
+		})
+		callback()
+	})
+}
+
 func ZipkinDescribe(description string, callback func()) bool {
 	return Describe("[routing] "+description, func() {
 		BeforeEach(func() {
@@ -168,6 +190,28 @@ func V3Describe(description string, callback func()) bool {
 		BeforeEach(func() {
 			if !Config.GetIncludeV3() {
 				Skip(`Skipping this test because Config.IncludeV3 is set to 'false'.`)
+			}
+		})
+		callback()
+	})
+}
+
+func TasksDescribe(description string, callback func()) bool {
+	return Describe("[tasks] "+description, func() {
+		BeforeEach(func() {
+			if !Config.GetIncludeTasks() {
+				Skip(`Skipping this test because Config.IncludeTasks is set to 'false'.`)
+			}
+		})
+		callback()
+	})
+}
+
+func PersistentAppDescribe(description string, callback func()) bool {
+	return Describe("[persistent_app] "+description, func() {
+		BeforeEach(func() {
+			if !Config.GetIncludePersistentApp() {
+				Skip(`Skipping this test because Config.IncludePersistentApp is set to 'false'.`)
 			}
 		})
 		callback()

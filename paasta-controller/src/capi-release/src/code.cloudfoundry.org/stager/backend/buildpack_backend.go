@@ -213,6 +213,10 @@ func (backend *traditionalBackend) BuildRecipe(stagingGuid string, request cc_me
 		TrustedSystemCertificatesPath: TrustedSystemCertificatesPath,
 	}
 
+	if request.IsolationSegment != "" {
+		taskDefinition.PlacementTags = []string{request.IsolationSegment}
+	}
+
 	logger.Debug("staging-task-request")
 
 	return taskDefinition, stagingGuid, backend.config.TaskDomain, nil

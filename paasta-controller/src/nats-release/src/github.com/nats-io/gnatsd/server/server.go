@@ -6,35 +6,42 @@ import (
 	"bufio"
 	"crypto/tls"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"net"
 	"net/http"
 	"os"
-	"os/signal"
 	"runtime"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
 	// Allow dynamic profiling.
 	_ "net/http/pprof"
+
+	"github.com/nats-io/gnatsd/util"
 )
 
 // Info is the information sent to clients to help them understand information
 // about this server.
 type Info struct {
-	ID           string `json:"server_id"`
-	Version      string `json:"version"`
-	GoVersion    string `json:"go"`
-	Host         string `json:"host"`
-	Port         int    `json:"port"`
-	AuthRequired bool   `json:"auth_required"`
-	SSLRequired  bool   `json:"ssl_required"` // DEPRECATED: ssl json used for older clients
-	TLSRequired  bool   `json:"tls_required"`
-	TLSVerify    bool   `json:"tls_verify"`
-	MaxPayload   int    `json:"max_payload"`
-	IP           string `json:"ip,omitempty"`
+	ID                string   `json:"server_id"`
+	Version           string   `json:"version"`
+	GoVersion         string   `json:"go"`
+	Host              string   `json:"host"`
+	Port              int      `json:"port"`
+	AuthRequired      bool     `json:"auth_required"`
+	SSLRequired       bool     `json:"ssl_required"` // DEPRECATED: ssl json used for older clients
+	TLSRequired       bool     `json:"tls_required"`
+	TLSVerify         bool     `json:"tls_verify"`
+	MaxPayload        int      `json:"max_payload"`
+	IP                string   `json:"ip,omitempty"`
+	ClientConnectURLs []string `json:"connect_urls,omitempty"` // Contains URLs a client can connect to.
+
+	// Used internally for quick look-ups.
+	clientConnectURLs map[string]struct{}
 }
 
 // Server is our main struct.
@@ -69,6 +76,7 @@ type Server struct {
 	grTmpClients  map[uint64]*client
 	grRunning     bool
 	grWG          sync.WaitGroup // to wait on various go routines
+	cproto        int64          // number of clients supporting async INFO
 }
 
 // Make sure all are 64bits for atomic use
@@ -86,19 +94,20 @@ func New(opts *Options) *Server {
 
 	// Process TLS options, including whether we require client certificates.
 	tlsReq := opts.TLSConfig != nil
-	verify := (tlsReq && opts.TLSConfig.ClientAuth == tls.RequireAnyClientCert)
+	verify := (tlsReq && opts.TLSConfig.ClientAuth == tls.RequireAndVerifyClientCert)
 
 	info := Info{
-		ID:           genID(),
-		Version:      VERSION,
-		GoVersion:    runtime.Version(),
-		Host:         opts.Host,
-		Port:         opts.Port,
-		AuthRequired: false,
-		TLSRequired:  tlsReq,
-		SSLRequired:  tlsReq,
-		TLSVerify:    verify,
-		MaxPayload:   opts.MaxPayload,
+		ID:                genID(),
+		Version:           VERSION,
+		GoVersion:         runtime.Version(),
+		Host:              opts.Host,
+		Port:              opts.Port,
+		AuthRequired:      false,
+		TLSRequired:       tlsReq,
+		SSLRequired:       tlsReq,
+		TLSVerify:         verify,
+		MaxPayload:        opts.MaxPayload,
+		clientConnectURLs: make(map[string]struct{}),
 	}
 
 	s := &Server{
@@ -174,21 +183,23 @@ func PrintServerAndExit() {
 	os.Exit(0)
 }
 
-// Signal Handling
-func (s *Server) handleSignals() {
-	if s.opts.NoSigs {
-		return
-	}
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt)
-	go func() {
-		for sig := range c {
-			Debugf("Trapped Signal; %v", sig)
-			// FIXME, trip running?
-			Noticef("Server Exiting..")
-			os.Exit(0)
+// ProcessCommandLineArgs takes the command line arguments
+// validating and setting flags for handling in case any
+// sub command was present.
+func ProcessCommandLineArgs(cmd *flag.FlagSet) (showVersion bool, showHelp bool, err error) {
+	if len(cmd.Args()) > 0 {
+		arg := cmd.Args()[0]
+		switch strings.ToLower(arg) {
+		case "version":
+			return true, false, nil
+		case "help":
+			return false, true, nil
+		default:
+			return false, false, fmt.Errorf("Unrecognized command: %q\n", arg)
 		}
-	}()
+	}
+
+	return false, false, nil
 }
 
 // Protected check on running state
@@ -212,7 +223,11 @@ func (s *Server) Start() {
 	Noticef("Starting nats-server version %s", VERSION)
 	Debugf("Go build version %s", s.info.GoVersion)
 
+	// Avoid RACE between Start() and Shutdown()
+	s.mu.Lock()
 	s.running = true
+	s.mu.Unlock()
+
 	s.grMu.Lock()
 	s.grRunning = true
 	s.grMu.Unlock()
@@ -236,9 +251,15 @@ func (s *Server) Start() {
 		s.StartHTTPSMonitoring()
 	}
 
+	// The Routing routine needs to wait for the client listen
+	// port to be opened and potential ephemeral port selected.
+	clientListenReady := make(chan struct{})
+
 	// Start up routing as well if needed.
-	if s.opts.ClusterPort != 0 {
-		s.StartRouting()
+	if s.opts.Cluster.Port != 0 {
+		s.startGoRoutine(func() {
+			s.StartRouting(clientListenReady)
+		})
 	}
 
 	// Pprof http endpoint for the profiler.
@@ -247,7 +268,7 @@ func (s *Server) Start() {
 	}
 
 	// Wait for clients.
-	s.AcceptLoop()
+	s.AcceptLoop(clientListenReady)
 }
 
 // Shutdown will shutdown the server instance by kicking out the AcceptLoop
@@ -329,7 +350,15 @@ func (s *Server) Shutdown() {
 }
 
 // AcceptLoop is exported for easier testing.
-func (s *Server) AcceptLoop() {
+func (s *Server) AcceptLoop(clr chan struct{}) {
+	// If we were to exit before the listener is setup properly,
+	// make sure we close the channel.
+	defer func() {
+		if clr != nil {
+			close(clr)
+		}
+	}()
+
 	hp := net.JoinHostPort(s.opts.Host, strconv.Itoa(s.opts.Port))
 	Noticef("Listening for client connections on %s", hp)
 	l, e := net.Listen("tcp", hp)
@@ -369,6 +398,10 @@ func (s *Server) AcceptLoop() {
 		s.opts.Port = portNum
 	}
 	s.mu.Unlock()
+
+	// Let the caller know that we are ready
+	close(clr)
+	clr = nil
 
 	tmpDelay := ACCEPT_MIN_SLEEP
 
@@ -448,9 +481,9 @@ func (s *Server) startMonitoring(secure bool) {
 	if secure {
 		hp = net.JoinHostPort(s.opts.HTTPHost, strconv.Itoa(s.opts.HTTPSPort))
 		Noticef("Starting https monitor on %s", hp)
-		config := *s.opts.TLSConfig
+		config := util.CloneTLSConfig(s.opts.TLSConfig)
 		config.ClientAuth = tls.NoClientCert
-		s.http, err = tls.Listen("tcp", hp, &config)
+		s.http, err = tls.Listen("tcp", hp, config)
 
 	} else {
 		hp = net.JoinHostPort(s.opts.HTTPHost, strconv.Itoa(s.opts.HTTPPort))
@@ -516,8 +549,7 @@ func (s *Server) createClient(conn net.Conn) *client {
 
 	// Check for Auth
 	if authRequired {
-		ttl := secondsToDuration(s.opts.AuthTimeout)
-		c.setAuthTimer(ttl)
+		c.setAuthTimer(secondsToDuration(s.opts.AuthTimeout))
 	}
 
 	// Send our information.
@@ -535,6 +567,13 @@ func (s *Server) createClient(conn net.Conn) *client {
 	if !s.running {
 		s.mu.Unlock()
 		return c
+	}
+	// If there is a max connections specified, check that adding
+	// this new client would not push us over the max
+	if s.opts.MaxConn > 0 && len(s.clients) >= s.opts.MaxConn {
+		s.mu.Unlock()
+		c.maxConnExceeded()
+		return nil
 	}
 	s.clients[c.cid] = c
 	s.mu.Unlock()
@@ -596,6 +635,36 @@ func (s *Server) createClient(conn net.Conn) *client {
 	c.mu.Unlock()
 
 	return c
+}
+
+// updateServerINFO updates the server's Info object with the given
+// array of URLs and re-generate the infoJSON byte array, only if the
+// given URLs were not already recorded and if the feature is not
+// disabled.
+// Returns a boolean indicating if server's Info was updated.
+func (s *Server) updateServerINFO(urls []string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Feature disabled, do not update.
+	if s.opts.Cluster.NoAdvertise {
+		return false
+	}
+
+	// Will be set to true if we alter the server's Info object.
+	wasUpdated := false
+	for _, url := range urls {
+		if _, present := s.info.clientConnectURLs[url]; !present {
+
+			s.info.clientConnectURLs[url] = struct{}{}
+			s.info.ClientConnectURLs = append(s.info.ClientConnectURLs, url)
+			wasUpdated = true
+		}
+	}
+	if wasUpdated {
+		s.generateServerInfoJSON()
+	}
+	return wasUpdated
 }
 
 // Handle closing down a connection when the handshake has timedout.
@@ -701,12 +770,19 @@ func (s *Server) removeClient(c *client) {
 	if r != nil {
 		rID = r.remoteID
 	}
+	updateProtoInfoCount := false
+	if typ == CLIENT && c.opts.Protocol >= ClientProtoInfo {
+		updateProtoInfoCount = true
+	}
 	c.mu.Unlock()
 
 	s.mu.Lock()
 	switch typ {
 	case CLIENT:
 		delete(s.clients, cid)
+		if updateProtoInfoCount {
+			s.cproto--
+		}
 	case ROUTER:
 		delete(s.routes, cid)
 		if r != nil {
@@ -763,51 +839,21 @@ func (s *Server) Addr() net.Addr {
 	return s.listener.Addr()
 }
 
-// GetListenEndpoint will return a string of the form host:port suitable for
-// a connect. Will return empty string if the server is not ready to accept
-// client connections.
-func (s *Server) GetListenEndpoint() string {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	// Wait for the listener to be set, see note about RANDOM_PORT below
-	if s.listener == nil {
-		return ""
+// ReadyForConnections returns `true` if the server is ready to accept client
+// and, if routing is enabled, route connections. If after the duration
+// `dur` the server is still not ready, returns `false`.
+func (s *Server) ReadyForConnections(dur time.Duration) bool {
+	end := time.Now().Add(dur)
+	for time.Now().Before(end) {
+		s.mu.Lock()
+		ok := s.listener != nil && (s.opts.Cluster.Port == 0 || s.routeListener != nil)
+		s.mu.Unlock()
+		if ok {
+			return true
+		}
+		time.Sleep(25 * time.Millisecond)
 	}
-
-	host := s.opts.Host
-
-	// On windows, a connect with host "0.0.0.0" (or "::") will fail.
-	// We replace it with "localhost" when that's the case.
-	if host == "0.0.0.0" || host == "::" || host == "[::]" {
-		host = "localhost"
-	}
-
-	// Return the opts's Host and Port. Note that the Port may be set
-	// when the listener is started, due to the use of RANDOM_PORT
-	return net.JoinHostPort(host, strconv.Itoa(s.opts.Port))
-}
-
-// GetRouteListenEndpoint will return a string of the form host:port suitable
-// for a connect. Will return empty string if the server is not configured for
-// routing or not ready to accept route connections.
-func (s *Server) GetRouteListenEndpoint() string {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if s.routeListener == nil {
-		return ""
-	}
-
-	host := s.opts.ClusterHost
-
-	// On windows, a connect with host "0.0.0.0" (or "::") will fail.
-	// We replace it with "localhost" when that's the case.
-	if host == "0.0.0.0" || host == "::" || host == "[::]" {
-		host = "localhost"
-	}
-
-	// Return the cluster's Host and Port.
-	return net.JoinHostPort(host, strconv.Itoa(s.opts.ClusterPort))
+	return false
 }
 
 // ID returns the server's ID
@@ -824,4 +870,54 @@ func (s *Server) startGoRoutine(f func()) {
 		go f()
 	}
 	s.grMu.Unlock()
+}
+
+// getClientConnectURLs returns suitable URLs for clients to connect to the listen
+// port based on the server options' Host and Port. If the Host corresponds to
+// "any" interfaces, this call returns the list of resolved IP addresses.
+func (s *Server) getClientConnectURLs() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	sPort := strconv.Itoa(s.opts.Port)
+	urls := make([]string, 0, 1)
+
+	ipAddr, err := net.ResolveIPAddr("ip", s.opts.Host)
+	// If the host is "any" (0.0.0.0 or ::), get specific IPs from available
+	// interfaces.
+	if err == nil && ipAddr.IP.IsUnspecified() {
+		var ip net.IP
+		ifaces, _ := net.Interfaces()
+		for _, i := range ifaces {
+			addrs, _ := i.Addrs()
+			for _, addr := range addrs {
+				switch v := addr.(type) {
+				case *net.IPNet:
+					ip = v.IP
+				case *net.IPAddr:
+					ip = v.IP
+				}
+				// Skip non global unicast addresses
+				if !ip.IsGlobalUnicast() || ip.IsUnspecified() {
+					ip = nil
+					continue
+				}
+				urls = append(urls, net.JoinHostPort(ip.String(), sPort))
+			}
+		}
+	}
+	if err != nil || len(urls) == 0 {
+		// We are here if s.opts.Host is not "0.0.0.0" nor "::", or if for some
+		// reason we could not add any URL in the loop above.
+		// We had a case where a Windows VM was hosed and would have err == nil
+		// and not add any address in the array in the loop above, and we
+		// ended-up returning 0.0.0.0, which is problematic for Windows clients.
+		// Check for 0.0.0.0 or :: specifically, and ignore if that's the case.
+		if s.opts.Host == "0.0.0.0" || s.opts.Host == "::" {
+			Errorf("Address %q can not be resolved properly", s.opts.Host)
+		} else {
+			urls = append(urls, net.JoinHostPort(s.opts.Host, sPort))
+		}
+	}
+	return urls
 }

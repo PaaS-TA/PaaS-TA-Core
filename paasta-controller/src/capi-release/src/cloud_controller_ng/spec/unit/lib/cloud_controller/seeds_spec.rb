@@ -283,7 +283,7 @@ module VCAP::CloudController
 
           it 'adds both as shared domains' do
             Seeds.create_seed_domains(config, Organization.find(name: 'the-system-org'))
-            expect(Domain.shared_domains.map(&:name)).to eq(['app.example.com', 'example.com'])
+            expect(Domain.shared_domains.map(&:name)).to match_array(['app.example.com', 'example.com'])
             expect(Domain.private_domains.map(&:name)).to eq([])
           end
         end
@@ -378,14 +378,6 @@ module VCAP::CloudController
               Seeds.create_seed_domains(config, system_org)
             }.to raise_error(RoutingApi::RoutingApiDisabled)
           end
-        end
-      end
-
-      context 'when app domains are an empty array' do
-        let(:app_domains) { [] }
-
-        it 'raises an error' do
-          expect { Seeds.create_seed_domains(config, system_org) }.to raise_error(RuntimeError, /app_domains can not be empty/)
         end
       end
     end

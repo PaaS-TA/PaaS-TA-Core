@@ -1,0 +1,48 @@
+name: pgats-errand
+
+update:
+  canaries: 1
+  canary_watch_time: 30000-600000
+  max_in_flight: 1
+  serial: true
+  update_watch_time: 5000-600000
+
+releases:
+- name: postgres
+  version: latest
+
+stemcells:
+- alias: default
+  os: ubuntu-trusty
+  version: latest
+
+instance_groups:
+- name: acceptance-tests
+  instances: 1
+  lifecycle: errand
+  stemcell: default
+  networks:
+  - name: default
+  azs:
+  - z1
+  vm_type: m3.medium
+  persistent_disk_type: 10GB
+  jobs:
+  - name: acceptance-tests
+    release: postgres
+    properties:
+      postgres:
+        acceptance_tests:
+          postgres_release_version: latest
+          bosh:
+            target: ((director_target))
+            username: ((director_username))
+            password: ((director_password))
+            director_ca_cert: ((director_ca_cert))
+          cloud_configs:
+            default_azs:
+            - z1
+            default_networks:
+            - name: default
+            default_persistent_disk_type: 10GB
+            default_vm_type: m3.large

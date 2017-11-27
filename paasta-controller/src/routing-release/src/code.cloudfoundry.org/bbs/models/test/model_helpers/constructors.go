@@ -12,7 +12,7 @@ func NewValidActualLRP(guid string, index int32) *models.ActualLRP {
 	actualLRP := &models.ActualLRP{
 		ActualLRPKey:         models.NewActualLRPKey(guid, index, "some-domain"),
 		ActualLRPInstanceKey: models.NewActualLRPInstanceKey("some-guid", "some-cell"),
-		ActualLRPNetInfo:     models.NewActualLRPNetInfo("some-address", models.NewPortMapping(2222, 4444)),
+		ActualLRPNetInfo:     models.NewActualLRPNetInfo("some-address", "container-address", models.NewPortMapping(2222, 4444)),
 		CrashCount:           33,
 		CrashReason:          "badness",
 		State:                models.ActualLRPStateRunning,
@@ -55,6 +55,7 @@ func NewValidDesiredLRP(guid string) *models.DesiredLRP {
 		DiskMb:      512,
 		MemoryMb:    1024,
 		CpuWeight:   42,
+		MaxPids:     1024,
 		Routes:      &models.Routes{"my-router": &myRouterJSON},
 		LogSource:   "some-log-source",
 		LogGuid:     "some-log-guid",
@@ -74,14 +75,23 @@ func NewValidDesiredLRP(guid string) *models.DesiredLRP {
 		ModificationTag:               &modTag,
 		LegacyDownloadUser:            "legacy-dan",
 		TrustedSystemCertificatesPath: "/etc/somepath",
+		PlacementTags:                 []string{"red-tag", "blue-tag"},
 		VolumeMounts: []*models.VolumeMount{
 			{
-				Driver:        "my-driver",
-				VolumeId:      "my-volume",
-				ContainerPath: "/mnt/mypath",
-				Mode:          models.BindMountMode_RO,
+				Driver:       "my-driver",
+				ContainerDir: "/mnt/mypath",
+				Mode:         "r",
+				Shared: &models.SharedDevice{
+					VolumeId:    "my-volume",
+					MountConfig: `{"foo":"bar"}`,
+				},
 			},
 		},
+		CertificateProperties: &models.CertificateProperties{
+			OrganizationalUnit: []string{"iamthelizardking", "iamthelizardqueen"},
+		},
+		ImageUsername: "image-username",
+		ImagePassword: "image-password",
 	}
 	err := desiredLRP.Validate()
 	Expect(err).NotTo(HaveOccurred())
@@ -110,6 +120,7 @@ func NewValidTaskDefinition() *models.TaskDefinition {
 		}),
 		MemoryMb:    256,
 		DiskMb:      1024,
+		MaxPids:     1024,
 		CpuWeight:   42,
 		Privileged:  true,
 		LogGuid:     "123",
@@ -143,12 +154,21 @@ func NewValidTaskDefinition() *models.TaskDefinition {
 		TrustedSystemCertificatesPath: "/etc/somepath",
 		VolumeMounts: []*models.VolumeMount{
 			{
-				Driver:        "my-driver",
-				VolumeId:      "my-volume",
-				ContainerPath: "/mnt/mypath",
-				Mode:          models.BindMountMode_RO,
+				Driver:       "my-driver",
+				ContainerDir: "/mnt/mypath",
+				Mode:         "r",
+				Shared: &models.SharedDevice{
+					VolumeId:    "my-volume",
+					MountConfig: `{"foo":"bar"}`,
+				},
 			},
 		},
+		PlacementTags: []string{"red-tag", "blue-tag", "one-tag", "two-tag"},
+		CertificateProperties: &models.CertificateProperties{
+			OrganizationalUnit: []string{"iamthelizardking", "iamthelizardqueen"},
+		},
+		ImageUsername: "image-username",
+		ImagePassword: "image-password",
 	}
 }
 

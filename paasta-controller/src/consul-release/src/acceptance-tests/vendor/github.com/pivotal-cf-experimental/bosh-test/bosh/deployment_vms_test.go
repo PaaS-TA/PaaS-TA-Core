@@ -47,11 +47,11 @@ var _ = Describe("DeploymentVMs", func() {
 				Expect(taskCallCount).NotTo(Equal(0))
 
 				w.Write([]byte(`
-						{"index": 0, "job_name": "consul_z1", "job_state":"some-state", "ips": ["1.2.3.4"]}
-						{"index": 0, "job_name": "etcd_z1", "job_state":"some-state", "ips": ["1.2.3.5"]}
-						{"index": 1, "job_name": "etcd_z1", "job_state":"some-other-state", "ips": ["1.2.3.6"]}
-						{"index": 2, "job_name": "etcd_z1", "job_state":"some-more-state", "ips": ["1.2.3.7"]}
-					`))
+					{"id": "id-c0", "index": 0, "job_name": "consul_z1", "job_state":"some-state", "ips": ["1.2.3.4"]}
+					{"id": "id-e0", "index": 0, "job_name": "etcd_z1", "job_state":"some-state", "ips": ["1.2.3.5"]}
+					{"id": "id-e1", "index": 1, "job_name": "etcd_z1", "job_state":"some-other-state", "ips": ["1.2.3.6"]}
+					{"id": "id-e2", "index": 2, "job_name": "etcd_z1", "job_state":"some-more-state", "ips": ["1.2.3.7"]}
+				`))
 			default:
 				Fail("unknown route")
 			}
@@ -67,24 +67,28 @@ var _ = Describe("DeploymentVMs", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(vms).To(ConsistOf([]bosh.VM{
 			{
+				ID:      "id-c0",
 				Index:   0,
 				JobName: "consul_z1",
 				State:   "some-state",
 				IPs:     []string{"1.2.3.4"},
 			},
 			{
+				ID:      "id-e0",
 				Index:   0,
 				JobName: "etcd_z1",
 				State:   "some-state",
 				IPs:     []string{"1.2.3.5"},
 			},
 			{
+				ID:      "id-e1",
 				Index:   1,
 				JobName: "etcd_z1",
 				State:   "some-other-state",
 				IPs:     []string{"1.2.3.6"},
 			},
 			{
+				ID:      "id-e2",
 				Index:   2,
 				JobName: "etcd_z1",
 				State:   "some-more-state",

@@ -1,13 +1,10 @@
 require 'spec_helper'
 require 'presenters/v3/route_mapping_presenter'
-require 'messages/route_mappings_list_message'
+require 'messages/route_mappings/route_mappings_list_message'
 
 module VCAP::CloudController::Presenters::V3
   RSpec.describe RouteMappingPresenter do
     subject(:presenter) { described_class.new(route_mapping) }
-    let(:scheme) { TestConfig.config[:external_protocol] }
-    let(:host) { TestConfig.config[:external_domain] }
-    let(:link_prefix) { "#{scheme}://#{host}" }
 
     let(:route_mapping) do
       VCAP::CloudController::RouteMappingModel.make(
@@ -18,7 +15,7 @@ module VCAP::CloudController::Presenters::V3
       )
     end
     let(:app) { VCAP::CloudController::AppModel.make }
-    let(:process) { VCAP::CloudController::App.make(app: app, type: 'some-type') }
+    let(:process) { VCAP::CloudController::ProcessModel.make(app: app, type: 'some-type') }
     let(:route) { VCAP::CloudController::Route.make(space: app.space) }
 
     describe '#to_hash' do
@@ -28,7 +25,6 @@ module VCAP::CloudController::Presenters::V3
         expect(result[:guid]).to eq(route_mapping.guid)
         expect(result[:created_at]).to eq(route_mapping.created_at)
         expect(result[:updated_at]).to eq(route_mapping.updated_at)
-        expect(result[:app_port]).to eq(route_mapping.app_port)
         expect(result[:links]).to include(:self)
         expect(result[:links]).to include(:app)
         expect(result[:links]).to include(:route)

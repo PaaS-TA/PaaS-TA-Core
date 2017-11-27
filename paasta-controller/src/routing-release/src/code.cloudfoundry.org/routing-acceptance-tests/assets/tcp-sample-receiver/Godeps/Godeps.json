@@ -1,6 +1,6 @@
 {
 	"ImportPath": "code.cloudfoundry.org/routing-acceptance-tests/assets/tcp-sample-receiver",
-	"GoVersion": "go1.5.3",
+	"GoVersion": "go1.8",
 	"Deps": [
 		{
 			"ImportPath": "github.com/tedsuo/ifrit/ginkgomon",

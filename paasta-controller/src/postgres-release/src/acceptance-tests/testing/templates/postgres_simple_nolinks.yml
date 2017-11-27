@@ -1,0 +1,53 @@
+name: pgats-simple
+
+releases:
+- name: postgres
+  version: YOUR_RELEASE_VERSION
+
+stemcells:
+- alias: linux
+  os: ubuntu-trusty
+  version: latest
+
+instance_groups:
+- name: postgres
+  instances: 1
+  azs: [YOUR_AZ_LIST]
+  networks:
+  - name: YOUR_NETWORK
+  jobs:
+  - name: postgres
+    release: postgres
+    properties:
+      databases:
+        port: 5524
+        databases:
+        - citext: false
+          name: sandbox
+        - citext: false
+          name: sandbox2
+        max_connections: 111
+        additional_config:
+          shared_buffers: 32768
+        roles:
+        - name: ((defuser_name))
+          password: ((defuser_password))
+        - name: ((superuser_name))
+          password: ((superuser_password))
+          permissions:
+          - "SUPERUSER"
+          - "CONNECTION LIMIT 33"
+          - "VALID UNTIL 'May 5 12:00:00 2025 +1'"
+  persistent_disk_type: YOUR_DISK_TYPE
+  vm_type: YOUR_VM_TYPE
+  stemcell: linux
+  env:
+    bosh:
+      keep_root_password: true
+
+update:
+  canaries: 1
+  canary_watch_time: 30000-600000
+  max_in_flight: 1
+  serial: true
+  update_watch_time: 5000-600000

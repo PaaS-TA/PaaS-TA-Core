@@ -1,0 +1,35 @@
+### Set current droplet
+
+```
+Example Request
+```
+
+```shell
+curl "https://api.example.org/v3/apps/[guid]/relationships/current_droplet" \
+  -X PATCH \
+  -H "Authorization: bearer [token]" \
+  -H "Content-type: application/json" \
+  -d '{ "data": { "guid": "[droplet_guid]" } }'
+```
+
+```
+Example Response
+```
+
+```http
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+<%= yield_content :app_current_droplet_relationship %>
+```
+
+Set the current droplet for an app. The current droplet is the droplet that the app will use when running.
+
+#### Definition
+`PATCH /v3/apps/:guid/relationships/current_droplet`
+
+#### Permitted Roles
+ |
+--- | ---
+Space Developer |
+Admin |

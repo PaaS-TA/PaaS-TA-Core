@@ -53,7 +53,7 @@ func mapMissingKeyFailure(difference diff.MapMissingKey) string {
     Expected
         %s
     to contain key
-        <%T> %s`, SliceOfValues(difference.AllKeys), difference.MissingKey, difference.MissingKey)
+        <%T> %+v`, SliceOfValues(difference.AllKeys), difference.MissingKey, difference.MissingKey)
 }
 
 func mapExtraKeyFailure(difference diff.MapExtraKey) string {
@@ -62,7 +62,7 @@ func mapExtraKeyFailure(difference diff.MapExtraKey) string {
     Expected
         %s
     not to contain key
-        <%T> %s`, SliceOfValues(difference.AllKeys), difference.ExtraKey, difference.ExtraKey)
+        <%T> %+v`, SliceOfValues(difference.AllKeys), difference.ExtraKey, difference.ExtraKey)
 }
 
 func sliceNestedFailure(difference diff.SliceNested) string {

@@ -12,6 +12,22 @@ module VCAP::CloudController::Validators
       end
     end
 
+    describe 'validator extending StandaloneValidator' do
+      describe '.validate_each' do
+        it 'calls through to the instance method so it can be easily used outside of Active Models' do
+          my_validator = Class.new(ActiveModel::EachValidator) do
+            extend StandaloneValidator
+
+            def validate_each(record, attr_name, value)
+              "hello #{record} #{attr_name} #{value}"
+            end
+          end
+
+          expect(my_validator.validate_each(1, 2, 3)).to eq('hello 1 2 3')
+        end
+      end
+    end
+
     describe 'ArrayValidator' do
       let(:array_class) do
         Class.new(fake_class) do
@@ -178,30 +194,34 @@ module VCAP::CloudController::Validators
         expect(fake_class.valid?).to be_falsey
         expect(fake_class.errors[:field]).to include 'cannot set PORT'
       end
+
+      it 'does not allow variables with zero key length' do
+        fake_class = environment_variables_class.new field: { '': 'el lunes nos ponemos camisetas naranjas' }
+        expect(fake_class.valid?).to be_falsey
+        expect(fake_class.errors[:field]).to include 'key must be a minimum length of 1'
+      end
     end
 
     describe 'LifecycleValidator' do
-      class LifecycleMessage < VCAP::CloudController::BaseMessage
-        attr_accessor :lifecycle
+      let(:lifecycle_class) do
+        Class.new(fake_class) do
+          attr_accessor :lifecycle
 
-        validates_with LifecycleValidator
+          validates_with LifecycleValidator
 
-        def allowed_keys
-          [:lifecycle]
-        end
+          def lifecycle_data
+            lifecycle[:data] || lifecycle['data']
+          end
 
-        def lifecycle_data
-          lifecycle[:data] || lifecycle['data']
-        end
-
-        def lifecycle_type
-          lifecycle[:type] || lifecycle['type']
+          def lifecycle_type
+            lifecycle[:type] || lifecycle['type']
+          end
         end
       end
 
       context 'when the lifecycle type provided is invalid' do
         it 'adds lifecycle_type error message to the base class' do
-          message = LifecycleMessage.new({ lifecycle: { type: 'not valid', data: {} } })
+          message = lifecycle_class.new({ lifecycle: { type: 'not valid', data: {} } })
 
           expect(message).not_to be_valid
           expect(message.errors_on(:lifecycle_type)).to include('is not included in the list: buildpack, docker')
@@ -211,10 +231,10 @@ module VCAP::CloudController::Validators
       context 'when lifecycle type provided is buildpack' do
         context 'when the buildpack lifecycle data is invalid' do
           it 'correctly adds the buildpack data message validation errors' do
-            message = LifecycleMessage.new({ lifecycle: { type: 'buildpack', data: { buildpack: 123 } } })
+            message = lifecycle_class.new({ lifecycle: { type: 'buildpack', data: { buildpacks: [123] } } })
 
             expect(message).to_not be_valid
-            expect(message.errors_on(:lifecycle)).to include('Buildpack must be a string')
+            expect(message.errors_on(:lifecycle)).to include('Buildpacks can only contain strings')
           end
         end
       end
@@ -226,6 +246,10 @@ module VCAP::CloudController::Validators
 
         def allowed_keys
           [:relationships]
+        end
+
+        def relationships_message
+          Relationships.new(relationships.deep_symbolize_keys)
         end
 
         validates_with RelationshipValidator
@@ -249,8 +273,8 @@ module VCAP::CloudController::Validators
 
       it 'returns early when base class relationships is not a hash' do
         message = RelationshipMessage.new({ relationships: 'not a hash' })
-        expect(message).to be_valid
-        expect(message.errors_on(:relationships)).to be_empty
+        expect(message).not_to be_valid
+        expect(message.errors_on(:relationships)).to include("'relationships' is not a hash")
       end
     end
 
@@ -289,42 +313,54 @@ module VCAP::CloudController::Validators
     end
 
     describe 'ToOneRelationshipValidator' do
-      class FooMessage < VCAP::CloudController::BaseMessage
-        attr_accessor :bar
-
-        def allowed_keys
-          [:bar]
+      let(:to_one_class) do
+        Class.new(fake_class) do
+          validates :field, to_one_relationship: true
         end
-
-        validates :bar, to_one_relationship: true
       end
 
       it 'ensures that the data has the correct structure' do
-        invalid_one = FooMessage.new({ bar: { not_a_guid: 1234 } })
-        invalid_two = FooMessage.new({ bar: { guid: { woah: 1234 } } })
-        valid       = FooMessage.new(bar: { guid: '123' })
+        bad_guid_key = to_one_class.new({ field: { data: { not_a_guid: '1234' } } })
+        bad_guid_value = to_one_class.new({ field: { data: { guid: { woah: '1234' } } } })
 
-        expect(invalid_one).not_to be_valid
-        expect(invalid_two).not_to be_valid
+        bad_data_key = to_one_class.new({ field: { not_data: '1234' } })
+        bad_data_value = to_one_class.new({ field: { data: '1234' } })
+        missing_data = to_one_class.new({ field: '1234' })
+
+        valid = to_one_class.new(field: { data: { guid: '1234' } })
+
+        expect(bad_guid_key).not_to be_valid
+        expect(bad_guid_value).not_to be_valid
+        expect(bad_data_key).not_to be_valid
+        expect(bad_data_value).not_to be_valid
+        expect(missing_data).not_to be_valid
         expect(valid).to be_valid
+      end
+
+      it 'allows for nil value in data' do
+        valid = to_one_class.new(field: { data: nil })
+
+        expect(valid).to be_valid
+      end
+
+      it 'adds an error if the field is not structured correctly' do
+        invalid = to_one_class.new({ field: { data: { not_a_guid: 1234 } } })
+        expect(invalid).not_to be_valid
+        expect(invalid.errors[:field]).to include 'must be structured like this: "field: {"data": {"guid": "valid-guid"}}"'
       end
     end
 
     describe 'ToManyRelationshipValidator' do
-      class BarMessage < VCAP::CloudController::BaseMessage
-        attr_accessor :routes
-
-        def allowed_keys
-          [:routes]
+      let(:to_many_class) do
+        Class.new(fake_class) do
+          validates :field, to_many_relationship: true
         end
-
-        validates :routes, to_many_relationship: true
       end
 
       it 'ensures that the data has the correct structure' do
-        valid       = BarMessage.new({ routes: [{ guid: '1234' }, { guid: '1234' }, { guid: '1234' }, { guid: '1234' }] })
-        invalid_one = BarMessage.new({ routes: { guid: '1234' } })
-        invalid_two = BarMessage.new({ routes: [{ guid: 1234 }, { guid: 1234 }] })
+        valid       = to_many_class.new({ field: [{ guid: '1234' }, { guid: '1234' }, { guid: '1234' }, { guid: '1234' }] })
+        invalid_one = to_many_class.new({ field: { guid: '1234' } })
+        invalid_two = to_many_class.new({ field: [{ guid: 1234 }, { guid: 1234 }] })
 
         expect(valid).to be_valid
         expect(invalid_one).not_to be_valid

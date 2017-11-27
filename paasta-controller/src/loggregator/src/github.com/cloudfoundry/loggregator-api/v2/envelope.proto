@@ -1,0 +1,64 @@
+syntax = "proto3";
+
+package loggregator.v2;
+
+message Envelope{
+  int64 timestamp = 1;
+  string source_id = 2;
+  string instance_id = 8;
+  map<string, Value> deprecated_tags = 3;
+  map<string, string> tags = 9;
+
+  oneof message {
+    Log log = 4;
+    Counter counter = 5;
+    Gauge gauge = 6;
+    Timer timer = 7;
+  }
+}
+
+message EnvelopeBatch {
+  repeated Envelope batch = 1;
+}
+
+message Value {
+  oneof data {
+    string text = 1;
+    int64 integer = 2;
+    double decimal = 3;
+  }
+}
+
+message Log {
+    bytes payload = 1;
+    Type type = 2;
+
+    enum Type {
+        OUT = 0;
+        ERR = 1;
+    }
+}
+
+message Counter {
+    string name = 1;
+
+    oneof value {
+        uint64 delta = 2;
+        uint64 total = 3;
+    }
+}
+
+message Gauge {
+    map<string, GaugeValue> metrics = 1;
+}
+
+message GaugeValue {
+    string unit = 1;
+    double value = 2;
+}
+
+message Timer {
+    string name = 1;
+    int64 start = 2;
+    int64 stop = 3;
+}

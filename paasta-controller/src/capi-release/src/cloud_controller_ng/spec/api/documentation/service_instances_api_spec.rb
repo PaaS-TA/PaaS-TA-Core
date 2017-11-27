@@ -9,10 +9,10 @@ RSpec.resource 'Service Instances', type: [:api, :legacy_api] do
   let(:service) { VCAP::CloudController::Service.make(service_broker: service_broker) }
   let(:service_plan) { VCAP::CloudController::ServicePlan.make(service: service, public: true) }
   let!(:service_instance) do
-    service_instance = VCAP::CloudController::ManagedServiceInstance.make(
+    service_instance                            = VCAP::CloudController::ManagedServiceInstance.make(
       service_plan: service_plan, tags: tags)
     service_instance.service_instance_operation = VCAP::CloudController::ServiceInstanceOperation.make(
-      state: 'succeeded',
+      state:       'succeeded',
       description: 'service broker-provided description'
     )
     service_instance
@@ -31,8 +31,8 @@ RSpec.resource 'Service Instances', type: [:api, :legacy_api] do
     end
 
     before do
-      uri = URI(service_broker.broker_url)
-      broker_url = uri.host + uri.path
+      uri         = URI(service_broker.broker_url)
+      broker_url  = uri.host + uri.path
       broker_auth = "#{service_broker.auth_username}:#{service_broker.auth_password}"
       stub_request(:delete,
         %r{https://#{broker_auth}@#{broker_url}/v2/service_instances/#{service_instance.guid}}).
@@ -41,6 +41,7 @@ RSpec.resource 'Service Instances', type: [:api, :legacy_api] do
 
     response_field 'name', 'The human-readable name of the service instance.'
     response_field 'credentials', 'The service broker-provided credentials to use this service.'
+    response_field 'service_guid', 'The service GUID that this service instance belongs to'
     response_field 'service_plan_guid', 'The service plan GUID that this service instance is utilizing.'
     response_field 'space_guid', 'The space GUID that this service instance belongs to.'
     response_field 'gateway_data', '',
@@ -57,6 +58,7 @@ RSpec.resource 'Service Instances', type: [:api, :legacy_api] do
     response_field 'last_operation.updated_at', 'The timestamp that the Cloud Controller last checked the service instance state from the broker.'
     response_field 'space_url', 'The relative path to the space resource that this service instance belongs to.'
     response_field 'service_plan_url', 'The relative path to the service plan resource that this service instance belongs to.'
+    response_field 'service_url', 'The relative path to the service that this service instance belongs to.'
     response_field 'service_binding_url', 'The relative path to the service bindings that this service instance is bound to.'
     response_field 'routes_url', 'Routes bound to the service instance. Requests to these routes will be forwarded to the service instance.'
     response_field 'tags', 'A list of tags for the service instance'
@@ -71,31 +73,31 @@ RSpec.resource 'Service Instances', type: [:api, :legacy_api] do
       field :parameters, 'Arbitrary parameters to pass along to the service broker. Must be a JSON object', required: false
       field :gateway_data, 'Configuration information for the broker gateway in v1 services', required: false, deprecated: true
       field :tags, 'A list of tags for the service instance. Max characters: 2048',
-            required: false, example_values: [%w(db), tags], default: []
+        required: false, example_values: [%w(db), tags], default: []
 
-      param_description = <<EOF
-Set to `true` if the client allows asynchronous provisioning. The cloud controller may respond before the service is ready for use.
+      param_description = <<~EOF
+        Set to `true` if the client allows asynchronous provisioning. The cloud controller may respond before the service is ready for use.
 EOF
       parameter :accepts_incomplete, param_description, valid_values: [true, false]
 
       before do
-        uri = URI(service_broker.broker_url)
-        uri.user = service_broker.auth_username
+        uri          = URI(service_broker.broker_url)
+        uri.user     = service_broker.auth_username
         uri.password = service_broker.auth_password
         uri.path += '/v2/service_instances/'
         stub_request(:put, /#{uri}.*/).to_return(status: 202, body: broker_response_body.to_json, headers: {})
       end
 
       example 'Creating a Service Instance' do
-        space_guid = VCAP::CloudController::Space.make.guid
+        space_guid   = VCAP::CloudController::Space.make.guid
         request_hash = {
-          space_guid: space_guid,
-          name: 'my-service-instance',
+          space_guid:        space_guid,
+          name:              'my-service-instance',
           service_plan_guid: service_plan.guid,
-          parameters: {
+          parameters:        {
             the_service_broker: 'wants this object'
           },
-          tags: tags
+          tags:              tags
         }
 
         client.post '/v2/service_instances?accepts_incomplete=true', MultiJson.dump(request_hash, pretty: true), headers
@@ -114,16 +116,16 @@ EOF
       field :service_plan_guid, 'The new plan guid for the service instance', required: false, example_values: ['6c4bd80f-4593-41d1-a2c9-b20cb65ec76e']
       field :parameters, 'Arbitrary parameters to pass along to the service broker. Must be a JSON object', required: false
       field :tags, 'A list of tags for the service instance. NOTE: Updating the tags will overwrite any old tags. Max characters: 2048.',
-            required: false, example_values: [['db'], ['accounting', 'mongodb']]
+        required: false, example_values: [['db'], ['accounting', 'mongodb']]
 
-      param_description = <<EOF
-Set to `true` if the client allows asynchronous provisioning. The cloud controller may respond before the service is ready for use.
+      param_description = <<~EOF
+        Set to `true` if the client allows asynchronous provisioning. The cloud controller may respond before the service is ready for use.
 EOF
       parameter :accepts_incomplete, param_description, valid_values: [true, false]
 
       before do
-        uri = URI(service_broker.broker_url)
-        uri.user = service_broker.auth_username
+        uri          = URI(service_broker.broker_url)
+        uri.user     = service_broker.auth_username
         uri.password = service_broker.auth_password
         uri.path += "/v2/service_instances/#{service_instance.guid}"
         uri.query = 'accepts_incomplete=true'
@@ -133,7 +135,7 @@ EOF
       example 'Update a Service Instance' do
         request_json = {
           service_plan_guid: new_plan.guid,
-          parameters: {
+          parameters:        {
             the_service_broker: 'wants this object'
           }
         }.to_json
@@ -146,18 +148,18 @@ EOF
     end
 
     delete '/v2/service_instances/:guid' do
-      accepts_incomplete_description = <<EOF
-Set to `true` if the client allows asynchronous provisioning. The cloud controller may respond before the service is ready for use.
+      accepts_incomplete_description = <<~EOF
+        Set to `true` if the client allows asynchronous provisioning. The cloud controller may respond before the service is ready for use.
 EOF
-      purge_description = <<EOF
-Recursively remove a service instance and child objects from Cloud Foundry database without making requests to a service broker.
-The user must have the cloud_controller.admin scope on their OAuth token in order to perform a purge.
+      purge_description = <<~EOF
+        Recursively remove a service instance and child objects from Cloud Foundry database without making requests to a service broker.
+        The user must have the cloud_controller.admin scope on their OAuth token in order to perform a purge.
 EOF
-      recursive_description = <<EOF
-Will delete service bindings, service keys, and routes associated with the service instance.
+      recursive_description = <<~EOF
+        Will delete service bindings, service keys, and routes associated with the service instance.
 EOF
-      async_description = <<EOF
-Will run the delete request in a background job. Recommended: 'true'.
+      async_description = <<~EOF
+        Will run the delete request in a background job. Recommended: 'true'.
 EOF
 
       parameter :accepts_incomplete, accepts_incomplete_description, valid_values: [true, false]
@@ -166,8 +168,8 @@ EOF
       parameter :async, async_description, valid_values: [true, false]
 
       before do
-        uri = URI(service_broker.broker_url)
-        uri.user = service_broker.auth_username
+        uri          = URI(service_broker.broker_url)
+        uri.user     = service_broker.auth_username
         uri.password = service_broker.auth_password
         uri.path += "/v2/service_instances/#{service_instance.guid}"
         stub_request(:delete, /#{uri}?.*/).to_return(status: 202, body: broker_response_body.to_json, headers: {})
@@ -190,7 +192,7 @@ EOF
 
       standard_model_list :service_binding,
         VCAP::CloudController::ServiceBindingsController,
-        outer_model: :service_instance,
+        outer_model:       :service_instance,
         export_attributes: [:app_guid, :service_instance_guid, :credentials, :binding_options, :gateway_data, :gateway_name, :syslog_drain_url, :volume_mounts]
     end
 
@@ -208,9 +210,9 @@ EOF
 
         example 'Binding a Service Instance to a Route' do
           request_hash = {
-              parameters: {
-                  the_service_broker: 'wants this object'
-              }
+            parameters: {
+              the_service_broker: 'wants this object'
+            }
           }
 
           client.put "/v2/service_instances/#{service_instance.guid}/routes/#{route.guid}", MultiJson.dump(request_hash, pretty: true), headers
@@ -253,7 +255,10 @@ EOF
       client.get "/v2/service_instances/#{service_instance.guid}/permissions", {}, headers
       expect(status).to eq(200)
 
-      expect(parsed_response).to eql({ 'manage' => true })
+      expect(parsed_response).to eql({
+        'manage' => true,
+        'read'   => true
+      })
     end
   end
 end

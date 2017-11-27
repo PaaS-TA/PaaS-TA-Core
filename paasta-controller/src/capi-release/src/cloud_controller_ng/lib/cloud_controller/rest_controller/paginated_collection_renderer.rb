@@ -100,13 +100,13 @@ module VCAP::CloudController::RestController
       transform_opts = opts[:transform_opts] || {}
       collection_transformer.transform(dataset_records, transform_opts) if collection_transformer
 
-      dataset_records.map { |obj| @serializer.serialize(controller, obj, opts, orphans) }
+      serialized_records = dataset_records.map { |obj| @serializer.serialize(controller, obj, opts, orphans) }
+      serialized_records.reject(&:nil?)
     end
 
     def default_visibility_filter
-      user = VCAP::CloudController::SecurityContext.current_user
-      admin_override = VCAP::CloudController::SecurityContext.admin? || VCAP::CloudController::SecurityContext.admin_read_only?
-      proc { |ds| ds.filter(ds.model.user_visibility(user, admin_override)) }
+      access_context = VCAP::CloudController::Security::AccessContext.new
+      proc { |ds| ds.filter(ds.model.user_visibility(access_context.user, access_context.admin_override)) }
     end
 
     def url(controller, path, page, page_size, order_direction, opts, request_params)
@@ -126,6 +126,7 @@ module VCAP::CloudController::RestController
       params['orphan-relations'] = opts[:orphan_relations] if opts[:orphan_relations]
       params['exclude-relations'] = opts[:exclude_relations] if opts[:exclude_relations]
       params['include-relations'] = opts[:include_relations] if opts[:include_relations]
+      params['order-by'] = opts[:order_by] if opts[:order_by]
 
       controller.preserve_query_parameters.each do |preserved_param|
         params[preserved_param] = request_params[preserved_param] if request_params[preserved_param]

@@ -8,7 +8,7 @@ metron_config:
 metrics_reporting_interval: <%= p("routing_api.metrics_reporting_interval") %>
 statsd_endpoint: <%= p("routing_api.statsd_endpoint") %>
 oauth:
-  token_endpoint: uaa.service.cf.internal
+  token_endpoint: <%= p("uaa.token_endpoint") %>
   port: <%= p("uaa.tls_port") %>
   skip_ssl_validation: <%= p("skip_ssl_validation") %>
   <% if p("uaa.ca_cert") != "" %>
@@ -34,15 +34,18 @@ etcd:
   } %>
 <% end %>
 
-<% if_p("routing_api.sqldb.host",
-    "routing_api.sqldb.port",
-    "routing_api.sqldb.type",
-    "routing_api.sqldb.schema") do |host, port, type, schema| %>
 sqldb:
-  host: <%= host %>
-  port: <%= port %>
-  schema: <%= schema %>
-  type: <%= type %>
+  host: <%= p("routing_api.sqldb.host") %>
+  port: <%= p("routing_api.sqldb.port") %>
+  type: <%= p("routing_api.sqldb.type") %>
+  schema: <%= p("routing_api.sqldb.schema") %>
   username: <%= p("routing_api.sqldb.username") %>
   password: <%= p("routing_api.sqldb.password") %>
-<% end %>
+
+locket:
+  locket_address: <%= p("routing_api.locket.api_location") %>
+  locket_ca_cert_file: "/var/vcap/jobs/routing-api/config/certs/locket/ca.crt"
+  locket_client_cert_file: "/var/vcap/jobs/routing-api/config/certs/locket/client.crt"
+  locket_client_key_file: "/var/vcap/jobs/routing-api/config/certs/locket/client.key"
+
+skip_consul_lock: <%= p("routing_api.skip_consul_lock") %>

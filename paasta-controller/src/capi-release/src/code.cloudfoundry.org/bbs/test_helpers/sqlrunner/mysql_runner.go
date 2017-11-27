@@ -33,7 +33,9 @@ func (m *MySQLRunner) Run(signals <-chan os.Signal, ready chan<- struct{}) error
 	Expect(err).NotTo(HaveOccurred())
 	Expect(m.db.Ping()).NotTo(HaveOccurred())
 
-	m.db.Exec(fmt.Sprintf("DROP DATABASE %s", m.sqlDBName))
+	_, err = m.db.Exec(fmt.Sprintf("DROP DATABASE IF EXISTS %s", m.sqlDBName))
+	Expect(err).NotTo(HaveOccurred())
+
 	_, err = m.db.Exec(fmt.Sprintf("CREATE DATABASE %s", m.sqlDBName))
 	Expect(err).NotTo(HaveOccurred())
 
@@ -48,12 +50,29 @@ func (m *MySQLRunner) Run(signals <-chan os.Signal, ready chan<- struct{}) error
 	_, err = m.db.Exec(fmt.Sprintf("DROP DATABASE %s", m.sqlDBName))
 	Expect(err).NotTo(HaveOccurred())
 	Expect(m.db.Close()).To(Succeed())
+	m.db = nil
 
 	return nil
 }
 
 func (m *MySQLRunner) ConnectionString() string {
 	return fmt.Sprintf("diego:diego_password@/%s", m.sqlDBName)
+}
+
+func (p *MySQLRunner) Port() int {
+	return 3306
+}
+
+func (p *MySQLRunner) DBName() string {
+	return p.sqlDBName
+}
+
+func (p *MySQLRunner) Password() string {
+	return "diego_password"
+}
+
+func (p *MySQLRunner) Username() string {
+	return "diego"
 }
 
 func (m *MySQLRunner) DriverName() string {
@@ -64,15 +83,9 @@ func (m *MySQLRunner) DB() *sql.DB {
 	return m.db
 }
 
-func (m *MySQLRunner) Reset() {
-	var truncateTablesSQL = []string{
-		"TRUNCATE TABLE domains",
-		"TRUNCATE TABLE configurations",
-		"TRUNCATE TABLE tasks",
-		"TRUNCATE TABLE desired_lrps",
-		"TRUNCATE TABLE actual_lrps",
-	}
-	for _, query := range truncateTablesSQL {
+func (m *MySQLRunner) ResetTables(tables []string) {
+	for _, name := range tables {
+		query := fmt.Sprintf("TRUNCATE TABLE %s", name)
 		result, err := m.db.Exec(query)
 		switch err := err.(type) {
 		case *mysql.MySQLError:
@@ -85,4 +98,8 @@ func (m *MySQLRunner) Reset() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(result.RowsAffected()).To(BeEquivalentTo(0))
 	}
+}
+
+func (m *MySQLRunner) Reset() {
+	m.ResetTables([]string{"domains", "configurations", "tasks", "desired_lrps", "actual_lrps", "locks"})
 }

@@ -16,37 +16,34 @@ packages:
 - loggregator_common
 - doppler
 
+provides:
+- name: doppler
+  type: doppler
+  properties:
+  - doppler.grpc_port
+
 properties:
   doppler.zone:
     description: Zone of the doppler server
-  doppler.debug:
-    description: boolean value to turn on verbose logging for doppler system (dea agent & doppler server)
-    default: false
+    default: ""
   doppler.maxRetainedLogMessages:
     description: number of log messages to retain per application
     default: 100
-
   doppler.dropsonde_incoming_port:
     description: Port for incoming udp messages
     default: 3457
-  doppler.incoming_tcp_port:
-    description: Port for incoming tcp messages
-    default: 3458
-
-  doppler.tls.enable:
-    description: "Enable TLS listener on doppler so that it can receive dropsonde envelopes over TLS transport. If enabled, Cert and Key files must be specified."
-    default: false
-  doppler.tls.port:
-    description: "Port for incoming messages in the dropsonde format over tls listener"
-    default: 3459
 
   loggregator.tls.ca_cert:
     description: "CA root required for key/cert verification"
-    default: ""
   loggregator.tls.doppler.cert:
     description: "TLS certificate for doppler"
   loggregator.tls.doppler.key:
     description: "TLS key for doppler"
+  loggregator.tls.cipher_suites:
+    description: |
+      An ordered list of supported SSL cipher suites. Allowed cipher suites are
+      TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256 and TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384.
+    default: "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256:TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384"
 
   loggregator.etcd.require_ssl:
     description: "Enable ssl for all communication with etcd"
@@ -61,9 +58,15 @@ properties:
     description: "PEM-encoded client key"
     default: ""
 
+  doppler.websocket_host:
+    description: Host for websocket server
+    default: 0.0.0.0
   doppler.outgoing_port:
     description: Port for outgoing log messages via websockets
     default: 8081
+  doppler.disable_announce:
+    description: Disable doppler announcing via etcd
+    default: false
 
   doppler.grpc_port:
     description: Port for outgoing log messages via GRPC
@@ -73,8 +76,17 @@ properties:
     description: "Interval before a websocket write is aborted if it does not succeed"
     default: 60
 
+  loggregator.disable_syslog_drains:
+    description: |
+      Disable syslog drain capability in Loggregator. This is meant to be used
+      when migrating to scalable-syslog-release.
+    default: false
+  doppler.syslog_skip_cert_verify:
+    description: "When connecting over TLS, don't verify certificates for syslog sink"
+    default: true
   doppler.blacklisted_syslog_ranges:
     description: "Blacklist for IPs that should not be used as syslog drains, e.g. internal ip addresses."
+
   doppler.container_metric_ttl_seconds:
     description: "TTL (in seconds) for container usage metrics"
     default: 120
@@ -98,20 +110,20 @@ properties:
     description: "Size of the internal buffer used by doppler to store messages for output to firehose or 'cf logs'. If the buffer gets full doppler will drop the messages."
     default: 10000
 
-  doppler.syslog_skip_cert_verify:
-    description: "When connecting over TLS, don't verify certificates for syslog sink"
-    default: true
-
   doppler.locked_memory_limit:
     description: "Size (KB) of shell's locked memory limit. Set to 'kernel' to use the kernel's default. Non-numeric values other than 'kernel', 'soft', 'hard', and 'unlimited' will result in an error."
     default: "unlimited"
 
   doppler.pprof_port:
     description: "The pprof port for runtime profiling data"
-    default: 6060
+    default: 0
+  doppler.health_addr:
+    description: "The host:port to expose health metrics for doppler"
+    default: "localhost:14825"
 
   loggregator.etcd.machines:
     description: "IPs pointing to the ETCD cluster"
+    default: []
 
   metron_endpoint.host:
     description: "The host used to emit messages to the Metron agent"
@@ -119,3 +131,6 @@ properties:
   metron_endpoint.dropsonde_port:
     description: "The port used to emit dropsonde messages to the Metron agent"
     default: 3457
+  metron_endpoint.grpc_port:
+    description: "The port used to emit grpc messages to the Metron agent"
+    default: 3458

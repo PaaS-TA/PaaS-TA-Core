@@ -1,0 +1,49 @@
+<%
+conf_dir = "/var/vcap/jobs/stager/config"
+
+config = {}
+
+config[:log_level] = p("capi.stager.log_level")
+config[:dropsonde_port] = p("capi.stager.dropsonde_port")
+config[:file_server_url] = p("capi.stager.file_server_url")
+config[:lager_config] = { log_level: p("capi.stager.log_level") }
+config[:stager_listen_addr] = p("capi.stager.listen_addr")
+config[:diego_privileged_containers] = p("capi.stager.diego_privileged_containers")
+config[:skip_cert_verify] = p("diego.ssl.skip_cert_verify")
+config[:staging_task_callback_url] = p("capi.stager.staging_task_callback_url")
+
+config[:docker_staging_stack] = p("capi.stager.docker_staging_stack")
+config[:cc_uploader_url] = p("capi.stager.cc_uploader_url")
+config[:consul_cluster] = "http://127.0.0.1:#{p("capi.stager.consul_agent_port")}"
+
+config[:cc_base_url] = "http://#{p("capi.stager.cc.internal_service_hostname")}:#{p("capi.stager.cc.external_port")}"
+config[:cc_basic_auth_username] = p("capi.stager.cc.basic_auth_username")
+config[:cc_basic_auth_password] = p("capi.stager.cc.basic_auth_password")
+config[:debug_server_config] = { debug_address: p("capi.stager.debug_addr") }
+config[:lifecycles] = []
+config[:insecure_docker_registries] = []
+
+if p("capi.stager.bbs.require_ssl")
+  config[:bbs_api_url] = "https://#{p("capi.stager.bbs.api_location")}"
+  config[:bbs_ca_cert] = "#{conf_dir}/certs/bbs/ca.crt"
+  config[:bbs_client_key] = "#{conf_dir}/certs/bbs/client.key"
+  config[:bbs_client_cert] = "#{conf_dir}/certs/bbs/client.crt"
+else
+  config[:bbs_api_url] = "http://#{p("capi.stager.bbs.api_location")}"
+end
+
+
+if_p("capi.stager.bbs.client_session_cache_size") do |value|
+  config[:bbs_client_cache_size] = value
+end
+
+if_p("capi.stager.bbs.max_idle_conns_per_host") do |value|
+  config[:bbs_max_idle_conns_per_host] = value
+end
+
+p("capi.stager.lifecycle_bundles").each { |bundle| config[:lifecycles] << bundle }
+p("capi.stager.insecure_docker_registry_list").each do |url|
+  config[:insecure_docker_registries] << url
+end
+%>
+<%= config.to_json %>

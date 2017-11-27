@@ -6,7 +6,7 @@ raise "traffic_controller.disable_access_control must be true" unless p("traffic
 
 set -e
 
-export GOROOT=$(readlink -nf /var/vcap/packages/golang1.7)
+export GOROOT=$(readlink -nf /var/vcap/packages/golang1.8.3)
 export PATH=${GOROOT}/bin:${PATH}
 export GOPATH=/var/vcap/packages/loggregator-acceptance-tests
 export PATH=${GOPATH}/bin:${PATH}
@@ -16,7 +16,7 @@ export CF_COLOR=false
 mkdir -p /var/vcap/sys/log/acceptance_tests
 rm -rf /var/vcap/sys/log/acceptance_tests/*
 
-cd /var/vcap/packages/loggregator-acceptance-tests/src/lats
+cd /var/vcap/packages/loggregator-acceptance-tests/src/code.cloudfoundry.org/loggregator/lats
 
 echo '################################################################################################################'
 echo $(go version)

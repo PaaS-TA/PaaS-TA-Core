@@ -2,6 +2,7 @@ package sqldb_test
 
 import (
 	"errors"
+	"strings"
 	"time"
 
 	"code.cloudfoundry.org/bbs/format"
@@ -30,6 +31,7 @@ var _ = Describe("ActualLRPDB", func() {
 
 		It("persists the actual lrp into the database", func() {
 			actualLRPGroup, err := sqlDB.CreateUnclaimedActualLRP(logger, key)
+			Expect(err).NotTo(HaveOccurred())
 
 			actualLRP := models.NewUnclaimedActualLRP(*key, fakeClock.Now().UnixNano())
 			actualLRP.ModificationTag.Epoch = "my-awesome-guid"
@@ -672,8 +674,9 @@ var _ = Describe("ActualLRPDB", func() {
 			Context("and the actual lrp is RUNNING", func() {
 				BeforeEach(func() {
 					netInfo := models.ActualLRPNetInfo{
-						Address: "0.0.0.0",
-						Ports:   []*models.PortMapping{},
+						Address:         "0.0.0.0",
+						Ports:           []*models.PortMapping{},
+						InstanceAddress: "1.1.1.1",
 					}
 
 					netInfoData, err := serializer.Marshal(logger, format.ENCODED_PROTO, &netInfo)
@@ -824,8 +827,9 @@ var _ = Describe("ActualLRPDB", func() {
 				}
 
 				netInfo = &models.ActualLRPNetInfo{
-					Address: "1.2.1.2",
-					Ports:   []*models.PortMapping{{ContainerPort: 8080, HostPort: 9090}},
+					Address:         "1.2.1.2",
+					Ports:           []*models.PortMapping{{ContainerPort: 8080, HostPort: 9090}},
+					InstanceAddress: "2.2.2.2",
 				}
 
 				actualLRP = &models.ActualLRP{
@@ -1134,8 +1138,9 @@ var _ = Describe("ActualLRPDB", func() {
 				}
 
 				netInfo = &models.ActualLRPNetInfo{
-					Address: "1.2.1.2",
-					Ports:   []*models.PortMapping{{ContainerPort: 8080, HostPort: 9090}},
+					Address:         "1.2.1.2",
+					Ports:           []*models.PortMapping{{ContainerPort: 8080, HostPort: 9090}},
+					InstanceAddress: "2.2.2.2",
 				}
 
 				actualLRP = &models.ActualLRP{
@@ -1174,6 +1179,26 @@ var _ = Describe("ActualLRPDB", func() {
 					Expect(err).NotTo(HaveOccurred())
 
 					Expect(afterActualLRPGroup).To(Equal(actualLRPGroup))
+				})
+
+				Context("and the crash reason is larger than 1K", func() {
+					It("truncates the crash reason", func() {
+						crashReason := strings.Repeat("x", 2*1024)
+						_, _, _, err := sqlDB.CrashActualLRP(logger, &actualLRP.ActualLRPKey, instanceKey, crashReason)
+						Expect(err).NotTo(HaveOccurred())
+
+						actualLRPGroup, err := sqlDB.ActualLRPGroupByProcessGuidAndIndex(logger, actualLRP.ProcessGuid, actualLRP.Index)
+						Expect(err).NotTo(HaveOccurred())
+
+						expectedActualLRP := *actualLRP
+						expectedActualLRP.State = models.ActualLRPStateUnclaimed
+						expectedActualLRP.CrashCount = 1
+						expectedActualLRP.CrashReason = crashReason[:1024]
+						expectedActualLRP.ModificationTag.Increment()
+						expectedActualLRP.Since = fakeClock.Now().UnixNano()
+
+						Expect(*actualLRPGroup.Instance).To(BeEquivalentTo(expectedActualLRP))
+					})
 				})
 
 				Context("and it should be restarted", func() {
@@ -1439,6 +1464,28 @@ var _ = Describe("ActualLRPDB", func() {
 					}
 
 					Expect(*actualLRPGroup.Instance).To(BeEquivalentTo(expectedActualLRP))
+				})
+
+				Context("and the placement error is longer than 1K", func() {
+					It("truncates the placement_error", func() {
+						value := strings.Repeat("x", 2*1024)
+						_, _, err := sqlDB.FailActualLRP(logger, &actualLRP.ActualLRPKey, value)
+						Expect(err).NotTo(HaveOccurred())
+
+						actualLRPGroup, err := sqlDB.ActualLRPGroupByProcessGuidAndIndex(logger, actualLRP.ProcessGuid, actualLRP.Index)
+						Expect(err).NotTo(HaveOccurred())
+
+						expectedActualLRP := *actualLRP
+						expectedActualLRP.State = models.ActualLRPStateUnclaimed
+						expectedActualLRP.PlacementError = value[:1024]
+						expectedActualLRP.Since = fakeClock.Now().UnixNano()
+						expectedActualLRP.ModificationTag = models.ModificationTag{
+							Epoch: "my-awesome-guid",
+							Index: 1,
+						}
+
+						Expect(*actualLRPGroup.Instance).To(BeEquivalentTo(expectedActualLRP))
+					})
 				})
 
 				It("returns the previous and current actual lrp", func() {

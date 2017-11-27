@@ -1,0 +1,44 @@
+---
+name: nats
+releases:
+- name: nats
+  version: latest
+stemcells:
+- alias: default
+  os: ubuntu-trusty
+  version: latest
+update:
+  canaries: 1
+  max_in_flight: 1
+  canary_watch_time: 1000-30000
+  update_watch_time: 1000-30000
+instance_groups:
+- name: nats-server
+  azs: [z1, z2, z3, z4]
+  instances: 3
+  jobs:
+  - name: nats
+    release: nats
+    properties:
+      nats:
+        user: nats
+        password: "((nats_password))"
+  networks:
+  - name: private
+  vm_type: m3.medium
+  stemcell: default
+- name: smoke-tests
+  azs: [z1]
+  vm_type: m3.medium
+  stemcell: default
+  instances: 1
+  lifecycle: errand
+  jobs:
+  - name: smoke-tests
+    release: nats
+  networks:
+  - name: private
+
+variables:
+- name: nats_password
+  type: password

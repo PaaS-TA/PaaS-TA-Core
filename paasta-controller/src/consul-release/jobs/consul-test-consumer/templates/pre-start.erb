@@ -1,16 +1,28 @@
 #!/bin/bash -exu
 
 
-<% if !p("consul-test-consumer.nameserver").empty? %>
-function setup_resolvconf() {
+function main() {
   local resolvconf_file
   resolvconf_file=/etc/resolvconf/resolv.conf.d/head
 
-  local nameserver=<%= p("consul-test-consumer.nameserver") %>
+  local nameserver
+  nameserver=""
+
+  <% if_link("dns") do |dns_link| %>
+    nameserver="<%= dns_link.instances[0].address %>"
+  <% end %>
+
+  if [[ -z "${nameserver}" ]]; then
+    nameserver="<%= p("consul-test-consumer.nameserver") %>"
+  fi
+
+  if [[ -z "${nameserver}" ]]; then
+    return
+  fi
 
   if ! grep -qE "$nameserver" "${resolvconf_file}"; then
     if [ ! -s "${resolvconf_file}" ]; then
-       echo "nameserver  $nameserver" > "${resolvconf_file}"
+       echo "nameserver $nameserver" > "${resolvconf_file}"
     else
        sed -i -e "2i nameserver $nameserver" "${resolvconf_file}"
      fi
@@ -19,10 +31,4 @@ function setup_resolvconf() {
   resolvconf -u
 }
 
-
-function main() {
-    setup_resolvconf
-}
-
 main
-<% end %>

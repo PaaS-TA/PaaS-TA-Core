@@ -1,0 +1,45 @@
+### Entitle organizations for an isolation segment
+
+```
+Example Request
+```
+
+```shell
+curl "https://api.example.org/v3/isolation_segments/[guid]/relationships/organizations" \
+  -X POST \
+  -H "Authorization: bearer [token]" \
+  -H "Content-type: application/json" \
+  -d '{
+    "data": [
+      { "guid":"org-guid-1" },
+      { "guid":"org-guid-2" }
+    ]
+  }'
+```
+
+```
+Example Response
+```
+
+```http
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+<%= yield_content :relationships_organizations %>
+```
+This endpoint entitles the specified organizations for the isolation segment.
+In the case where the specified isolation segment is the system-wide shared segment, and if an organization is not already entitled for any other isolation segment, then the shared isolation segment automatically gets assigned as the default for that organization.
+
+#### Definition
+`POST /v3/isolation_segments/:guid/relationships/organizations`
+
+#### Required Parameters
+
+Name | Type | Description
+---- | ---- | -----------
+**data** | [_to-many relationship_](#to-many-relationships) | Organization relationships. Each organization will be entitled to manage this isolation segment.
+
+#### Permitted Roles
+ |
+--- | ---
+Admin |

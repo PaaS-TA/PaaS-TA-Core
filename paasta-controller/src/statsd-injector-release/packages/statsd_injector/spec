@@ -1,0 +1,41 @@
+---
+name: statsd_injector
+dependencies:
+    - golang1.8.3
+files:
+- statsd-injector-release/src/github.com/cloudfoundry/statsd-injector/LICENSE
+- statsd-injector-release/src/github.com/cloudfoundry/statsd-injector/**/*.go
+- statsd-injector-release/src/github.com/cloudfoundry/statsd-injector/*.go # gosub
+- statsd-injector-release/src/github.com/cloudfoundry/statsd-injector/app/*.go # gosub
+- statsd-injector-release/src/github.com/cloudfoundry/statsd-injector/internal/egress/*.go # gosub
+- statsd-injector-release/src/github.com/cloudfoundry/statsd-injector/internal/ingress/*.go # gosub
+- statsd-injector-release/src/github.com/cloudfoundry/statsd-injector/internal/plumbing/*.go # gosub
+- statsd-injector-release/src/github.com/cloudfoundry/statsd-injector/internal/plumbing/v2/*.go # gosub
+- statsd-injector-release/src/github.com/cloudfoundry/statsd-injector/profiler/*.go # gosub
+- statsd-injector-release/src/github.com/golang/protobuf/proto/*.go # gosub
+- statsd-injector-release/src/github.com/golang/protobuf/ptypes/any/*.go # gosub
+- statsd-injector-release/src/golang.org/x/net/context/*.go # gosub
+- statsd-injector-release/src/golang.org/x/net/http2/*.go # gosub
+- statsd-injector-release/src/golang.org/x/net/http2/hpack/*.go # gosub
+- statsd-injector-release/src/golang.org/x/net/idna/*.go # gosub
+- statsd-injector-release/src/golang.org/x/net/internal/timeseries/*.go # gosub
+- statsd-injector-release/src/golang.org/x/net/lex/httplex/*.go # gosub
+- statsd-injector-release/src/golang.org/x/net/trace/*.go # gosub
+- statsd-injector-release/src/golang.org/x/text/secure/bidirule/*.go # gosub
+- statsd-injector-release/src/golang.org/x/text/transform/*.go # gosub
+- statsd-injector-release/src/golang.org/x/text/unicode/bidi/*.go # gosub
+- statsd-injector-release/src/golang.org/x/text/unicode/norm/*.go # gosub
+- statsd-injector-release/src/google.golang.org/genproto/googleapis/rpc/status/*.go # gosub
+- statsd-injector-release/src/google.golang.org/grpc/*.go # gosub
+- statsd-injector-release/src/google.golang.org/grpc/codes/*.go # gosub
+- statsd-injector-release/src/google.golang.org/grpc/credentials/*.go # gosub
+- statsd-injector-release/src/google.golang.org/grpc/grpclog/*.go # gosub
+- statsd-injector-release/src/google.golang.org/grpc/internal/*.go # gosub
+- statsd-injector-release/src/google.golang.org/grpc/keepalive/*.go # gosub
+- statsd-injector-release/src/google.golang.org/grpc/metadata/*.go # gosub
+- statsd-injector-release/src/google.golang.org/grpc/naming/*.go # gosub
+- statsd-injector-release/src/google.golang.org/grpc/peer/*.go # gosub
+- statsd-injector-release/src/google.golang.org/grpc/stats/*.go # gosub
+- statsd-injector-release/src/google.golang.org/grpc/status/*.go # gosub
+- statsd-injector-release/src/google.golang.org/grpc/tap/*.go # gosub
+- statsd-injector-release/src/google.golang.org/grpc/transport/*.go # gosub

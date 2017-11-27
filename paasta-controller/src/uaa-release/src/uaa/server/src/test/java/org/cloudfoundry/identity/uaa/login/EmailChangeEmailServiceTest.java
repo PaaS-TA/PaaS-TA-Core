@@ -12,23 +12,22 @@
  *******************************************************************************/
 package org.cloudfoundry.identity.uaa.login;
 
-import java.sql.Timestamp;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
-
 import org.cloudfoundry.identity.uaa.account.EmailChangeEmailService;
 import org.cloudfoundry.identity.uaa.codestore.ExpiringCode;
 import org.cloudfoundry.identity.uaa.codestore.ExpiringCodeStore;
 import org.cloudfoundry.identity.uaa.error.UaaException;
-import org.cloudfoundry.identity.uaa.login.test.ThymeleafConfig;
 import org.cloudfoundry.identity.uaa.message.EmailService;
 import org.cloudfoundry.identity.uaa.message.MessageService;
 import org.cloudfoundry.identity.uaa.message.MessageType;
 import org.cloudfoundry.identity.uaa.scim.ScimUser;
 import org.cloudfoundry.identity.uaa.scim.ScimUserProvisioning;
 import org.cloudfoundry.identity.uaa.util.JsonUtils;
-import org.cloudfoundry.identity.uaa.zone.*;
+import org.cloudfoundry.identity.uaa.zone.BrandingInformation;
+import org.cloudfoundry.identity.uaa.zone.ClientServicesExtension;
+import org.cloudfoundry.identity.uaa.zone.IdentityZone;
+import org.cloudfoundry.identity.uaa.zone.IdentityZoneConfiguration;
+import org.cloudfoundry.identity.uaa.zone.IdentityZoneHolder;
+import org.cloudfoundry.identity.uaa.zone.MultitenancyFixture;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
@@ -40,7 +39,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.oauth2.provider.ClientDetailsService;
 import org.springframework.security.oauth2.provider.NoSuchClientException;
 import org.springframework.security.oauth2.provider.client.BaseClientDetails;
 import org.springframework.test.context.ContextConfiguration;
@@ -48,6 +46,11 @@ import org.springframework.test.context.junit4.SpringJUnit4ClassRunner;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 import org.thymeleaf.spring4.SpringTemplateEngine;
+
+import java.sql.Timestamp;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 
 import static org.cloudfoundry.identity.uaa.account.EmailChangeEmailService.CHANGE_EMAIL_REDIRECT_URL;
 import static org.cloudfoundry.identity.uaa.codestore.ExpiringCodeType.EMAIL;
@@ -64,14 +67,14 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @RunWith(SpringJUnit4ClassRunner.class)
-@ContextConfiguration(classes = ThymeleafConfig.class)
+@ContextConfiguration(classes = {ThymeleafAdditional.class,ThymeleafConfig.class})
 public class EmailChangeEmailServiceTest {
     private EmailChangeEmailService emailChangeEmailService;
     private ScimUserProvisioning scimUserProvisioning;
     private ExpiringCodeStore codeStore;
     private MessageService messageService;
     private MockHttpServletRequest request;
-    private ClientDetailsService clientDetailsService;
+    private ClientServicesExtension clientDetailsService;
     private String companyName;
 
 
@@ -90,7 +93,7 @@ public class EmailChangeEmailServiceTest {
         SecurityContextHolder.clearContext();
         scimUserProvisioning = mock(ScimUserProvisioning.class);
         codeStore = mock(ExpiringCodeStore.class);
-        clientDetailsService = mock(ClientDetailsService.class);
+        clientDetailsService = mock(ClientServicesExtension.class);
         messageService = mock(EmailService.class);
         emailChangeEmailService = new EmailChangeEmailService(templateEngine, messageService, scimUserProvisioning, codeStore, clientDetailsService);
 
@@ -116,9 +119,9 @@ public class EmailChangeEmailServiceTest {
     public void beginEmailChangeWithUsernameConflict() throws Exception {
         ScimUser user = new ScimUser("user-001", "user@example.com", "test-name", "test-name");
         user.setPrimaryEmail("user@example.com");
-        when(scimUserProvisioning.retrieve(anyString())).thenReturn(user);
-        when(scimUserProvisioning.query(anyString())).thenReturn(Collections.singletonList(new ScimUser()));
-
+        when(scimUserProvisioning.retrieve(anyString(), anyString())).thenReturn(user);
+        String zoneId = IdentityZoneHolder.get().getId();
+        when(scimUserProvisioning.query(anyString(), eq(zoneId))).thenReturn(Collections.singletonList(new ScimUser()));
         emailChangeEmailService.beginEmailChange("user-001", "user@example.com", "new@example.com", null, null);
     }
 
@@ -214,13 +217,13 @@ public class EmailChangeEmailServiceTest {
 
     @Test(expected = UaaException.class)
     public void testCompleteVerificationWithInvalidCode() throws Exception {
-        when(codeStore.retrieveCode("invalid_code")).thenReturn(null);
+        when(codeStore.retrieveCode("invalid_code", IdentityZoneHolder.get().getId())).thenReturn(null);
         emailChangeEmailService.completeVerification("invalid_code");
     }
 
     @Test(expected = UaaException.class)
     public void testCompleteVerificationWithInvalidIntent() throws Exception {
-        when(codeStore.retrieveCode("invalid_code")).thenReturn(new ExpiringCode("invalid_code", new Timestamp(System.currentTimeMillis()), null, "invalid-intent"));
+        when(codeStore.retrieveCode("invalid_code", IdentityZoneHolder.get().getId())).thenReturn(new ExpiringCode("invalid_code", new Timestamp(System.currentTimeMillis()), null, "invalid-intent"));
         emailChangeEmailService.completeVerification("invalid_code");
     }
 
@@ -231,10 +234,10 @@ public class EmailChangeEmailServiceTest {
         codeData.put("client_id", "invalid-client");
         codeData.put("email", "new@example.com");
 
-        when(codeStore.retrieveCode("the_secret_code")).thenReturn(new ExpiringCode("the_secret_code", new Timestamp(System.currentTimeMillis()), JsonUtils.writeValueAsString(codeData), null));
+        when(codeStore.retrieveCode("the_secret_code", IdentityZoneHolder.get().getId())).thenReturn(new ExpiringCode("the_secret_code", new Timestamp(System.currentTimeMillis()), JsonUtils.writeValueAsString(codeData), null));
         ScimUser user = new ScimUser("user-001", "user@example.com", "", "");
         user.setPrimaryEmail("user@example.com");
-        when(scimUserProvisioning.retrieve("user-001")).thenReturn(user);
+        when(scimUserProvisioning.retrieve("user-001", IdentityZoneHolder.get().getId())).thenReturn(user);
 
         doThrow(new NoSuchClientException("no such client")).when(clientDetailsService).loadClientByClientId("invalid-client");
         Map<String, String> response = null;
@@ -272,10 +275,10 @@ public class EmailChangeEmailServiceTest {
         BaseClientDetails clientDetails = new BaseClientDetails("client-id", null, null, "authorization_grant", null, "http://app.com/*");
         clientDetails.addAdditionalInformation(CHANGE_EMAIL_REDIRECT_URL, "http://fallback.url/redirect");
 
-        when(codeStore.retrieveCode("the_secret_code")).thenReturn(new ExpiringCode("the_secret_code", new Timestamp(System.currentTimeMillis()), JsonUtils.writeValueAsString(codeData), null));
+        when(codeStore.retrieveCode("the_secret_code", IdentityZoneHolder.get().getId())).thenReturn(new ExpiringCode("the_secret_code", new Timestamp(System.currentTimeMillis()), JsonUtils.writeValueAsString(codeData), null));
         ScimUser user = new ScimUser("user-001", username, "", "");
         user.setPrimaryEmail("user@example.com");
-        when(scimUserProvisioning.retrieve("user-001")).thenReturn(user);
+        when(scimUserProvisioning.retrieve("user-001", IdentityZoneHolder.get().getId())).thenReturn(user);
 
         when(clientDetailsService.loadClientByClientId(clientId)).thenReturn(clientDetails);
 
@@ -284,7 +287,7 @@ public class EmailChangeEmailServiceTest {
         ScimUser updatedUser = new ScimUser("user-001", "new@example.com", "", "");
         user.setPrimaryEmail("new@example.com");
 
-        verify(scimUserProvisioning).update("user-001", updatedUser);
+        verify(scimUserProvisioning).update("user-001", updatedUser, IdentityZoneHolder.get().getId());
         return response;
     }
 
@@ -297,14 +300,14 @@ public class EmailChangeEmailServiceTest {
         codeData.put("redirect_uri", "http://app.com");
         codeData.put("email", "new@example.com");
 
-        when(scimUserProvisioning.retrieve("user-001")).thenReturn(user);
-        when(scimUserProvisioning.query(anyString())).thenReturn(Collections.singletonList(new ScimUser()));
+        when(scimUserProvisioning.retrieve("user-001", IdentityZoneHolder.get().getId())).thenReturn(user);
+        when(scimUserProvisioning.query(anyString(), eq(IdentityZoneHolder.get().getId()))).thenReturn(Collections.singletonList(new ScimUser()));
         String data = JsonUtils.writeValueAsString(codeData);
-        when(codeStore.generateCode(eq(data), any(Timestamp.class), eq(EMAIL.name()))).thenReturn(new ExpiringCode("the_secret_code", new Timestamp(System.currentTimeMillis()), data, EMAIL.name()));
+        when(codeStore.generateCode(eq(data), any(Timestamp.class), eq(EMAIL.name()), anyString())).thenReturn(new ExpiringCode("the_secret_code", new Timestamp(System.currentTimeMillis()), data, EMAIL.name()));
 
         emailChangeEmailService.beginEmailChange("user-001", "user@example.com", "new@example.com", "app", "http://app.com");
 
-        verify(codeStore).generateCode(eq(JsonUtils.writeValueAsString(codeData)), any(Timestamp.class), eq(EMAIL.name()));
+        verify(codeStore).generateCode(eq(JsonUtils.writeValueAsString(codeData)), any(Timestamp.class), eq(EMAIL.name()), eq(IdentityZoneHolder.get().getId()));
     }
 
 }

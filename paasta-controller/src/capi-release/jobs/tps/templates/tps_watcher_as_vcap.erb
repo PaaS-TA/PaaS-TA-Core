@@ -3,35 +3,6 @@
 LOG_DIR=/var/vcap/sys/log/tps
 CONF_DIR=/var/vcap/jobs/tps/config
 
-<% require 'shellwords' %>
-
-<% if p("capi.tps.bbs.require_ssl") %>
-  bbs_sec_flags=" \
-   -bbsClientCert=${CONF_DIR}/certs/bbs/client.crt \
-   -bbsClientKey=${CONF_DIR}/certs/bbs/client.key \
-   -bbsCACert=${CONF_DIR}/certs/bbs/ca.crt"
-
-  bbs_api_url="<%= "https://" + p("capi.tps.bbs.api_location") %>"
-<% else %>
-  bbs_sec_flags=""
-  bbs_api_url="<%= "http://" + p("capi.tps.bbs.api_location") %>"
-<% end %>
-
-exec /var/vcap/packages/tps/bin/tps-watcher ${bbs_sec_flags} \
-  -bbsAddress=${bbs_api_url} \
-  <% if_p("capi.tps.bbs.client_session_cache_size") do |value| %> \
-    -bbsClientSessionCacheSize=<%= value %> \
-  <% end %> \
-  <% if_p("capi.tps.bbs.max_idle_conns_per_host") do |value| %> \
-    -bbsMaxIdleConnsPerHost=<%= value %> \
-  <% end %> \
-  -dropsondePort=<%= p("capi.tps.dropsonde_port") %> \
-  -consulCluster=http://127.0.0.1:<%= p("capi.tps.consul_agent_port") %> \
-  -ccBaseURL=http://<%= p("capi.tps.cc.internal_service_hostname") %>:<%= p("capi.tps.cc.external_port") %> \
-  -ccUsername=<%= Shellwords.shellescape(p("capi.tps.cc.basic_auth_username")) %> \
-  -ccPassword=<%= Shellwords.shellescape(p("capi.tps.cc.basic_auth_password")) %> \
-  -skipCertVerify=<%= p("diego.ssl.skip_cert_verify") %> \
-  -debugAddr=<%= p("capi.tps.watcher.debug_addr") %> \
-  -logLevel=<%= p("capi.tps.log_level") %> \
+exec /var/vcap/packages/tps/bin/tps-watcher -configPath "${CONF_DIR}/tps_watcher_config.json" \
   2> >(tee -a $LOG_DIR/tps_watcher.stderr.log | logger -p user.error -t vcap.tps-watcher) \
   1> >(tee -a $LOG_DIR/tps_watcher.stdout.log | logger -p user.info -t vcap.tps-watcher)

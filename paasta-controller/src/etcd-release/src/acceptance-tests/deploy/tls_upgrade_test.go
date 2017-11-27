@@ -1,15 +1,17 @@
 package deploy_test
 
 import (
-	etcdclient "acceptance-tests/testing/etcd"
-	"acceptance-tests/testing/helpers"
+	etcdclient "github.com/cloudfoundry-incubator/etcd-release/src/acceptance-tests/testing/etcd"
+
 	"errors"
 	"fmt"
 	"strings"
 	"time"
 
+	"github.com/cloudfoundry-incubator/etcd-release/src/acceptance-tests/testing/helpers"
+
 	"github.com/pivotal-cf-experimental/bosh-test/bosh"
-	"github.com/pivotal-cf-experimental/destiny/etcd"
+	"github.com/pivotal-cf-experimental/destiny/ops"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -22,14 +24,16 @@ const (
 
 var _ = Describe("TLS Upgrade", func() {
 	var (
-		manifest etcd.Manifest
+		manifest     string
+		manifestName string
+
 		spammers []*helpers.Spammer
 		watcher  *helpers.Watcher
 	)
 
 	AfterEach(func() {
 		if !CurrentGinkgoTestDescription().Failed {
-			err := client.DeleteDeployment(manifest.Name)
+			err := boshClient.DeleteDeployment(manifestName)
 			Expect(err).NotTo(HaveOccurred())
 		}
 	})
@@ -37,32 +41,39 @@ var _ = Describe("TLS Upgrade", func() {
 	It("keeps writing to an etcd cluster without interruption", func() {
 		By("deploy non tls etcd", func() {
 			var err error
-			manifest, err = helpers.NewEtcdWithInstanceCount("tls_upgrade", 3, client, config, false)
+			manifest, err = helpers.NewEtcdManifestWithInstanceCount("tls-upgrade", 3, false, boshClient)
 			Expect(err).NotTo(HaveOccurred())
 
-			manifest, err = helpers.SetTestConsumerInstanceCount(5, manifest)
+			manifestName, err = ops.ManifestName(manifest)
 			Expect(err).NotTo(HaveOccurred())
 
-			err = helpers.ResolveVersionsAndDeploy(manifest, client)
+			manifest, err = ops.ApplyOp(manifest, ops.Op{
+				Type:  "replace",
+				Path:  "/instance_groups/name=testconsumer/instances",
+				Value: 5,
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = boshClient.Deploy([]byte(manifest))
 			Expect(err).NotTo(HaveOccurred())
 
 			Eventually(func() ([]bosh.VM, error) {
-				return helpers.DeploymentVMs(client, manifest.Name)
+				return helpers.DeploymentVMs(boshClient, manifestName)
 			}, "1m", "10s").Should(ConsistOf(helpers.GetVMsFromManifest(manifest)))
 		})
 
-		By("saving keys from the non tls cluster", func() {
-			etcdJobIndex, err := helpers.FindJobIndexByName(manifest, "etcd_z1")
+		By("setup watcher to save keys from the non tls cluster", func() {
+			etcdIPs, err := helpers.GetVMIPs(boshClient, manifestName, "etcd")
 			Expect(err).NotTo(HaveOccurred())
 
-			watcher = helpers.NewEtcdWatcher(manifest.Jobs[etcdJobIndex].Networks[0].StaticIPs)
+			watcher = helpers.NewEtcdWatcher(etcdIPs)
 		})
 
 		By("spamming the cluster", func() {
-			testConsumerJobIndex, err := helpers.FindJobIndexByName(manifest, "testconsumer_z1")
+			testConsumerIPs, err := helpers.GetVMIPs(boshClient, manifestName, "testconsumer")
 			Expect(err).NotTo(HaveOccurred())
 
-			for i, ip := range manifest.Jobs[testConsumerJobIndex].Networks[0].StaticIPs {
+			for i, ip := range testConsumerIPs {
 				etcdClient := etcdclient.NewClient(fmt.Sprintf("http://%s:6769", ip))
 				spammer := helpers.NewSpammer(etcdClient, 1*time.Second, fmt.Sprintf("tls-upgrade-%d", i))
 				spammers = append(spammers, spammer)
@@ -73,26 +84,98 @@ var _ = Describe("TLS Upgrade", func() {
 
 		By("deploy tls etcd, scale down non-tls etcd, deploy proxy, and switch clients to tls etcd", func() {
 			var err error
-			manifest, err = helpers.NewEtcdManifestWithTLSUpgrade(manifest.Name, client, config)
+			manifest, err = helpers.NewEtcdManifestWithInstanceCount("tls-upgrade", 3, true, boshClient)
 			Expect(err).NotTo(HaveOccurred())
 
-			err = helpers.ResolveVersionsAndDeploy(manifest, client)
+			caCert, err := ops.FindOp(manifest, "/instance_groups/name=etcd/properties/etcd/ca_cert")
+			Expect(err).NotTo(HaveOccurred())
+
+			clientCert, err := ops.FindOp(manifest, "/instance_groups/name=etcd/properties/etcd/client_cert")
+			Expect(err).NotTo(HaveOccurred())
+
+			clientKey, err := ops.FindOp(manifest, "/instance_groups/name=etcd/properties/etcd/client_key")
+			Expect(err).NotTo(HaveOccurred())
+
+			testConsumer, err := ops.FindOp(manifest, "/instance_groups/name=testconsumer")
+			Expect(err).NotTo(HaveOccurred())
+
+			manifest, err = ops.ApplyOps(manifest, []ops.Op{
+				{
+					Type:  "replace",
+					Path:  "/instance_groups/name=etcd/name",
+					Value: "etcd_tls",
+				},
+				{
+					Type: "replace",
+					Path: "/instance_groups/-",
+					Value: map[string]interface{}{
+						"name":      "etcd",
+						"instances": 1,
+						"azs":       []string{"z1"},
+						"jobs": []map[string]interface{}{
+							{
+								"name":    "consul_agent",
+								"release": "consul",
+								"consumes": map[string]interface{}{
+									"consul": map[string]string{"from": "consul_server"},
+								},
+							},
+							{
+								"name":    "etcd_proxy",
+								"release": "etcd",
+							},
+						},
+						"vm_type":              "default",
+						"stemcell":             "default",
+						"persistent_disk_type": "1GB",
+						"networks": []map[string]string{
+							{
+								"name": "private",
+							},
+						},
+						"properties": map[string]interface{}{
+							"etcd_proxy": map[string]interface{}{
+								"etcd": map[string]string{
+									"ca_cert":     caCert.(string),
+									"client_cert": clientCert.(string),
+									"client_key":  clientKey.(string),
+								},
+							},
+						},
+					},
+				},
+				{
+					Type: "remove",
+					Path: "/instance_groups/name=testconsumer",
+				},
+				{
+					Type:  "replace",
+					Path:  "/instance_groups/-",
+					Value: testConsumer,
+				},
+				{
+					Type:  "replace",
+					Path:  "/instance_groups/name=testconsumer/instances",
+					Value: 5,
+				},
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = boshClient.Deploy([]byte(manifest))
 			Expect(err).NotTo(HaveOccurred())
 
 			Eventually(func() ([]bosh.VM, error) {
-				return helpers.DeploymentVMs(client, manifest.Name)
+				return helpers.DeploymentVMs(boshClient, manifestName)
 			}, "1m", "10s").Should(ConsistOf(helpers.GetVMsFromManifest(manifest)))
-
 		})
 
 		By("migrating the non tls data to the tls cluster", func() {
 			watcher.Stop <- true
 
-			etcdJobIndex, err := helpers.FindJobIndexByName(manifest, "etcd_z1")
+			etcdIPs, err := helpers.GetVMIPs(boshClient, manifestName, "etcd")
 			Expect(err).NotTo(HaveOccurred())
 
-			ip := manifest.Jobs[etcdJobIndex].Networks[0].StaticIPs[0]
-			etcdClient := helpers.NewEtcdClient([]string{fmt.Sprintf("http://%s:4001", ip)})
+			etcdClient := helpers.NewEtcdClient([]string{fmt.Sprintf("http://%s:4001", etcdIPs[0])})
 
 			for key, value := range watcher.Data() {
 				err := etcdClient.Set(key, value)
@@ -101,12 +184,18 @@ var _ = Describe("TLS Upgrade", func() {
 		})
 
 		By("removing the proxy", func() {
-			manifest = manifest.RemoveJob("etcd_z1")
-			err := helpers.ResolveVersionsAndDeploy(manifest, client)
+			var err error
+			manifest, err = ops.ApplyOp(manifest, ops.Op{
+				Type: "remove",
+				Path: "/instance_groups/name=etcd",
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = boshClient.Deploy([]byte(manifest))
 			Expect(err).NotTo(HaveOccurred())
 
 			Eventually(func() ([]bosh.VM, error) {
-				return helpers.DeploymentVMs(client, manifest.Name)
+				return helpers.DeploymentVMs(boshClient, manifestName)
 			}, "1m", "10s").Should(ConsistOf(helpers.GetVMsFromManifest(manifest)))
 		})
 

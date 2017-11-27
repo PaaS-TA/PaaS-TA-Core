@@ -154,6 +154,8 @@ func (h *EvacuationHandler) EvacuateCrashedActualLRP(logger lager.Logger, w http
 
 func (h *EvacuationHandler) EvacuateRunningActualLRP(logger lager.Logger, w http.ResponseWriter, req *http.Request) {
 	logger = logger.Session("evacuate-running-actual-lrp")
+	logger.Info("starting")
+	defer logger.Info("completed")
 
 	response := &models.EvacuationResponse{}
 	response.KeepContainer = true
@@ -229,10 +231,16 @@ func (h *EvacuationHandler) EvacuateRunningActualLRP(logger lager.Logger, w http
 		return
 	}
 
-	if (instance.State == models.ActualLRPStateUnclaimed && instance.PlacementError != "") ||
-		(instance.State == models.ActualLRPStateRunning && !instance.ActualLRPInstanceKey.Equal(request.ActualLrpInstanceKey)) ||
+	if (instance.State == models.ActualLRPStateRunning && !instance.ActualLRPInstanceKey.Equal(request.ActualLrpInstanceKey)) ||
 		instance.State == models.ActualLRPStateCrashed {
 		response.KeepContainer = false
+
+		// if there is not evacuating instance, it probably got removed when the
+		// new instance transitioned to a Running state
+		if evacuating == nil {
+			return
+		}
+
 		err = h.db.RemoveEvacuatingActualLRP(logger, &evacuating.ActualLRPKey, &evacuating.ActualLRPInstanceKey)
 		if err == nil {
 			go h.actualHub.Emit(models.NewActualLRPRemovedEvent(&models.ActualLRPGroup{Evacuating: evacuating}))
@@ -333,7 +341,7 @@ func (h *EvacuationHandler) unclaimAndRequestAuction(logger lager.Logger, lrpKey
 
 	schedInfo := desiredLRP.DesiredLRPSchedulingInfo()
 	startRequest := auctioneer.NewLRPStartRequestFromSchedulingInfo(&schedInfo, int(lrpKey.Index))
-	err = h.auctioneerClient.RequestLRPAuctions([]*auctioneer.LRPStartRequest{&startRequest})
+	err = h.auctioneerClient.RequestLRPAuctions(logger, []*auctioneer.LRPStartRequest{&startRequest})
 	if err != nil {
 		logger.Error("failed-requesting-auction", err)
 	}

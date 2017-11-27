@@ -161,8 +161,8 @@ func (s *Session) AcquireLock(key string, value []byte) error {
 		Key:              key,
 		Value:            value,
 		Session:          s.id,
-		MonitorRetries:   7,
-		MonitorRetryTime: 2 * time.Second,
+		MonitorRetries:   int(s.ttl / MonitorRetryTime),
+		MonitorRetryTime: MonitorRetryTime,
 	}
 
 	lock, err := s.client.LockOpts(&lockOptions)
@@ -210,8 +210,8 @@ func (s *Session) SetPresence(key string, value []byte) (<-chan string, error) {
 		Key:              key,
 		Value:            value,
 		Session:          s.id,
-		MonitorRetries:   7,
-		MonitorRetryTime: 2 * time.Second,
+		MonitorRetries:   int(s.ttl / MonitorRetryTime),
+		MonitorRetryTime: MonitorRetryTime,
 	}
 
 	lock, err := s.client.LockOpts(&lockOptions)

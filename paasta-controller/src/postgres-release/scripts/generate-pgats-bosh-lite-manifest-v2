@@ -1,0 +1,38 @@
+#!/bin/bash
+set -e
+
+
+usage() {
+  >&2 cat <<EOF
+SYNOPSIS:
+    Generate a bosh-lite v2 manifest for a postgres-release acceptance tests deployment.
+
+USAGE:
+    $0 [ -b <bosh-cli-v2-alias> ]
+
+OPTIONAL ARGUMENTS:
+    -b <bosh-cli-v2-alias>  Specify the bosh cli v2 if different from 'bosh'.
+
+EOF
+  exit 1
+}
+
+boshcli=bosh
+
+while getopts "b:" opt; do
+  case $opt in
+    b)
+      boshcli=${OPTARG}
+      ;;
+    *)
+      echo "Unknown arguments"
+      usage
+      ;;
+  esac
+done
+
+cd $(dirname $0)/..
+
+./scripts/generate-pgats-manifest-v2 \
+  -b $boshcli \
+  -v "./templates/v2/bosh-lite/pgats-vars.yml"

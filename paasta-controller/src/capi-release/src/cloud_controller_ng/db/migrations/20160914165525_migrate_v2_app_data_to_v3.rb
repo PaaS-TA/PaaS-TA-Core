@@ -1,12 +1,10 @@
 Sequel.migration do
-  transaction
-
   up do
     collate_opts = {}
-    dbtype = if self.class.name.match(/mysql/i)
+    dbtype = if self.class.name =~ /mysql/i
                collate_opts[:collate] = :utf8_bin
                'mysql'
-             elsif self.class.name.match(/postgres/i)
+             elsif self.class.name =~ /postgres/i
                'postgres'
              else
                raise 'unknown database'
@@ -15,23 +13,25 @@ Sequel.migration do
     ####
     ##  App usage events - Insert STOP events for v3 created processes that will be removed
     ####
-    generate_stop_events_query = <<-SQL
-      INSERT INTO app_usage_events
-        (guid, created_at, instance_count, memory_in_mb_per_instance, state, app_guid, app_name, space_guid, space_name, org_guid, buildpack_guid, buildpack_name, package_state, parent_app_name, parent_app_guid, process_type, task_guid, task_name, package_guid, previous_state, previous_package_state, previous_memory_in_mb_per_instance, previous_instance_count)
-      SELECT %s, now(), p.instances, p.memory, 'STOPPED', p.guid, p.name, s.guid, s.name, o.guid, d.buildpack_receipt_buildpack_guid, d.buildpack_receipt_buildpack, p.package_state, a.name, a.guid, p.type, NULL, NULL, pkg.guid, 'STARTED', p.package_state, p.memory, p.instances
-        FROM apps as p
-          INNER JOIN apps_v3 as a ON (a.guid=p.app_guid)
-          INNER JOIN spaces as s ON (s.guid=a.space_guid)
-          INNER JOIN organizations as o ON (o.id=s.organization_id)
-          INNER JOIN packages as pkg ON (a.guid=pkg.app_guid)
-          INNER JOIN v3_droplets as d ON (a.guid=d.app_guid)
-          INNER JOIN buildpack_lifecycle_data as l ON (d.guid=l.droplet_guid)
-        WHERE p.state='STARTED'
-    SQL
-    if dbtype == 'mysql'
-      run generate_stop_events_query % 'UUID()'
-    elsif dbtype =='postgres'
-      run generate_stop_events_query % 'get_uuid()'
+    transaction do
+      generate_stop_events_query = <<-SQL
+        INSERT INTO app_usage_events
+          (guid, created_at, instance_count, memory_in_mb_per_instance, state, app_guid, app_name, space_guid, space_name, org_guid, buildpack_guid, buildpack_name, package_state, parent_app_name, parent_app_guid, process_type, task_guid, task_name, package_guid, previous_state, previous_package_state, previous_memory_in_mb_per_instance, previous_instance_count)
+        SELECT %s, now(), p.instances, p.memory, 'STOPPED', p.guid, p.name, s.guid, s.name, o.guid, d.buildpack_receipt_buildpack_guid, d.buildpack_receipt_buildpack, p.package_state, a.name, a.guid, p.type, NULL, NULL, pkg.guid, 'STARTED', p.package_state, p.memory, p.instances
+          FROM apps as p
+            INNER JOIN apps_v3 as a ON (a.guid=p.app_guid)
+            INNER JOIN spaces as s ON (s.guid=a.space_guid)
+            INNER JOIN organizations as o ON (o.id=s.organization_id)
+            INNER JOIN packages as pkg ON (a.guid=pkg.app_guid)
+            INNER JOIN v3_droplets as d ON (a.guid=d.app_guid)
+            INNER JOIN buildpack_lifecycle_data as l ON (d.guid=l.droplet_guid)
+          WHERE p.state='STARTED'
+      SQL
+      if dbtype == 'mysql'
+        run generate_stop_events_query % 'UUID()'
+      elsif dbtype == 'postgres'
+        run generate_stop_events_query % 'get_uuid()'
+      end
     end
 
     ###
@@ -54,9 +54,11 @@ Sequel.migration do
     drop_table(:v3_droplets)
     drop_table(:route_mappings)
 
-    run 'DELETE FROM droplets WHERE app_id IN (SELECT id FROM apps WHERE app_guid IS NOT NULL);'
-    run 'DELETE FROM apps_routes WHERE app_id IN (SELECT id FROM apps WHERE app_guid IS NOT NULL);'
-    run 'DELETE FROM apps WHERE app_guid IS NOT NULL OR deleted_at IS NOT NULL;'
+    transaction do
+      run 'DELETE FROM droplets WHERE app_id IN (SELECT id FROM apps WHERE app_guid IS NOT NULL);'
+      run 'DELETE FROM apps_routes WHERE app_id IN (SELECT id FROM apps WHERE app_guid IS NOT NULL);'
+      run 'DELETE FROM apps WHERE app_guid IS NOT NULL OR deleted_at IS NOT NULL;'
+    end
     self[:packages].truncate
     self[:buildpack_lifecycle_data].truncate
     self[:apps_v3].truncate
@@ -158,7 +160,7 @@ Sequel.migration do
       String :droplet_guid, null: false
       foreign_key [:droplet_guid], :droplets, key: :guid, name: :fk_tasks_droplet_guid
 
-      if self.class.name.match(/mysql/i)
+      if self.class.name =~ /mysql/i
         table_name = tables.find { |t| t =~ /tasks/ }
         run "ALTER TABLE `#{table_name}` CONVERT TO CHARACTER SET utf8;"
       end
@@ -169,7 +171,6 @@ Sequel.migration do
     ####
 
     transaction do
-
       ####
       ## Fill in v3 apps table data
       ###
@@ -277,7 +278,7 @@ Sequel.migration do
           DELETE a FROM droplets a, droplets b
           WHERE a.app_id=b.app_id AND a.id < b.id
         SQL
-      elsif dbtype =='postgres'
+      elsif dbtype == 'postgres'
         run postgres_prune_droplets_query
 
         run <<-SQL
@@ -321,7 +322,7 @@ Sequel.migration do
 
       if dbtype == 'mysql'
         run mysql_convert_to_v3_droplets_query
-      elsif dbtype =='postgres'
+      elsif dbtype == 'postgres'
         run postgres_convert_to_v3_droplets_query
       end
 
@@ -353,7 +354,7 @@ Sequel.migration do
 
       if dbtype == 'mysql'
         run mysql_set_current_droplet_query
-      elsif dbtype =='postgres'
+      elsif dbtype == 'postgres'
         run postgres_set_current_droplet_query
       end
 
@@ -361,9 +362,9 @@ Sequel.migration do
       ## Fill in guids for buildpack_lifecycle_data inserts done for apps and droplets
       ####
 
-      if self.class.name.match(/mysql/i)
+      if self.class.name =~ /mysql/i
         run 'update buildpack_lifecycle_data set guid=UUID();'
-      elsif self.class.name.match(/postgres/i)
+      elsif self.class.name =~ /postgres/i
         run 'update buildpack_lifecycle_data set guid=get_uuid();'
       end
 
@@ -382,15 +383,33 @@ Sequel.migration do
         UPDATE apps_routes SET app_port=8080 WHERE app_port IS NULL AND EXISTS (SELECT 1 FROM processes WHERE processes.docker_image IS NULL AND processes.id = apps_routes.app_id)
       SQL
 
-      if self.class.name.match(/mysql/i)
+      if self.class.name =~ /mysql/i
         run 'update apps_routes set guid=UUID() where guid is NULL;'
-      elsif self.class.name.match(/postgres/i)
+      elsif self.class.name =~ /postgres/i
         run 'update apps_routes set guid=get_uuid() where guid is NULL;'
       end
 
       ####
       ## Migrate service bindings
       ####
+
+      # Remove duplicate apps_routes to prepare for adding a uniqueness constraint
+      dup_groups = self[:apps_routes].
+                   select(:app_guid, :route_guid, :app_port, :process_type).
+                   group_by(:app_guid, :route_guid, :app_port, :process_type).
+                   having { count.function.* > 1 }
+
+      dup_groups.each do |group|
+        sorted_ids = self[:apps_routes].
+                     select(:id).
+                     where(app_guid: group[:app_guid], route_guid: group[:route_guid], app_port: group[:app_port], process_type: group[:process_type]).
+                     map(&:values).
+                     flatten.
+                     sort
+        sorted_ids.shift
+        ids_to_remove = sorted_ids
+        self[:apps_routes].where(id: ids_to_remove).delete
+      end
 
       run <<-SQL
         UPDATE service_bindings SET

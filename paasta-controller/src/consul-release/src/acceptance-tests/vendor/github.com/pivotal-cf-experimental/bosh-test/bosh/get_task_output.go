@@ -24,6 +24,14 @@ type TaskError struct {
 	Message string
 }
 
+func (te TaskError) Error() string {
+	return fmt.Sprintf("task error: %d has occurred: %s", te.Code, te.Message)
+}
+
+func (te TaskError) ErrorCode() int {
+	return te.Code
+}
+
 func (c Client) GetTaskOutput(taskId int) ([]TaskOutput, error) {
 	request, err := http.NewRequest("GET", fmt.Sprintf("%s/tasks/%d/output?type=event", c.config.URL, taskId), nil)
 	if err != nil {

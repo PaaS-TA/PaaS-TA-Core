@@ -24,6 +24,7 @@ type PropertiesConsul struct {
 	ServerCert  string                `yaml:"server_cert"`
 	ServerKey   string                `yaml:"server_key"`
 	EncryptKeys []string              `yaml:"encrypt_keys"`
+	RequireSSL  bool                  `yaml:"require_ssl,omitempty"`
 }
 
 type PropertiesConsulAgent struct {
@@ -33,6 +34,7 @@ type PropertiesConsulAgent struct {
 	Mode       string                         `yaml:"mode,omitempty"`
 	Datacenter string                         `yaml:"datacenter,omitempty"`
 	DNSConfig  PropertiesConsulAgentDNSConfig `yaml:"dns_config,omitempty"`
+	RequireSSL bool                           `yaml:"require_ssl,omitempty"`
 }
 
 type PropertiesConsulAgentServers struct {
@@ -41,4 +43,24 @@ type PropertiesConsulAgentServers struct {
 
 type PropertiesConsulAgentDNSConfig struct {
 	RecursorTimeout string `yaml:"recursor_timeout"`
+}
+
+func newConsulProperties(staticIPs []string) *PropertiesConsul {
+	return &PropertiesConsul{
+		Agent: PropertiesConsulAgent{
+			Domain:     "cf.internal",
+			Datacenter: "dc1",
+			Servers: PropertiesConsulAgentServers{
+				Lan: staticIPs,
+			},
+		},
+		AgentCert: DC1AgentCert,
+		AgentKey:  DC1AgentKey,
+		CACert:    CACert,
+		EncryptKeys: []string{
+			EncryptKey,
+		},
+		ServerCert: DC1ServerCert,
+		ServerKey:  DC1ServerKey,
+	}
 }

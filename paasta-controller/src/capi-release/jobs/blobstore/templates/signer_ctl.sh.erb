@@ -19,8 +19,9 @@ case $1 in
 
     echo $$ > $PIDFILE
 
+    <% require "shellwords" %>
     exec chpst -u vcap:vcap /var/vcap/packages/blobstore_url_signer/blobstore_url_signer \
-      -secret <%=p("blobstore.secure_link.secret")%> \
+      -secret <%= Shellwords.shellescape(p("blobstore.secure_link.secret")) %> \
       -network unix \
       -laddr $SOCKETFILE \
       >>$LOG_DIR/blobstore_url_signer.stdout.log \

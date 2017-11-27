@@ -6,8 +6,7 @@ import (
 	"github.com/cloudfoundry-incubator/consul-release/src/acceptance-tests/testing/helpers"
 	testconsumerclient "github.com/cloudfoundry-incubator/consul-release/src/acceptance-tests/testing/testconsumer/client"
 	"github.com/pivotal-cf-experimental/bosh-test/bosh"
-	"github.com/pivotal-cf-experimental/destiny/consul"
-	"github.com/pivotal-cf-experimental/destiny/core"
+	"github.com/pivotal-cf-experimental/destiny/ops"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -15,98 +14,134 @@ import (
 
 var _ = Describe("Multiple hosts multiple services", func() {
 	var (
-		manifest consul.ManifestV2
-		tcClient testconsumerclient.Client
+		manifest     string
+		manifestName string
+
+		testConsumerIP string
+		tcClient       testconsumerclient.Client
 	)
 
 	BeforeEach(func() {
 		var err error
+		manifest, err = helpers.DeployConsulWithInstanceCount("multiple-host-multiple-services", 3, config.WindowsClients, boshClient)
+		Expect(err).NotTo(HaveOccurred())
 
-		manifest, _, err = helpers.DeployConsulWithInstanceCount("multiple-host-multiple-services", 3, boshClient, config)
+		manifestName, err = ops.ManifestName(manifest)
 		Expect(err).NotTo(HaveOccurred())
 
 		Eventually(func() ([]bosh.VM, error) {
-			return helpers.DeploymentVMs(boshClient, manifest.Name)
-		}, "1m", "10s").Should(ConsistOf(helpers.GetVMsFromManifest(manifest)))
+			return helpers.DeploymentVMs(boshClient, manifestName)
+		}, "5m", "10s").Should(ConsistOf(helpers.GetVMsFromManifest(manifest)))
 
-		tcClient = testconsumerclient.New(fmt.Sprintf("http://%s:6769", manifest.InstanceGroups[1].Networks[0].StaticIPs[0]))
+		testConsumerIPs, err := helpers.GetVMIPs(boshClient, manifestName, "testconsumer")
+		Expect(err).NotTo(HaveOccurred())
+
+		testConsumerIP = testConsumerIPs[0]
+
+		tcClient = testconsumerclient.New(fmt.Sprintf("http://%s:6769", testConsumerIP))
 	})
 
 	AfterEach(func() {
 		if !CurrentGinkgoTestDescription().Failed {
-			err := boshClient.DeleteDeployment(manifest.Name)
+			err := boshClient.DeleteDeployment(manifestName)
 			Expect(err).NotTo(HaveOccurred())
 		}
 	})
 
 	It("discovers multiples services on multiple hosts", func() {
 		By("registering services", func() {
-			healthCheck := fmt.Sprintf("curl -f http://%s:6769/health_check", manifest.InstanceGroups[1].Networks[0].StaticIPs[0])
-			manifest.InstanceGroups[0].Properties.Consul.Agent.Services = core.JobPropertiesConsulAgentServices{
-				"some-service": core.JobPropertiesConsulAgentService{
-					Check: &core.JobPropertiesConsulAgentServiceCheck{
-						Name:     "some-service-check",
-						Script:   healthCheck,
-						Interval: "30s",
+			healthCheck := fmt.Sprintf("curl -f http://%s:6769/health_check", testConsumerIP)
+
+			var err error
+			manifest, err = ops.ApplyOp(manifest, ops.Op{
+				Type: "replace",
+				Path: "/instance_groups/name=consul/properties/consul/agent/services",
+				Value: map[string]service{
+					"some-service": service{
+						Name: "some-service-name",
+						Check: serviceCheck{
+							Name:     "some-service-check",
+							Script:   healthCheck,
+							Interval: "10s",
+						},
+					},
+					"some-other-service": service{
+						Name: "some-other-service-name",
+						Check: serviceCheck{
+							Name:     "some-other-service-check",
+							Script:   healthCheck,
+							Interval: "10s",
+						},
 					},
 				},
-				"some-other-service": core.JobPropertiesConsulAgentService{
-					Check: &core.JobPropertiesConsulAgentServiceCheck{
-						Name:     "some-other-service-check",
-						Script:   healthCheck,
-						Interval: "30s",
-					},
-				},
-			}
+			})
+			Expect(err).NotTo(HaveOccurred())
 		})
 
 		By("deploying", func() {
-			yaml, err := manifest.ToYAML()
-			Expect(err).NotTo(HaveOccurred())
-
-			yaml, err = boshClient.ResolveManifestVersions(yaml)
-			Expect(err).NotTo(HaveOccurred())
-
-			_, err = boshClient.Deploy(yaml)
+			_, err := boshClient.Deploy([]byte(manifest))
 			Expect(err).NotTo(HaveOccurred())
 
 			Eventually(func() ([]bosh.VM, error) {
-				return helpers.DeploymentVMs(boshClient, manifest.Name)
-			}, "1m", "10s").Should(ConsistOf(helpers.GetVMsFromManifest(manifest)))
+				return helpers.DeploymentVMs(boshClient, manifestName)
+			}, "5m", "10s").Should(ConsistOf(helpers.GetVMsFromManifest(manifest)))
 		})
 
 		By("resolving service addresses", func() {
-			Eventually(func() ([]string, error) {
-				return tcClient.DNS("some-service.service.cf.internal")
-			}, "2m", "10s").Should(ConsistOf(manifest.InstanceGroups[0].Networks[0].StaticIPs))
+			consulIPs, err := helpers.GetVMIPs(boshClient, manifestName, "consul")
+			Expect(err).NotTo(HaveOccurred())
+
+			deploymentVMs, err := boshClient.DeploymentVMs(manifestName)
+			Expect(err).NotTo(HaveOccurred())
+
+			var consulVM0 bosh.VM
+			var consulVM1 bosh.VM
+			var consulVM2 bosh.VM
+
+			for _, vm := range deploymentVMs {
+				if vm.JobName == "consul" {
+					switch vm.Index {
+					case 0:
+						consulVM0 = vm
+					case 1:
+						consulVM1 = vm
+					case 2:
+						consulVM2 = vm
+					}
+				}
+			}
 
 			Eventually(func() ([]string, error) {
-				return tcClient.DNS("consul-0.some-service.service.cf.internal")
-			}, "2m", "10s").Should(ConsistOf(manifest.InstanceGroups[0].Networks[0].StaticIPs[0]))
+				return tcClient.DNS("some-service-name.service.cf.internal")
+			}, "5m", "10s").Should(ConsistOf(consulIPs))
 
 			Eventually(func() ([]string, error) {
-				return tcClient.DNS("consul-1.some-service.service.cf.internal")
-			}, "2m", "10s").Should(ConsistOf(manifest.InstanceGroups[0].Networks[0].StaticIPs[1]))
+				return tcClient.DNS("consul-0.some-service-name.service.cf.internal")
+			}, "5m", "10s").Should(ConsistOf(consulVM0.IPs))
 
 			Eventually(func() ([]string, error) {
-				return tcClient.DNS("consul-2.some-service.service.cf.internal")
-			}, "2m", "10s").Should(ConsistOf(manifest.InstanceGroups[0].Networks[0].StaticIPs[2]))
+				return tcClient.DNS("consul-1.some-service-name.service.cf.internal")
+			}, "5m", "10s").Should(ConsistOf(consulVM1.IPs))
 
 			Eventually(func() ([]string, error) {
-				return tcClient.DNS("some-other-service.service.cf.internal")
-			}, "2m", "10s").Should(ConsistOf(manifest.InstanceGroups[0].Networks[0].StaticIPs))
+				return tcClient.DNS("consul-2.some-service-name.service.cf.internal")
+			}, "5m", "10s").Should(ConsistOf(consulVM2.IPs))
 
 			Eventually(func() ([]string, error) {
-				return tcClient.DNS("consul-0.some-other-service.service.cf.internal")
-			}, "2m", "10s").Should(ConsistOf(manifest.InstanceGroups[0].Networks[0].StaticIPs[0]))
+				return tcClient.DNS("some-other-service-name.service.cf.internal")
+			}, "5m", "10s").Should(ConsistOf(consulIPs))
 
 			Eventually(func() ([]string, error) {
-				return tcClient.DNS("consul-1.some-other-service.service.cf.internal")
-			}, "2m", "10s").Should(ConsistOf(manifest.InstanceGroups[0].Networks[0].StaticIPs[1]))
+				return tcClient.DNS("consul-0.some-other-service-name.service.cf.internal")
+			}, "5m", "10s").Should(ConsistOf(consulVM0.IPs))
 
 			Eventually(func() ([]string, error) {
-				return tcClient.DNS("consul-2.some-other-service.service.cf.internal")
-			}, "2m", "10s").Should(ConsistOf(manifest.InstanceGroups[0].Networks[0].StaticIPs[2]))
+				return tcClient.DNS("consul-1.some-other-service-name.service.cf.internal")
+			}, "5m", "10s").Should(ConsistOf(consulVM1.IPs))
+
+			Eventually(func() ([]string, error) {
+				return tcClient.DNS("consul-2.some-other-service-name.service.cf.internal")
+			}, "5m", "10s").Should(ConsistOf(consulVM2.IPs))
 		})
 	})
 })

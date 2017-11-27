@@ -36,6 +36,11 @@ var _ = Describe("Config", func() {
 					Expect(cfg.ConsulCluster.Servers).To(Equal("http://localhost:5678"))
 					Expect(cfg.ConsulCluster.LockTTL).To(Equal(10 * time.Second))
 					Expect(cfg.ConsulCluster.RetryInterval).To(Equal(5 * time.Second))
+					Expect(cfg.SkipConsulLock).To(BeTrue())
+					Expect(cfg.Locket.LocketAddress).To(Equal("http://localhost:5678"))
+					Expect(cfg.Locket.LocketCACertFile).To(Equal("some-locket-ca-cert"))
+					Expect(cfg.Locket.LocketClientCertFile).To(Equal("some-locket-client-cert"))
+					Expect(cfg.Locket.LocketClientKeyFile).To(Equal("some-locket-client-key"))
 				})
 
 				Context("when there is no token endpoint specified", func() {
@@ -120,7 +125,7 @@ consul_cluster:
 				config := testConfig()
 				err := cfg.Initialize([]byte(config), true)
 				Expect(err).NotTo(HaveOccurred())
-				Expect(cfg.ConsulCluster.LockTTL).To(Equal(locket.LockTTL))
+				Expect(cfg.ConsulCluster.LockTTL).To(Equal(locket.DefaultSessionTTL))
 			})
 			It("populates the default value for RetryInterval from locket library", func() {
 				config := testConfig()
@@ -129,6 +134,47 @@ consul_cluster:
 				Expect(cfg.ConsulCluster.RetryInterval).To(Equal(locket.RetryInterval))
 			})
 		})
+
+		Context("when multiple router groups are seeded", func() {
+			var expectedGroups models.RouterGroups
+
+			testConfig := func(name string) string {
+				return `log_guid: "my_logs"
+metrics_reporting_interval: "500ms"
+statsd_endpoint: "localhost:8125"
+statsd_client_flush_interval: "10ms"
+system_domain: "example.com"
+router_groups:
+- name: router-group-1
+  reservable_ports: 1200
+  type: tcp
+- name: ` + name + `
+  reservable_ports: 10000-42000
+  type: tcp`
+			}
+
+			Context("with different names", func() {
+				It("should not error", func() {
+					config := testConfig("router-group-2")
+					err := cfg.Initialize([]byte(config), true)
+					Expect(err).NotTo(HaveOccurred())
+					expectedGroups = models.RouterGroups{
+						{
+							Name:            "router-group-1",
+							ReservablePorts: "1200",
+							Type:            "tcp",
+						},
+						{
+							Name:            "router-group-2",
+							ReservablePorts: "10000-42000",
+							Type:            "tcp",
+						},
+					}
+					Expect(cfg.RouterGroups).To(Equal(expectedGroups))
+				})
+			})
+		})
+
 		Context("when router groups are seeded in the configuration file", func() {
 			var expectedGroups models.RouterGroups
 

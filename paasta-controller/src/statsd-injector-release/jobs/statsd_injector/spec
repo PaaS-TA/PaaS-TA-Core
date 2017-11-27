@@ -1,0 +1,28 @@
+---
+name: statsd_injector
+templates:
+  ctl.erb: bin/ctl
+  ca.crt.erb: certs/ca.crt
+  statsd_injector.crt.erb: certs/statsd_injector.crt
+  statsd_injector.key.erb: certs/statsd_injector.key
+
+packages:
+- statsd_injector
+properties:
+  statsd_injector.metron_port:
+    description: "The port on which metron is running"
+    default: 3458
+
+  statsd_injector.statsd_host:
+    description: "The host on which the injector should listen"
+    default: localhost
+  statsd_injector.statsd_port:
+    description: "The port on which the injector should listen for statsd messages"
+    default: 8125
+
+  loggregator.tls.ca_cert:
+    description: "File path to the CA certificate"
+  loggregator.tls.statsd_injector.cert:
+    description: "File path to the client TLS cert"
+  loggregator.tls.statsd_injector.key:
+    description: "File path to the client TLS private key"

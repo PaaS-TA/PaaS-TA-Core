@@ -120,10 +120,8 @@ module VCAP::CloudController
     end
 
     def dashboard_url
-      admin_context = VCAP::CloudController::SecurityContext.admin? || VCAP::CloudController::SecurityContext.admin_read_only?
-      unless admin_context || space.has_developer?(VCAP::CloudController::SecurityContext.current_user)
-        return ''
-      end
+      access_context = VCAP::CloudController::Security::AccessContext.new
+      return '' unless access_context.can?(:read_env, self)
       super
     end
 
@@ -149,7 +147,11 @@ module VCAP::CloudController
         self.last_operation.destroy
       end
 
-      self.service_instance_operation = ServiceInstanceOperation.new(last_operation)
+      # it is important to create the service instance operation with the service instance
+      # instead of doing self.service_instance_operation = x
+      # because mysql will deadlock when requests happen concurrently otherwise.
+      ServiceInstanceOperation.create(last_operation.merge(service_instance_id: self.id))
+      self.service_instance_operation(reload: true)
     end
 
     def update_service_instance(attributes_to_update)
@@ -181,7 +183,7 @@ module VCAP::CloudController
     private
 
     def update_attributes(instance_attrs)
-      set_all(instance_attrs)
+      set(instance_attrs)
       save_changes
     end
 

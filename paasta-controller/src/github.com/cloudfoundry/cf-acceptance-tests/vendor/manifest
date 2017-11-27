@@ -14,7 +14,7 @@
 			"importpath": "code.cloudfoundry.org/cf-routing-test-helpers",
 			"repository": "https://github.com/cloudfoundry-incubator/cf-routing-test-helpers",
 			"vcs": "git",
-			"revision": "2034fd3fca2ebfabf9f75c1d2015c3fd9e9bebea",
+			"revision": "9b3553a85dfb2662ac94f78cab32d801009d8f3c",
 			"branch": "master",
 			"notests": true
 		},
@@ -30,7 +30,7 @@
 			"importpath": "github.com/cloudfoundry-incubator/cf-test-helpers",
 			"repository": "https://github.com/cloudfoundry-incubator/cf-test-helpers",
 			"vcs": "git",
-			"revision": "1ee4b5ae34510f78ce0c0166cc82605f1197a3cb",
+			"revision": "2c7deda19c83f1c2cfde730712b1f36aefc6bf33",
 			"branch": "master",
 			"notests": true
 		},
@@ -174,7 +174,7 @@
 			"importpath": "github.com/onsi/ginkgo",
 			"repository": "https://github.com/onsi/ginkgo",
 			"vcs": "git",
-			"revision": "5437a97bf824dec14e58d68c56ee36e772670c2e",
+			"revision": "e185767ab450dd717718019ebe6115112af5c575",
 			"branch": "master",
 			"notests": true
 		},
@@ -182,7 +182,7 @@
 			"importpath": "github.com/onsi/gomega",
 			"repository": "https://github.com/onsi/gomega",
 			"vcs": "git",
-			"revision": "7ce781ea776b2fd506491011353bded2e40c8467",
+			"revision": "f1f0f388b31eca4e2cbe7a6dd8a3a1dfddda5b1c",
 			"branch": "master",
 			"notests": true
 		},
@@ -220,6 +220,22 @@
 			"revision": "b76c864ef1dca1d8f271f917c290cddcce3d9e0d",
 			"branch": "master",
 			"path": "/ssh",
+			"notests": true
+		},
+		{
+			"importpath": "gopkg.in/check.v1",
+			"repository": "https://gopkg.in/check.v1",
+			"vcs": "git",
+			"revision": "20d25e2804050c1cd24a7eea1e7a6447dd0e74ec",
+			"branch": "v1",
+			"notests": true
+		},
+		{
+			"importpath": "gopkg.in/yaml.v2",
+			"repository": "https://gopkg.in/yaml.v2",
+			"vcs": "git",
+			"revision": "a5b47d31c556af34a302ce5d659e6fea44d90de0",
+			"branch": "v2",
 			"notests": true
 		}
 	]

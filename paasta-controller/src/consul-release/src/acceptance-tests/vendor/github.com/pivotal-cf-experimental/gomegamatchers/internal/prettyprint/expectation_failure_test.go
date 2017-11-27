@@ -85,9 +85,9 @@ var _ = Describe("ExpectationFailure", func() {
 
 		It("formats extra key differences correctly", func() {
 			failure := prettyprint.ExpectationFailure(diff.MapExtraKey{
-				ExtraKey: "red",
+				ExtraKey: 1,
 				AllKeys: []reflect.Value{
-					reflect.ValueOf("red"),
+					reflect.ValueOf(1),
 					reflect.ValueOf("blue"),
 				},
 			})
@@ -95,14 +95,14 @@ var _ = Describe("ExpectationFailure", func() {
 			Expect(failure).To(ContainSubstring("error at :"))
 			Expect(failure).To(ContainSubstring("  extra key found:"))
 			Expect(failure).To(ContainSubstring("    Expected"))
-			Expect(failure).To(ContainSubstring("        [<string> red, <string> blue]"))
+			Expect(failure).To(ContainSubstring("        [<int> 1, <string> blue]"))
 			Expect(failure).To(ContainSubstring("    not to contain key"))
-			Expect(failure).To(ContainSubstring("        <string> red"))
+			Expect(failure).To(ContainSubstring("        <int> 1"))
 		})
 
 		It("formats missing key differences correctly", func() {
 			failure := prettyprint.ExpectationFailure(diff.MapMissingKey{
-				MissingKey: "purple",
+				MissingKey: true,
 				AllKeys: []reflect.Value{
 					reflect.ValueOf("red"),
 					reflect.ValueOf("blue"),
@@ -114,7 +114,7 @@ var _ = Describe("ExpectationFailure", func() {
 			Expect(failure).To(ContainSubstring("    Expected"))
 			Expect(failure).To(ContainSubstring("        [<string> red, <string> blue]"))
 			Expect(failure).To(ContainSubstring("    to contain key"))
-			Expect(failure).To(ContainSubstring("        <string> purple"))
+			Expect(failure).To(ContainSubstring("        <bool> true"))
 		})
 	})
 

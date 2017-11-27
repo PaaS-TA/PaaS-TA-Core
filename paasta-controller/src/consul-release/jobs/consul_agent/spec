@@ -8,6 +8,7 @@ templates:
   pre-start.erb: bin/pre-start
   drain: bin/drain
   confab.json.erb: confab.json
+  consul_link.json.erb: consul_link.json
   ca.crt.erb: config/certs/ca.crt
   server.crt.erb: config/certs/server.crt
   server.key.erb: config/certs/server.key
@@ -18,10 +19,57 @@ packages:
   - consul
   - confab
 
+provides:
+- name: consul_common
+  type: consul_common
+  properties:
+  - consul.agent.servers.lan
+  - consul.agent.log_level
+  - consul.agent.datacenter
+  - consul.agent.protocol_version
+  - consul.agent.dns_config.allow_stale
+  - consul.agent.dns_config.max_stale
+  - consul.agent.dns_config.recursor_timeout
+  - consul.agent.domain
+  - consul.ca_cert
+  - consul.encrypt_keys
+
+- name: consul_server
+  type: consul_server
+  properties:
+  - consul.server_cert
+  - consul.server_key
+
+- name: consul_client
+  type: consul_client
+  properties:
+  - consul.agent_cert
+  - consul.agent_key
+
+consumes:
+- name: consul_common
+  type: consul_common
+  optional: true
+
+- name: consul_server
+  type: consul_server
+  optional: true
+
+- name: consul_client
+  type: consul_client
+  optional: true
+
 properties:
+  consul.agent.node_name:
+    description: "Node name for the agent. (Defaults to the BOSH instance group name)"
+
   consul.agent.mode:
     description: "Mode to run the agent in. (client or server)"
     default: client
+
+  consul.agent.ports.dns:
+      description: "DNS server port"
+      default: 53
 
   consul.agent.servers.lan:
     description: "LAN server addresses to join on start."
@@ -43,6 +91,9 @@ properties:
     description: "Map of consul service definitions."
     default: {}
 
+  consul.agent.telemetry.statsd_address:
+    description: "Telemetry Statsd address"
+
   consul.agent.protocol_version:
     description: "The Consul protocol to use."
     default: 2
@@ -62,6 +113,10 @@ properties:
   consul.agent.domain:
     description: "Domain suffix for DNS"
 
+  consul.agent.rewrite_resolv:
+    description: "When set to true this property will rewrite the resolv.conf file and add 127.0.0.1 as the first entry"
+    default: true
+
   consul.ca_cert:
     description: "PEM-encoded CA certificate"
 
@@ -79,3 +134,7 @@ properties:
 
   consul.encrypt_keys:
     description: "A list of passphrases that will be converted into encryption keys, the first key in the list is the active one"
+
+  consul.client.enabled:
+    description: "Set to false to disable the consul_agent on a VM."
+    default: true

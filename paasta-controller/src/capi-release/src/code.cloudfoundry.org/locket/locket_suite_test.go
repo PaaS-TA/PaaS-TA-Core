@@ -26,7 +26,13 @@ func TestLocket(t *testing.T) {
 
 var _ = BeforeSuite(func() {
 	consulStartingPort = 5001 + config.GinkgoConfig.ParallelNode*consulrunner.PortOffsetLength
-	consulRunner = consulrunner.NewClusterRunner(consulStartingPort, 1, defaultScheme)
+	consulRunner = consulrunner.NewClusterRunner(
+		consulrunner.ClusterRunnerConfig{
+			StartingPort: consulStartingPort,
+			NumNodes:     1,
+			Scheme:       defaultScheme,
+		},
+	)
 
 	consulRunner.Start()
 	consulRunner.WaitUntilReady()

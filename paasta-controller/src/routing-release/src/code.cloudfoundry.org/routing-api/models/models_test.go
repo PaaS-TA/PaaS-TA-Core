@@ -14,7 +14,7 @@ var _ = Describe("Models", func() {
 		var tag ModificationTag
 
 		BeforeEach(func() {
-			tag = ModificationTag{"guid1", 5}
+			tag = ModificationTag{Guid: "guid1", Index: 5}
 		})
 
 		Describe("Increment", func() {
@@ -32,7 +32,7 @@ var _ = Describe("Models", func() {
 
 			Context("when the guid is the different", func() {
 				BeforeEach(func() {
-					tag2 = ModificationTag{"guid5", 0}
+					tag2 = ModificationTag{Guid: "guid5", Index: 0}
 				})
 				It("new tag should succeed", func() {
 					Expect(tag.SucceededBy(&tag2)).To(BeTrue())
@@ -43,7 +43,7 @@ var _ = Describe("Models", func() {
 
 				Context("when the index is the same as the original tag", func() {
 					BeforeEach(func() {
-						tag2 = ModificationTag{"guid1", 5}
+						tag2 = ModificationTag{Guid: "guid1", Index: 5}
 					})
 
 					It("new tag should not succeed", func() {
@@ -55,7 +55,7 @@ var _ = Describe("Models", func() {
 				Context("when the index is less than original tag Index", func() {
 
 					BeforeEach(func() {
-						tag2 = ModificationTag{"guid1", 4}
+						tag2 = ModificationTag{Guid: "guid1", Index: 4}
 					})
 
 					It("new tag should not succeed", func() {
@@ -65,7 +65,7 @@ var _ = Describe("Models", func() {
 
 				Context("when the index is greater than original tag Index", func() {
 					BeforeEach(func() {
-						tag2 = ModificationTag{"guid1", 6}
+						tag2 = ModificationTag{Guid: "guid1", Index: 6}
 					})
 
 					It("new tag should succeed", func() {
@@ -83,6 +83,42 @@ var _ = Describe("Models", func() {
 		var rg RouterGroup
 
 		Describe("Validate", func() {
+			It("does not allow ReservablePorts for http type", func() {
+				rg = RouterGroup{
+					Name:            "router-group-1",
+					Type:            "http",
+					ReservablePorts: "1025-2025",
+				}
+				err := rg.Validate()
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(Equal("Reservable ports are not supported for router groups of type http"))
+				By("not having ReservablePorts")
+				rg = RouterGroup{
+					Name: "router-group-1",
+					Type: "http",
+				}
+				err = rg.Validate()
+				Expect(err).ToNot(HaveOccurred())
+			})
+
+			It("ReservablePorts are optional for non-http, non-tcp type", func() {
+				rg = RouterGroup{
+					Name:            "router-group-1",
+					Type:            "foo",
+					ReservablePorts: "1025-2025",
+				}
+				err := rg.Validate()
+				Expect(err).ToNot(HaveOccurred())
+
+				rg = RouterGroup{
+					Name:            "router-group-1",
+					Type:            "foo",
+					ReservablePorts: "",
+				}
+				err = rg.Validate()
+				Expect(err).ToNot(HaveOccurred())
+			})
+
 			It("succeeds for valid router group", func() {
 				rg = RouterGroup{
 					Name:            "router-group-1",
@@ -112,7 +148,7 @@ var _ = Describe("Models", func() {
 				Expect(err.Error()).To(Equal("Missing name in router group"))
 			})
 
-			It("fails for missing name", func() {
+			It("fails for missing ReservablePorts", func() {
 				rg = RouterGroup{
 					Type: "tcp",
 					Name: "router-group-1",
@@ -128,7 +164,6 @@ var _ = Describe("Models", func() {
 		var ports ReservablePorts
 
 		Describe("Validate", func() {
-
 			It("succeeds for valid reservable ports", func() {
 				ports = "6001,6005,6010-6020,6021-6030"
 				err := ports.Validate()

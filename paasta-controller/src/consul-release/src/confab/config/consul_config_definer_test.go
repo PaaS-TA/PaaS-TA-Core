@@ -38,6 +38,27 @@ var _ = Describe("ConsulConfigDefiner", func() {
 			})
 		})
 
+		Describe("telemetry", func() {
+			It("defaults to a nil value", func() {
+				Expect(consulConfig.Telemetry).To(BeNil())
+			})
+
+			Context("when the `consul.agent.telemetry.statsd_address` property is set", func() {
+				It("uses that value", func() {
+					consulConfig = config.GenerateConfiguration(config.Config{
+						Consul: config.ConfigConsul{
+							Agent: config.ConfigConsulAgent{
+								Telemetry: config.ConfigConsulTelemetry{
+									StatsdAddress: "some-statsd-address",
+								},
+							},
+						},
+					}, configDir, "")
+					Expect(consulConfig.Telemetry.StatsdAddress).To(Equal("some-statsd-address"))
+				})
+			})
+		})
+
 		Describe("domain", func() {
 			It("it gets the domain suffix from the config", func() {
 				config := config.GenerateConfiguration(config.Config{
@@ -209,9 +230,50 @@ var _ = Describe("ConsulConfigDefiner", func() {
 			})
 		})
 
-		Describe("DNS port", func() {
-			It("defaults to 53", func() {
-				Expect(consulConfig.Ports.DNS).To(Equal(53))
+		Describe("ports", func() {
+			Describe("DNS port", func() {
+				It("defaults to 53", func() {
+					Expect(consulConfig.Ports.DNS).To(Equal(53))
+				})
+
+				Context("when `consul.agent.ports.dns` is set", func() {
+					It("uses those values", func() {
+						consulConfig = config.GenerateConfiguration(config.Config{
+							Consul: config.ConfigConsul{
+								Agent: config.ConfigConsulAgent{
+									Ports: config.ConfigConsulAgentPorts{
+										DNS: 5300,
+									},
+								},
+							},
+						}, configDir, "")
+						Expect(consulConfig.Ports.DNS).To(Equal(5300))
+					})
+				})
+			})
+
+			Context("when `consul.agent.require_ssl` is true", func() {
+				BeforeEach(func() {
+					consulConfig = config.GenerateConfiguration(config.Config{
+						Consul: config.ConfigConsul{
+							Agent: config.ConfigConsulAgent{
+								RequireSSL: true,
+							},
+						},
+					}, configDir, "")
+				})
+
+				Describe("HTTP port", func() {
+					It("is disabled", func() {
+						Expect(consulConfig.Ports.HTTP).To(Equal(-1))
+					})
+				})
+
+				Describe("HTTPS port", func() {
+					It("defaults to 8500", func() {
+						Expect(consulConfig.Ports.HTTPS).To(Equal(8500))
+					})
+				})
 			})
 		})
 
@@ -384,6 +446,12 @@ var _ = Describe("ConsulConfigDefiner", func() {
 		Describe("performance", func() {
 			It("defaults to raft_multiplier to 1", func() {
 				Expect(consulConfig.Performance.RaftMultiplier).To(Equal(1))
+			})
+		})
+
+		Describe("tls_min_version", func() {
+			It("defaults to tls12", func() {
+				Expect(consulConfig.TLSMinVersion).To(Equal("tls12"))
 			})
 		})
 	})

@@ -1,6 +1,15 @@
 #!/bin/bash -exu
 
+preflight_check() {
+  set +x
+  test -n "${API_USER}"
+  test -n "${API_PASSWORD}"
+  test -n "${CF_DEPLOYMENT}"
+  set -x
+}
+
 function main() {
+  preflight_check
 
   local root="${1}"
   local api_endpoint="api.apps.${CF_DEPLOYMENT}.microbosh"

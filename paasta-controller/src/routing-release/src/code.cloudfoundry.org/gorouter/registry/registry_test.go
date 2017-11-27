@@ -3,16 +3,16 @@ package registry_test
 import (
 	"fmt"
 
+	"code.cloudfoundry.org/gorouter/logger"
 	. "code.cloudfoundry.org/gorouter/registry"
-	"code.cloudfoundry.org/lager"
-	"code.cloudfoundry.org/lager/lagertest"
+	"code.cloudfoundry.org/gorouter/test_util"
 	"code.cloudfoundry.org/routing-api/models"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gbytes"
 
 	"code.cloudfoundry.org/gorouter/config"
-	"code.cloudfoundry.org/gorouter/metrics/reporter/fakes"
+	"code.cloudfoundry.org/gorouter/metrics/fakes"
 	"code.cloudfoundry.org/gorouter/route"
 
 	"encoding/json"
@@ -25,15 +25,16 @@ var _ = Describe("RouteRegistry", func() {
 
 	var fooEndpoint, barEndpoint, bar2Endpoint *route.Endpoint
 	var configObj *config.Config
-	var logger lager.Logger
+	var logger logger.Logger
 	var modTag models.ModificationTag
 
 	BeforeEach(func() {
 
-		logger = lagertest.NewTestLogger("test")
+		logger = test_util.NewTestZapLogger("test")
 		configObj = config.DefaultConfig()
 		configObj.PruneStaleDropletsInterval = 50 * time.Millisecond
 		configObj.DropletStaleThreshold = 24 * time.Millisecond
+		configObj.IsolationSegments = []string{"foo", "bar"}
 
 		reporter = new(fakes.FakeRouteRegistryReporter)
 
@@ -44,19 +45,19 @@ var _ = Describe("RouteRegistry", func() {
 			map[string]string{
 				"runtime":   "ruby18",
 				"framework": "sinatra",
-			}, -1, "", modTag)
+			}, -1, "", modTag, "")
 
 		barEndpoint = route.NewEndpoint("54321", "192.168.1.2", 4321,
 			"id2", "0", map[string]string{
 				"runtime":   "javascript",
 				"framework": "node",
-			}, -1, "https://my-rs.com", modTag)
+			}, -1, "https://my-rs.com", modTag, "")
 
 		bar2Endpoint = route.NewEndpoint("54321", "192.168.1.3", 1234,
 			"id3", "0", map[string]string{
 				"runtime":   "javascript",
 				"framework": "node",
-			}, -1, "", modTag)
+			}, -1, "", modTag, "")
 	})
 
 	Context("Register", func() {
@@ -95,8 +96,8 @@ var _ = Describe("RouteRegistry", func() {
 			})
 
 			It("ignores case", func() {
-				m1 := route.NewEndpoint("", "192.168.1.1", 1234, "", "", nil, -1, "", modTag)
-				m2 := route.NewEndpoint("", "192.168.1.1", 1235, "", "", nil, -1, "", modTag)
+				m1 := route.NewEndpoint("", "192.168.1.1", 1234, "", "", nil, -1, "", modTag, "")
+				m2 := route.NewEndpoint("", "192.168.1.1", 1235, "", "", nil, -1, "", modTag, "")
 
 				r.Register("foo", m1)
 				r.Register("FOO", m2)
@@ -105,8 +106,8 @@ var _ = Describe("RouteRegistry", func() {
 			})
 
 			It("allows multiple uris for the same endpoint", func() {
-				m1 := route.NewEndpoint("", "192.168.1.1", 1234, "", "", nil, -1, "", modTag)
-				m2 := route.NewEndpoint("", "192.168.1.1", 1234, "", "", nil, -1, "", modTag)
+				m1 := route.NewEndpoint("", "192.168.1.1", 1234, "", "", nil, -1, "", modTag, "")
+				m2 := route.NewEndpoint("", "192.168.1.1", 1234, "", "", nil, -1, "", modTag, "")
 
 				r.Register("foo", m1)
 				r.Register("bar", m2)
@@ -116,7 +117,7 @@ var _ = Describe("RouteRegistry", func() {
 			})
 
 			It("allows routes with paths", func() {
-				m1 := route.NewEndpoint("", "192.168.1.1", 1234, "", "", nil, -1, "", modTag)
+				m1 := route.NewEndpoint("", "192.168.1.1", 1234, "", "", nil, -1, "", modTag, "")
 
 				r.Register("foo", m1)
 				r.Register("foo/v1", m1)
@@ -126,8 +127,8 @@ var _ = Describe("RouteRegistry", func() {
 
 			})
 
-			It("excludes query strings in routes", func() {
-				m1 := route.NewEndpoint("", "192.168.1.1", 1234, "", "", nil, -1, "", modTag)
+			It("excludes query strings in routes without context path", func() {
+				m1 := route.NewEndpoint("", "192.168.1.1", 1234, "", "", nil, -1, "", modTag, "")
 
 				// discards query string
 				r.Register("dora.app.com?foo=bar", m1)
@@ -137,7 +138,34 @@ var _ = Describe("RouteRegistry", func() {
 
 				p := r.Lookup("dora.app.com")
 				Expect(p).ToNot(BeNil())
+				Expect(p.ContextPath()).To(Equal("/"))
+			})
 
+			It("excludes query strings in routes with context path", func() {
+				m1 := route.NewEndpoint("", "192.168.1.1", 1234, "", "", nil, -1, "", modTag, "")
+
+				// discards query string
+				r.Register("dora.app.com/snarf?foo=bar", m1)
+
+				Expect(r.NumUris()).To(Equal(1))
+				Expect(r.NumEndpoints()).To(Equal(1))
+
+				p := r.Lookup("dora.app.com/snarf")
+				Expect(p).ToNot(BeNil())
+				Expect(p.ContextPath()).To(Equal("/snarf"))
+			})
+
+			It("remembers the context path properly with case (RFC 3986, Section 6.2.2.1)", func() {
+				m1 := route.NewEndpoint("", "192.168.1.1", 1234, "", "", nil, -1, "", modTag, "")
+
+				r.Register("dora.app.com/app/UP/we/Go", m1)
+
+				Expect(r.NumUris()).To(Equal(1))
+				Expect(r.NumEndpoints()).To(Equal(1))
+
+				p := r.Lookup("dora.app.com/app/UP/we/Go")
+				Expect(p).ToNot(BeNil())
+				Expect(p.ContextPath()).To(Equal("/app/UP/we/Go"))
 			})
 		})
 
@@ -151,18 +179,107 @@ var _ = Describe("RouteRegistry", func() {
 		})
 
 		Context("when route registration message is received", func() {
-			BeforeEach(func() {
-				r.Register("a.route", fooEndpoint)
-			})
-
 			It("logs at debug level", func() {
-				Expect(logger).To(gbytes.Say(`uri-added.*"log_level":0.*a\.route`))
+				r.Register("a.route", fooEndpoint)
+				Expect(logger).To(gbytes.Say(`"log_level":0.*uri-added.*a\.route`))
 			})
 
 			It("logs register message only for new routes", func() {
+				r.Register("a.route", fooEndpoint)
 				Expect(logger).To(gbytes.Say(`uri-added.*.*a\.route`))
 				r.Register("a.route", fooEndpoint)
 				Expect(logger).NotTo(gbytes.Say(`uri-added.*.*a\.route`))
+				By("not providing IsolationSegment property")
+				r.Register("a.route", fooEndpoint)
+				//TODO: use pattern matching to make sure we are asserting on the unregister line
+				Expect(logger).To(gbytes.Say(`"isolation_segment":"-"`))
+			})
+
+			It("logs register message with IsolationSegment when it's provided", func() {
+				isoSegEndpoint := route.NewEndpoint("12345", "192.168.1.1", 1234,
+					"id1", "0",
+					map[string]string{
+						"runtime":   "ruby18",
+						"framework": "sinatra",
+					}, -1, "", modTag, "is1")
+				r.Register("a.route", isoSegEndpoint)
+				//TODO: use pattern matching to make sure we are asserting on the unregister line
+				Expect(logger).To(gbytes.Say(`"isolation_segment":"is1"`))
+			})
+
+			Context("when routing table sharding mode is `segments`", func() {
+				BeforeEach(func() {
+					configObj.RoutingTableShardingMode = config.SHARD_SEGMENTS
+					r = NewRouteRegistry(logger, configObj, reporter)
+					fooEndpoint.IsolationSegment = "foo"
+					barEndpoint.IsolationSegment = "bar"
+					bar2Endpoint.IsolationSegment = "baz"
+				})
+
+				It("registers routes in the specified isolation segments, but not other isolation segments", func() {
+					r.Register("a.route", fooEndpoint)
+					Expect(r.NumUris()).To(Equal(1))
+					Expect(r.NumEndpoints()).To(Equal(1))
+					Expect(logger).To(gbytes.Say(`uri-added.*.*a\.route`))
+					r.Register("b.route", barEndpoint)
+					Expect(r.NumUris()).To(Equal(2))
+					Expect(r.NumEndpoints()).To(Equal(2))
+					Expect(logger).To(gbytes.Say(`uri-added.*.*b\.route`))
+					r.Register("c.route", bar2Endpoint)
+					Expect(r.NumUris()).To(Equal(2))
+					Expect(r.NumEndpoints()).To(Equal(2))
+					Expect(logger).ToNot(gbytes.Say(`uri-added.*.*c\.route`))
+				})
+
+				Context("with an endpoint in a shared isolation segment", func() {
+					BeforeEach(func() {
+						fooEndpoint.IsolationSegment = ""
+					})
+					It("does not log a register message", func() {
+						r.Register("a.route", fooEndpoint)
+						Expect(r.NumUris()).To(Equal(0))
+						Expect(r.NumEndpoints()).To(Equal(0))
+						Expect(logger).ToNot(gbytes.Say(`uri-added.*.*a\.route`))
+					})
+				})
+
+			})
+
+			Context("when routing table sharding mode is `shared-and-segments`", func() {
+				BeforeEach(func() {
+					configObj.RoutingTableShardingMode = config.SHARD_SHARED_AND_SEGMENTS
+					r = NewRouteRegistry(logger, configObj, reporter)
+					fooEndpoint.IsolationSegment = "foo"
+					barEndpoint.IsolationSegment = "bar"
+					bar2Endpoint.IsolationSegment = "baz"
+				})
+
+				It("registers routes in the specified isolation segments, but not other isolation segments", func() {
+					r.Register("a.route", fooEndpoint)
+					Expect(r.NumUris()).To(Equal(1))
+					Expect(r.NumEndpoints()).To(Equal(1))
+					Expect(logger).To(gbytes.Say(`uri-added.*.*a\.route`))
+					r.Register("b.route", barEndpoint)
+					Expect(r.NumUris()).To(Equal(2))
+					Expect(r.NumEndpoints()).To(Equal(2))
+					Expect(logger).To(gbytes.Say(`uri-added.*.*b\.route`))
+					r.Register("c.route", bar2Endpoint)
+					Expect(r.NumUris()).To(Equal(2))
+					Expect(r.NumEndpoints()).To(Equal(2))
+					Expect(logger).ToNot(gbytes.Say(`uri-added.*.*c\.route`))
+				})
+
+				Context("with an endpoint in a shared isolation segment", func() {
+					BeforeEach(func() {
+						fooEndpoint.IsolationSegment = ""
+					})
+					It("resgisters the route", func() {
+						r.Register("a.route", fooEndpoint)
+						Expect(r.NumUris()).To(Equal(1))
+						Expect(r.NumEndpoints()).To(Equal(1))
+						Expect(logger).To(gbytes.Say(`uri-added.*.*a\.route`))
+					})
+				})
 			})
 		})
 
@@ -173,7 +290,7 @@ var _ = Describe("RouteRegistry", func() {
 
 			BeforeEach(func() {
 				modTag = models.ModificationTag{Guid: "abc"}
-				endpoint = route.NewEndpoint("", "1.1.1.1", 1234, "", "", nil, -1, "", modTag)
+				endpoint = route.NewEndpoint("", "1.1.1.1", 1234, "", "", nil, -1, "", modTag, "")
 				r.Register("foo.com", endpoint)
 			})
 
@@ -196,7 +313,7 @@ var _ = Describe("RouteRegistry", func() {
 
 					BeforeEach(func() {
 						modTag.Increment()
-						endpoint2 = route.NewEndpoint("", "1.1.1.1", 1234, "", "", nil, -1, "", modTag)
+						endpoint2 = route.NewEndpoint("", "1.1.1.1", 1234, "", "", nil, -1, "", modTag, "")
 						r.Register("foo.com", endpoint2)
 					})
 
@@ -216,7 +333,7 @@ var _ = Describe("RouteRegistry", func() {
 
 						BeforeEach(func() {
 							modTag2 = models.ModificationTag{Guid: "abc", Index: 0}
-							endpoint3 = route.NewEndpoint("", "1.1.1.1", 1234, "", "", nil, -1, "", modTag2)
+							endpoint3 = route.NewEndpoint("", "1.1.1.1", 1234, "", "", nil, -1, "", modTag2, "")
 							r.Register("foo.com", endpoint3)
 						})
 
@@ -235,7 +352,7 @@ var _ = Describe("RouteRegistry", func() {
 				Context("when modification tag guid changes", func() {
 					BeforeEach(func() {
 						modTag.Guid = "def"
-						endpoint2 = route.NewEndpoint("", "1.1.1.1", 1234, "", "", nil, -1, "", modTag)
+						endpoint2 = route.NewEndpoint("", "1.1.1.1", 1234, "", "", nil, -1, "", modTag, "")
 						r.Register("foo.com", endpoint2)
 					})
 
@@ -253,9 +370,26 @@ var _ = Describe("RouteRegistry", func() {
 	})
 
 	Context("Unregister", func() {
-		It("emits message_count metrics", func() {
-			r.Unregister("foo", fooEndpoint)
-			Expect(reporter.CaptureRegistryMessageCallCount()).To(Equal(1))
+		Context("when endpoint has component tagged", func() {
+			BeforeEach(func() {
+				fooEndpoint.Tags = map[string]string{"component": "oauth-server"}
+			})
+			It("emits counter metrics", func() {
+				r.Unregister("foo", fooEndpoint)
+				Expect(reporter.CaptureUnregistryMessageCallCount()).To(Equal(1))
+				Expect(reporter.CaptureUnregistryMessageArgsForCall(0)).To(Equal(fooEndpoint))
+			})
+		})
+
+		Context("when endpoint does not have component tag", func() {
+			BeforeEach(func() {
+				fooEndpoint.Tags = map[string]string{}
+			})
+			It("emits counter metrics", func() {
+				r.Unregister("foo", fooEndpoint)
+				Expect(reporter.CaptureUnregistryMessageCallCount()).To(Equal(1))
+				Expect(reporter.CaptureUnregistryMessageArgsForCall(0)).To(Equal(fooEndpoint))
+			})
 		})
 
 		It("Handles unknown URIs", func() {
@@ -287,8 +421,8 @@ var _ = Describe("RouteRegistry", func() {
 		})
 
 		It("ignores uri case and matches endpoint", func() {
-			m1 := route.NewEndpoint("", "192.168.1.1", 1234, "", "", nil, -1, "", modTag)
-			m2 := route.NewEndpoint("", "192.168.1.1", 1234, "", "", nil, -1, "", modTag)
+			m1 := route.NewEndpoint("", "192.168.1.1", 1234, "", "", nil, -1, "", modTag, "")
+			m2 := route.NewEndpoint("", "192.168.1.1", 1234, "", "", nil, -1, "", modTag, "")
 
 			r.Register("foo", m1)
 			r.Unregister("FOO", m2)
@@ -297,8 +431,8 @@ var _ = Describe("RouteRegistry", func() {
 		})
 
 		It("removes the specific url/endpoint combo", func() {
-			m1 := route.NewEndpoint("", "192.168.1.1", 1234, "", "", nil, -1, "", modTag)
-			m2 := route.NewEndpoint("", "192.168.1.1", 1234, "", "", nil, -1, "", modTag)
+			m1 := route.NewEndpoint("", "192.168.1.1", 1234, "", "", nil, -1, "", modTag, "")
+			m2 := route.NewEndpoint("", "192.168.1.1", 1234, "", "", nil, -1, "", modTag, "")
 
 			r.Register("foo", m1)
 			r.Register("bar", m1)
@@ -330,8 +464,100 @@ var _ = Describe("RouteRegistry", func() {
 			Expect(r.NumEndpoints()).To(Equal(0))
 		})
 
+		Context("when routing table sharding mode is `segments`", func() {
+			BeforeEach(func() {
+				configObj.RoutingTableShardingMode = config.SHARD_SEGMENTS
+				r = NewRouteRegistry(logger, configObj, reporter)
+				fooEndpoint.IsolationSegment = "foo"
+				barEndpoint.IsolationSegment = "bar"
+				bar2Endpoint.IsolationSegment = "bar"
+
+				r.Register("a.route", fooEndpoint)
+				r.Register("b.route", barEndpoint)
+				r.Register("c.route", bar2Endpoint)
+				Expect(r.NumUris()).To(Equal(3))
+				Expect(r.NumEndpoints()).To(Equal(3))
+			})
+
+			It("unregisters only routes in the specified isolation segments", func() {
+				r.Unregister("a.route", fooEndpoint)
+				Expect(r.NumUris()).To(Equal(2))
+				Expect(r.NumEndpoints()).To(Equal(2))
+				Expect(logger).To(gbytes.Say(`endpoint-unregistered.*.*a\.route`))
+
+				r.Unregister("b.route", barEndpoint)
+				Expect(r.NumUris()).To(Equal(1))
+				Expect(r.NumEndpoints()).To(Equal(1))
+				Expect(logger).To(gbytes.Say(`endpoint-unregistered.*.*b\.route`))
+
+				bar2Endpoint.IsolationSegment = "baz"
+				r.Unregister("c.route", bar2Endpoint)
+				Expect(r.NumUris()).To(Equal(1))
+				Expect(r.NumEndpoints()).To(Equal(1))
+				Expect(logger).ToNot(gbytes.Say(`endpoint-unregistered.*.*c\.route`))
+			})
+
+			Context("with an endpoint in a shared isolation segment", func() {
+				BeforeEach(func() {
+					fooEndpoint.IsolationSegment = ""
+				})
+				It("does not log an unregister message", func() {
+					r.Unregister("a.route", fooEndpoint)
+					Expect(r.NumUris()).To(Equal(3))
+					Expect(r.NumEndpoints()).To(Equal(3))
+					Expect(logger).ToNot(gbytes.Say(`endpoint-unregistered.*.*a\.route`))
+				})
+			})
+
+		})
+		Context("when routing table sharding mode is `shared-and-segments`", func() {
+			BeforeEach(func() {
+				configObj.RoutingTableShardingMode = config.SHARD_SHARED_AND_SEGMENTS
+				r = NewRouteRegistry(logger, configObj, reporter)
+				fooEndpoint.IsolationSegment = "foo"
+				barEndpoint.IsolationSegment = "bar"
+				bar2Endpoint.IsolationSegment = "bar"
+
+				r.Register("a.route", fooEndpoint)
+				r.Register("b.route", barEndpoint)
+				r.Register("c.route", bar2Endpoint)
+				Expect(r.NumUris()).To(Equal(3))
+				Expect(r.NumEndpoints()).To(Equal(3))
+			})
+
+			It("unregisters routes in the specified isolation segments and not other isolation segments", func() {
+				r.Unregister("a.route", fooEndpoint)
+				Expect(r.NumUris()).To(Equal(2))
+				Expect(r.NumEndpoints()).To(Equal(2))
+				Expect(logger).To(gbytes.Say(`endpoint-unregistered.*.*a\.route`))
+
+				r.Unregister("b.route", barEndpoint)
+				Expect(r.NumUris()).To(Equal(1))
+				Expect(r.NumEndpoints()).To(Equal(1))
+				Expect(logger).To(gbytes.Say(`endpoint-unregistered.*.*b\.route`))
+
+				bar2Endpoint.IsolationSegment = "baz"
+				r.Unregister("c.route", bar2Endpoint)
+				Expect(r.NumUris()).To(Equal(1))
+				Expect(r.NumEndpoints()).To(Equal(1))
+				Expect(logger).ToNot(gbytes.Say(`endpoint-unregistered.*.*c\.route`))
+			})
+
+			Context("with an endpoint in a shared isolation segment", func() {
+				BeforeEach(func() {
+					fooEndpoint.IsolationSegment = ""
+				})
+				It("unregisters the route", func() {
+					r.Unregister("a.route", fooEndpoint)
+					Expect(r.NumUris()).To(Equal(2))
+					Expect(r.NumEndpoints()).To(Equal(2))
+					Expect(logger).To(gbytes.Say(`endpoint-unregistered.*.*a\.route`))
+				})
+			})
+		})
+
 		It("removes a route with a path", func() {
-			m1 := route.NewEndpoint("", "192.168.1.1", 1234, "", "", nil, -1, "", modTag)
+			m1 := route.NewEndpoint("", "192.168.1.1", 1234, "", "", nil, -1, "", modTag, "")
 
 			r.Register("foo/bar", m1)
 			r.Unregister("foo/bar", m1)
@@ -340,7 +566,7 @@ var _ = Describe("RouteRegistry", func() {
 		})
 
 		It("only unregisters the exact uri", func() {
-			m1 := route.NewEndpoint("", "192.168.1.1", 1234, "", "", nil, -1, "", modTag)
+			m1 := route.NewEndpoint("", "192.168.1.1", 1234, "", "", nil, -1, "", modTag, "")
 
 			r.Register("foo", m1)
 			r.Register("foo/bar", m1)
@@ -357,7 +583,7 @@ var _ = Describe("RouteRegistry", func() {
 		})
 
 		It("excludes query strings in routes", func() {
-			m1 := route.NewEndpoint("", "192.168.1.1", 1234, "", "", nil, -1, "", modTag)
+			m1 := route.NewEndpoint("", "192.168.1.1", 1234, "", "", nil, -1, "", modTag, "")
 
 			r.Register("dora.app.com", m1)
 
@@ -377,12 +603,30 @@ var _ = Describe("RouteRegistry", func() {
 			})
 
 			It("logs at debug level", func() {
-				Expect(logger).To(gbytes.Say(`unregister.*"log_level":0.*a\.route`))
+				Expect(logger).To(gbytes.Say(`"log_level":0.*unregister.*a\.route`))
 			})
 
 			It("only logs unregistration for existing routes", func() {
 				r.Unregister("non-existent-route", fooEndpoint)
 				Expect(logger).NotTo(gbytes.Say(`unregister.*.*a\.non-existent-route`))
+
+				By("not providing IsolationSegment property")
+				r.Unregister("a.route", fooEndpoint)
+				//TODO: use pattern matching to make sure we are asserting on the unregister line
+				Expect(logger).To(gbytes.Say(`"isolation_segment":"-"`))
+			})
+
+			It("logs unregister message with IsolationSegment when it's provided", func() {
+				isoSegEndpoint := route.NewEndpoint("12345", "192.168.1.1", 1234,
+					"id1", "0",
+					map[string]string{
+						"runtime":   "ruby18",
+						"framework": "sinatra",
+					}, -1, "", modTag, "is1")
+				r.Register("a.isoSegRoute", isoSegEndpoint)
+				r.Unregister("a.isoSegRoute", isoSegEndpoint)
+				//TODO: use pattern matching to make sure we are asserting on the unregister line
+				Expect(logger).To(gbytes.Say(`"isolation_segment":"is1"`))
 			})
 		})
 
@@ -396,7 +640,7 @@ var _ = Describe("RouteRegistry", func() {
 					Guid:  "abc",
 					Index: 10,
 				}
-				endpoint = route.NewEndpoint("", "192.168.1.1", 1234, "", "", nil, -1, "", modTag)
+				endpoint = route.NewEndpoint("", "192.168.1.1", 1234, "", "", nil, -1, "", modTag, "")
 				r.Register("foo.com", endpoint)
 				Expect(r.NumEndpoints()).To(Equal(1))
 			})
@@ -411,7 +655,7 @@ var _ = Describe("RouteRegistry", func() {
 					Guid:  "abc",
 					Index: 8,
 				}
-				endpoint2 := route.NewEndpoint("", "192.168.1.1", 1234, "", "", nil, -1, "", modTag2)
+				endpoint2 := route.NewEndpoint("", "192.168.1.1", 1234, "", "", nil, -1, "", modTag2, "")
 				r.Unregister("foo.com", endpoint2)
 				Expect(r.NumEndpoints()).To(Equal(1))
 			})
@@ -420,7 +664,7 @@ var _ = Describe("RouteRegistry", func() {
 
 	Context("Lookup", func() {
 		It("case insensitive lookup", func() {
-			m := route.NewEndpoint("", "192.168.1.1", 1234, "", "", nil, -1, "", modTag)
+			m := route.NewEndpoint("", "192.168.1.1", 1234, "", "", nil, -1, "", modTag, "")
 
 			r.Register("foo", m)
 
@@ -433,8 +677,8 @@ var _ = Describe("RouteRegistry", func() {
 		})
 
 		It("selects one of the routes", func() {
-			m1 := route.NewEndpoint("", "192.168.1.1", 1234, "", "", nil, -1, "", modTag)
-			m2 := route.NewEndpoint("", "192.168.1.1", 1235, "", "", nil, -1, "", modTag)
+			m1 := route.NewEndpoint("", "192.168.1.1", 1234, "", "", nil, -1, "", modTag, "")
+			m2 := route.NewEndpoint("", "192.168.1.1", 1235, "", "", nil, -1, "", modTag, "")
 
 			r.Register("bar", m1)
 			r.Register("barr", m1)
@@ -453,8 +697,8 @@ var _ = Describe("RouteRegistry", func() {
 		})
 
 		It("selects the outer most wild card route if one exists", func() {
-			app1 := route.NewEndpoint("", "192.168.1.1", 1234, "", "", nil, -1, "", modTag)
-			app2 := route.NewEndpoint("", "192.168.1.2", 1234, "", "", nil, -1, "", modTag)
+			app1 := route.NewEndpoint("", "192.168.1.1", 1234, "", "", nil, -1, "", modTag, "")
+			app2 := route.NewEndpoint("", "192.168.1.2", 1234, "", "", nil, -1, "", modTag, "")
 
 			r.Register("*.outer.wild.card", app1)
 			r.Register("*.wild.card", app2)
@@ -473,8 +717,8 @@ var _ = Describe("RouteRegistry", func() {
 		})
 
 		It("prefers full URIs to wildcard routes", func() {
-			app1 := route.NewEndpoint("", "192.168.1.1", 1234, "", "", nil, -1, "", modTag)
-			app2 := route.NewEndpoint("", "192.168.1.2", 1234, "", "", nil, -1, "", modTag)
+			app1 := route.NewEndpoint("", "192.168.1.1", 1234, "", "", nil, -1, "", modTag, "")
+			app2 := route.NewEndpoint("", "192.168.1.2", 1234, "", "", nil, -1, "", modTag, "")
 
 			r.Register("not.wild.card", app1)
 			r.Register("*.wild.card", app2)
@@ -487,8 +731,8 @@ var _ = Describe("RouteRegistry", func() {
 		})
 
 		It("sends lookup metrics to the reporter", func() {
-			app1 := route.NewEndpoint("", "192.168.1.1", 1234, "", "", nil, -1, "", modTag)
-			app2 := route.NewEndpoint("", "192.168.1.2", 1234, "", "", nil, -1, "", modTag)
+			app1 := route.NewEndpoint("", "192.168.1.1", 1234, "", "", nil, -1, "", modTag, "")
+			app2 := route.NewEndpoint("", "192.168.1.2", 1234, "", "", nil, -1, "", modTag, "")
 
 			r.Register("not.wild.card", app1)
 			r.Register("*.wild.card", app2)
@@ -505,7 +749,7 @@ var _ = Describe("RouteRegistry", func() {
 			var m *route.Endpoint
 
 			BeforeEach(func() {
-				m = route.NewEndpoint("", "192.168.1.1", 1234, "", "", nil, -1, "", modTag)
+				m = route.NewEndpoint("", "192.168.1.1", 1234, "", "", nil, -1, "", modTag, "")
 			})
 
 			It("using context path and query string", func() {
@@ -526,6 +770,12 @@ var _ = Describe("RouteRegistry", func() {
 				Expect(iter.Next().CanonicalAddr()).To(Equal("192.168.1.1:1234"))
 			})
 		})
+		Context("when lookup fails to find any routes", func() {
+			It("returns nil", func() {
+				p := r.Lookup("non-existent")
+				Expect(p).To(BeNil())
+			})
+		})
 	})
 
 	Context("LookupWithInstance", func() {
@@ -535,8 +785,8 @@ var _ = Describe("RouteRegistry", func() {
 		)
 
 		BeforeEach(func() {
-			m1 := route.NewEndpoint("app-1-ID", "192.168.1.1", 1234, "", "0", nil, -1, "", modTag)
-			m2 := route.NewEndpoint("app-2-ID", "192.168.1.2", 1235, "", "0", nil, -1, "", modTag)
+			m1 := route.NewEndpoint("app-1-ID", "192.168.1.1", 1234, "", "0", nil, -1, "", modTag, "")
+			m2 := route.NewEndpoint("app-2-ID", "192.168.1.2", 1235, "", "0", nil, -1, "", modTag, "")
 
 			r.Register("bar", m1)
 			r.Register("bar", m2)
@@ -557,6 +807,13 @@ var _ = Describe("RouteRegistry", func() {
 
 			Expect(r.NumUris()).To(Equal(1))
 			Expect(r.NumEndpoints()).To(Equal(2))
+		})
+
+		Context("when lookup fails to find any routes", func() {
+			It("returns nil", func() {
+				p := r.LookupWithInstance("foo", appId, appIndex)
+				Expect(p).To(BeNil())
+			})
 		})
 
 		Context("when given an incorrect app index", func() {
@@ -604,7 +861,7 @@ var _ = Describe("RouteRegistry", func() {
 
 			Expect(r.NumUris()).To(Equal(0))
 			r.MarshalJSON()
-			Expect(logger).To(gbytes.Say(`prune.*"log_level":1.*endpoints.*bar.com/path1/path2/path3`))
+			Expect(logger).To(gbytes.Say(`"log_level":1.*prune.*bar.com/path1/path2/path3.*endpoints.*isolation_segment`))
 		})
 
 		It("removes stale droplets", func() {
@@ -659,7 +916,7 @@ var _ = Describe("RouteRegistry", func() {
 		})
 
 		It("skips fresh droplets", func() {
-			endpoint := route.NewEndpoint("", "192.168.1.1", 1234, "", "", nil, -1, "", modTag)
+			endpoint := route.NewEndpoint("", "192.168.1.1", 1234, "", "", nil, -1, "", modTag, "")
 
 			r.Register("foo", endpoint)
 			r.Register("bar", endpoint)
@@ -704,7 +961,7 @@ var _ = Describe("RouteRegistry", func() {
 		Context("when stale threshold is less than pruning cycle", func() {
 			BeforeEach(func() {
 				configObj = config.DefaultConfig()
-				configObj.PruneStaleDropletsInterval = 50 * time.Millisecond
+				configObj.PruneStaleDropletsInterval = 500 * time.Millisecond
 				configObj.DropletStaleThreshold = 45 * time.Millisecond
 				reporter = new(fakes.FakeRouteRegistryReporter)
 
@@ -733,14 +990,14 @@ var _ = Describe("RouteRegistry", func() {
 			BeforeEach(func() {
 				configObj = config.DefaultConfig()
 				configObj.PruneStaleDropletsInterval = 50 * time.Millisecond
-				configObj.DropletStaleThreshold = 100 * time.Millisecond
+				configObj.DropletStaleThreshold = 1 * time.Second
 				reporter = new(fakes.FakeRouteRegistryReporter)
 
 				r = NewRouteRegistry(logger, configObj, reporter)
 			})
 
 			It("does not log the route info for fresh routes when pruning", func() {
-				endpoint := route.NewEndpoint("", "192.168.1.1", 1234, "", "", nil, 60, "", modTag)
+				endpoint := route.NewEndpoint("", "192.168.1.1", 1234, "", "", nil, 60, "", modTag, "")
 				r.Register("foo.com/bar", endpoint)
 				Expect(r.NumUris()).To(Equal(1))
 
@@ -764,7 +1021,7 @@ var _ = Describe("RouteRegistry", func() {
 
 				// add endpoints
 				for i := 0; i < totalRoutes; i++ {
-					e := route.NewEndpoint("12345", "192.168.1.1", uint16(1024+i), "id1", "", nil, -1, "", modTag)
+					e := route.NewEndpoint("12345", "192.168.1.1", uint16(1024+i), "id1", "", nil, -1, "", modTag, "")
 					r.Register(route.Uri(fmt.Sprintf("foo-%d", i)), e)
 				}
 
@@ -836,12 +1093,12 @@ var _ = Describe("RouteRegistry", func() {
 	})
 
 	It("marshals", func() {
-		m := route.NewEndpoint("", "192.168.1.1", 1234, "", "", nil, -1, "https://my-routeService.com", modTag)
+		m := route.NewEndpoint("", "192.168.1.1", 1234, "", "", nil, -1, "https://my-routeService.com", modTag, "")
 		r.Register("foo", m)
 
 		marshalled, err := json.Marshal(r)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(string(marshalled)).To(Equal(`{"foo":[{"address":"192.168.1.1:1234","ttl":-1,"route_service_url":"https://my-routeService.com"}]}`))
+		Expect(string(marshalled)).To(Equal(`{"foo":[{"address":"192.168.1.1:1234","ttl":-1,"route_service_url":"https://my-routeService.com","tags":null}]}`))
 		r.Unregister("foo", m)
 		marshalled, err = json.Marshal(r)
 		Expect(err).NotTo(HaveOccurred())

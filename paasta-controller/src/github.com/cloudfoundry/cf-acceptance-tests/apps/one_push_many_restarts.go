@@ -27,9 +27,11 @@ import (
 	"github.com/cloudfoundry/cf-acceptance-tests/helpers/assets"
 )
 
-var _ = AppsDescribe("An application that's already been pushed", func() {
-	var appName string
-	var persistentTestSetup *workflowhelpers.ReproducibleTestSuiteSetup
+var _ = PersistentAppDescribe("An application that's already been pushed", func() {
+	var (
+		appName             string
+		persistentTestSetup *workflowhelpers.ReproducibleTestSuiteSetup
+	)
 
 	BeforeEach(func() {
 		persistentTestSetup = workflowhelpers.NewPersistentAppTestSuiteSetup(Config)
@@ -47,7 +49,9 @@ var _ = AppsDescribe("An application that's already been pushed", func() {
 
 		appQuery := cf.Cf("app", appName).Wait(Config.DefaultTimeoutDuration())
 		// might exit with 1 or 0, depending on app status
-		output := string(appQuery.Out.Contents())
+		output := string(appQuery.Err.Contents())
+		// The following line is for backwards compatability with previous CLI behavior
+		output = output + string(appQuery.Out.Contents())
 
 		if appQuery.ExitCode() == 1 && strings.Contains(output, "not found") {
 			pushCommand := cf.Cf("push", appName, "--no-start", "-b", Config.GetRubyBuildpackName(), "-m", DEFAULT_MEMORY_LIMIT, "-p", assets.NewAssets().Dora, "-d", Config.GetAppsDomain()).Wait(Config.DefaultTimeoutDuration())
@@ -77,7 +81,7 @@ var _ = AppsDescribe("An application that's already been pushed", func() {
 
 		Eventually(func() string {
 			return helpers.CurlAppRoot(Config, appName)
-		}, Config.DefaultTimeoutDuration()).Should(ContainSubstring("404"))
+		}, Config.DefaultTimeoutDuration()).ShouldNot(ContainSubstring("Hi, I'm Dora!"))
 
 		Expect(cf.Cf("start", appName).Wait(Config.CfPushTimeoutDuration())).To(Exit(0))
 

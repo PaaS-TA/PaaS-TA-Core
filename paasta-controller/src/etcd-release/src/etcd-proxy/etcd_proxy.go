@@ -24,17 +24,19 @@ type Flags struct {
 	CACertFilePath string
 	CertFilePath   string
 	KeyFilePath    string
+	AdvertiseIP    string
 }
 
 func main() {
 	flags := Flags{}
 	flag.StringVar(&flags.EtcdDNSSuffix, "etcd-dns-suffix", "", "domain of etcd cluster")
 	flag.StringVar(&flags.EtcdPort, "etcd-port", "4001", "port that etcd server is running on")
-	flag.StringVar(&flags.IP, "ip", "", "ip of the proxy server")
+	flag.StringVar(&flags.IP, "ip", "", "ip that proxy server binds to")
 	flag.StringVar(&flags.Port, "port", "", "port of the proxy server")
 	flag.StringVar(&flags.CACertFilePath, "cacert", "", "path to the etcd ca certificate")
 	flag.StringVar(&flags.CertFilePath, "cert", "", "path to the etcd client certificate")
 	flag.StringVar(&flags.KeyFilePath, "key", "", "path to the etcd client key")
+	flag.StringVar(&flags.AdvertiseIP, "advertise-ip", "", "ip to advertise in for client url in /v2/members")
 	flag.Parse()
 
 	etcdRawURL := fmt.Sprintf("https://%s:%s", flags.EtcdDNSSuffix, flags.EtcdPort)
@@ -69,8 +71,24 @@ func main() {
 		TLSClientConfig: buildTLSConfig(flags.CACertFilePath, flags.CertFilePath, flags.KeyFilePath),
 	}
 
+	logger := log.New(os.Stdout, "", log.LstdFlags)
+
+	http.HandleFunc("/v2/members", func(w http.ResponseWriter, r *http.Request) {
+		logger.Printf("members: %+v", r)
+		response := fmt.Sprintf(`{
+			"members": [
+				{
+					"id":"xxxxxxxxxxxxxxxx",
+					"name":"proxy",
+					"clientURLs": ["http://%s:%s"]
+				}
+			]
+		}`, flags.AdvertiseIP, flags.Port)
+		w.Write([]byte(response))
+	})
+
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		log.Printf("%+v", r)
+		logger.Printf("root: %+v", r)
 		proxy.ServeHTTP(w, r)
 	})
 

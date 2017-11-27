@@ -32,6 +32,16 @@ type FakeInternalClient struct {
 		result1 []*models.Task
 		result2 error
 	}
+	TasksWithFilterStub        func(logger lager.Logger, filter models.TaskFilter) ([]*models.Task, error)
+	tasksWithFilterMutex       sync.RWMutex
+	tasksWithFilterArgsForCall []struct {
+		logger lager.Logger
+		filter models.TaskFilter
+	}
+	tasksWithFilterReturns struct {
+		result1 []*models.Task
+		result2 error
+	}
 	TasksByDomainStub        func(logger lager.Logger, domain string) ([]*models.Task, error)
 	tasksByDomainMutex       sync.RWMutex
 	tasksByDomainArgsForCall []struct {
@@ -232,24 +242,6 @@ type FakeInternalClient struct {
 		result1 []*models.CellPresence
 		result2 error
 	}
-	SubscribeToDesiredLRPEventsStub        func(logger lager.Logger) (events.EventSource, error)
-	subscribeToDesiredLRPEventsMutex       sync.RWMutex
-	subscribeToDesiredLRPEventsArgsForCall []struct {
-		logger lager.Logger
-	}
-	subscribeToDesiredLRPEventsReturns struct {
-		result1 events.EventSource
-		result2 error
-	}
-	SubscribeToActualLRPEventsStub        func(logger lager.Logger) (events.EventSource, error)
-	subscribeToActualLRPEventsMutex       sync.RWMutex
-	subscribeToActualLRPEventsArgsForCall []struct {
-		logger lager.Logger
-	}
-	subscribeToActualLRPEventsReturns struct {
-		result1 events.EventSource
-		result2 error
-	}
 	ClaimActualLRPStub        func(logger lager.Logger, processGuid string, index int, instanceKey *models.ActualLRPInstanceKey) error
 	claimActualLRPMutex       sync.RWMutex
 	claimActualLRPArgsForCall []struct {
@@ -361,25 +353,6 @@ type FakeInternalClient struct {
 	removeEvacuatingActualLRPReturns struct {
 		result1 error
 	}
-	ConvergeLRPsStub        func(logger lager.Logger) error
-	convergeLRPsMutex       sync.RWMutex
-	convergeLRPsArgsForCall []struct {
-		logger lager.Logger
-	}
-	convergeLRPsReturns struct {
-		result1 error
-	}
-	ConvergeTasksStub        func(logger lager.Logger, kickTaskDuration, expirePendingTaskDuration, expireCompletedTaskDuration time.Duration) error
-	convergeTasksMutex       sync.RWMutex
-	convergeTasksArgsForCall []struct {
-		logger                      lager.Logger
-		kickTaskDuration            time.Duration
-		expirePendingTaskDuration   time.Duration
-		expireCompletedTaskDuration time.Duration
-	}
-	convergeTasksReturns struct {
-		result1 error
-	}
 	StartTaskStub        func(logger lager.Logger, taskGuid string, cellID string) (bool, error)
 	startTaskMutex       sync.RWMutex
 	startTaskArgsForCall []struct {
@@ -483,6 +456,41 @@ func (fake *FakeInternalClient) TasksArgsForCall(i int) lager.Logger {
 func (fake *FakeInternalClient) TasksReturns(result1 []*models.Task, result2 error) {
 	fake.TasksStub = nil
 	fake.tasksReturns = struct {
+		result1 []*models.Task
+		result2 error
+	}{result1, result2}
+}
+
+func (fake *FakeInternalClient) TasksWithFilter(logger lager.Logger, filter models.TaskFilter) ([]*models.Task, error) {
+	fake.tasksWithFilterMutex.Lock()
+	fake.tasksWithFilterArgsForCall = append(fake.tasksWithFilterArgsForCall, struct {
+		logger lager.Logger
+		filter models.TaskFilter
+	}{logger, filter})
+	fake.recordInvocation("TasksWithFilter", []interface{}{logger, filter})
+	fake.tasksWithFilterMutex.Unlock()
+	if fake.TasksWithFilterStub != nil {
+		return fake.TasksWithFilterStub(logger, filter)
+	} else {
+		return fake.tasksWithFilterReturns.result1, fake.tasksWithFilterReturns.result2
+	}
+}
+
+func (fake *FakeInternalClient) TasksWithFilterCallCount() int {
+	fake.tasksWithFilterMutex.RLock()
+	defer fake.tasksWithFilterMutex.RUnlock()
+	return len(fake.tasksWithFilterArgsForCall)
+}
+
+func (fake *FakeInternalClient) TasksWithFilterArgsForCall(i int) (lager.Logger, models.TaskFilter) {
+	fake.tasksWithFilterMutex.RLock()
+	defer fake.tasksWithFilterMutex.RUnlock()
+	return fake.tasksWithFilterArgsForCall[i].logger, fake.tasksWithFilterArgsForCall[i].filter
+}
+
+func (fake *FakeInternalClient) TasksWithFilterReturns(result1 []*models.Task, result2 error) {
+	fake.TasksWithFilterStub = nil
+	fake.tasksWithFilterReturns = struct {
 		result1 []*models.Task
 		result2 error
 	}{result1, result2}
@@ -1213,74 +1221,6 @@ func (fake *FakeInternalClient) CellsReturns(result1 []*models.CellPresence, res
 	}{result1, result2}
 }
 
-func (fake *FakeInternalClient) SubscribeToDesiredLRPEvents(logger lager.Logger) (events.EventSource, error) {
-	fake.subscribeToDesiredLRPEventsMutex.Lock()
-	fake.subscribeToDesiredLRPEventsArgsForCall = append(fake.subscribeToDesiredLRPEventsArgsForCall, struct {
-		logger lager.Logger
-	}{logger})
-	fake.recordInvocation("SubscribeToDesiredLRPEvents", []interface{}{logger})
-	fake.subscribeToDesiredLRPEventsMutex.Unlock()
-	if fake.SubscribeToDesiredLRPEventsStub != nil {
-		return fake.SubscribeToDesiredLRPEventsStub(logger)
-	} else {
-		return fake.subscribeToDesiredLRPEventsReturns.result1, fake.subscribeToDesiredLRPEventsReturns.result2
-	}
-}
-
-func (fake *FakeInternalClient) SubscribeToDesiredLRPEventsCallCount() int {
-	fake.subscribeToDesiredLRPEventsMutex.RLock()
-	defer fake.subscribeToDesiredLRPEventsMutex.RUnlock()
-	return len(fake.subscribeToDesiredLRPEventsArgsForCall)
-}
-
-func (fake *FakeInternalClient) SubscribeToDesiredLRPEventsArgsForCall(i int) lager.Logger {
-	fake.subscribeToDesiredLRPEventsMutex.RLock()
-	defer fake.subscribeToDesiredLRPEventsMutex.RUnlock()
-	return fake.subscribeToDesiredLRPEventsArgsForCall[i].logger
-}
-
-func (fake *FakeInternalClient) SubscribeToDesiredLRPEventsReturns(result1 events.EventSource, result2 error) {
-	fake.SubscribeToDesiredLRPEventsStub = nil
-	fake.subscribeToDesiredLRPEventsReturns = struct {
-		result1 events.EventSource
-		result2 error
-	}{result1, result2}
-}
-
-func (fake *FakeInternalClient) SubscribeToActualLRPEvents(logger lager.Logger) (events.EventSource, error) {
-	fake.subscribeToActualLRPEventsMutex.Lock()
-	fake.subscribeToActualLRPEventsArgsForCall = append(fake.subscribeToActualLRPEventsArgsForCall, struct {
-		logger lager.Logger
-	}{logger})
-	fake.recordInvocation("SubscribeToActualLRPEvents", []interface{}{logger})
-	fake.subscribeToActualLRPEventsMutex.Unlock()
-	if fake.SubscribeToActualLRPEventsStub != nil {
-		return fake.SubscribeToActualLRPEventsStub(logger)
-	} else {
-		return fake.subscribeToActualLRPEventsReturns.result1, fake.subscribeToActualLRPEventsReturns.result2
-	}
-}
-
-func (fake *FakeInternalClient) SubscribeToActualLRPEventsCallCount() int {
-	fake.subscribeToActualLRPEventsMutex.RLock()
-	defer fake.subscribeToActualLRPEventsMutex.RUnlock()
-	return len(fake.subscribeToActualLRPEventsArgsForCall)
-}
-
-func (fake *FakeInternalClient) SubscribeToActualLRPEventsArgsForCall(i int) lager.Logger {
-	fake.subscribeToActualLRPEventsMutex.RLock()
-	defer fake.subscribeToActualLRPEventsMutex.RUnlock()
-	return fake.subscribeToActualLRPEventsArgsForCall[i].logger
-}
-
-func (fake *FakeInternalClient) SubscribeToActualLRPEventsReturns(result1 events.EventSource, result2 error) {
-	fake.SubscribeToActualLRPEventsStub = nil
-	fake.subscribeToActualLRPEventsReturns = struct {
-		result1 events.EventSource
-		result2 error
-	}{result1, result2}
-}
-
 func (fake *FakeInternalClient) ClaimActualLRP(logger lager.Logger, processGuid string, index int, instanceKey *models.ActualLRPInstanceKey) error {
 	fake.claimActualLRPMutex.Lock()
 	fake.claimActualLRPArgsForCall = append(fake.claimActualLRPArgsForCall, struct {
@@ -1642,75 +1582,6 @@ func (fake *FakeInternalClient) RemoveEvacuatingActualLRPReturns(result1 error) 
 	}{result1}
 }
 
-func (fake *FakeInternalClient) ConvergeLRPs(logger lager.Logger) error {
-	fake.convergeLRPsMutex.Lock()
-	fake.convergeLRPsArgsForCall = append(fake.convergeLRPsArgsForCall, struct {
-		logger lager.Logger
-	}{logger})
-	fake.recordInvocation("ConvergeLRPs", []interface{}{logger})
-	fake.convergeLRPsMutex.Unlock()
-	if fake.ConvergeLRPsStub != nil {
-		return fake.ConvergeLRPsStub(logger)
-	} else {
-		return fake.convergeLRPsReturns.result1
-	}
-}
-
-func (fake *FakeInternalClient) ConvergeLRPsCallCount() int {
-	fake.convergeLRPsMutex.RLock()
-	defer fake.convergeLRPsMutex.RUnlock()
-	return len(fake.convergeLRPsArgsForCall)
-}
-
-func (fake *FakeInternalClient) ConvergeLRPsArgsForCall(i int) lager.Logger {
-	fake.convergeLRPsMutex.RLock()
-	defer fake.convergeLRPsMutex.RUnlock()
-	return fake.convergeLRPsArgsForCall[i].logger
-}
-
-func (fake *FakeInternalClient) ConvergeLRPsReturns(result1 error) {
-	fake.ConvergeLRPsStub = nil
-	fake.convergeLRPsReturns = struct {
-		result1 error
-	}{result1}
-}
-
-func (fake *FakeInternalClient) ConvergeTasks(logger lager.Logger, kickTaskDuration time.Duration, expirePendingTaskDuration time.Duration, expireCompletedTaskDuration time.Duration) error {
-	fake.convergeTasksMutex.Lock()
-	fake.convergeTasksArgsForCall = append(fake.convergeTasksArgsForCall, struct {
-		logger                      lager.Logger
-		kickTaskDuration            time.Duration
-		expirePendingTaskDuration   time.Duration
-		expireCompletedTaskDuration time.Duration
-	}{logger, kickTaskDuration, expirePendingTaskDuration, expireCompletedTaskDuration})
-	fake.recordInvocation("ConvergeTasks", []interface{}{logger, kickTaskDuration, expirePendingTaskDuration, expireCompletedTaskDuration})
-	fake.convergeTasksMutex.Unlock()
-	if fake.ConvergeTasksStub != nil {
-		return fake.ConvergeTasksStub(logger, kickTaskDuration, expirePendingTaskDuration, expireCompletedTaskDuration)
-	} else {
-		return fake.convergeTasksReturns.result1
-	}
-}
-
-func (fake *FakeInternalClient) ConvergeTasksCallCount() int {
-	fake.convergeTasksMutex.RLock()
-	defer fake.convergeTasksMutex.RUnlock()
-	return len(fake.convergeTasksArgsForCall)
-}
-
-func (fake *FakeInternalClient) ConvergeTasksArgsForCall(i int) (lager.Logger, time.Duration, time.Duration, time.Duration) {
-	fake.convergeTasksMutex.RLock()
-	defer fake.convergeTasksMutex.RUnlock()
-	return fake.convergeTasksArgsForCall[i].logger, fake.convergeTasksArgsForCall[i].kickTaskDuration, fake.convergeTasksArgsForCall[i].expirePendingTaskDuration, fake.convergeTasksArgsForCall[i].expireCompletedTaskDuration
-}
-
-func (fake *FakeInternalClient) ConvergeTasksReturns(result1 error) {
-	fake.ConvergeTasksStub = nil
-	fake.convergeTasksReturns = struct {
-		result1 error
-	}{result1}
-}
-
 func (fake *FakeInternalClient) StartTask(logger lager.Logger, taskGuid string, cellID string) (bool, error) {
 	fake.startTaskMutex.Lock()
 	fake.startTaskArgsForCall = append(fake.startTaskArgsForCall, struct {
@@ -1827,6 +1698,8 @@ func (fake *FakeInternalClient) Invocations() map[string][][]interface{} {
 	defer fake.desireTaskMutex.RUnlock()
 	fake.tasksMutex.RLock()
 	defer fake.tasksMutex.RUnlock()
+	fake.tasksWithFilterMutex.RLock()
+	defer fake.tasksWithFilterMutex.RUnlock()
 	fake.tasksByDomainMutex.RLock()
 	defer fake.tasksByDomainMutex.RUnlock()
 	fake.tasksByCellIDMutex.RLock()
@@ -1869,10 +1742,6 @@ func (fake *FakeInternalClient) Invocations() map[string][][]interface{} {
 	defer fake.pingMutex.RUnlock()
 	fake.cellsMutex.RLock()
 	defer fake.cellsMutex.RUnlock()
-	fake.subscribeToDesiredLRPEventsMutex.RLock()
-	defer fake.subscribeToDesiredLRPEventsMutex.RUnlock()
-	fake.subscribeToActualLRPEventsMutex.RLock()
-	defer fake.subscribeToActualLRPEventsMutex.RUnlock()
 	fake.claimActualLRPMutex.RLock()
 	defer fake.claimActualLRPMutex.RUnlock()
 	fake.startActualLRPMutex.RLock()
@@ -1893,10 +1762,6 @@ func (fake *FakeInternalClient) Invocations() map[string][][]interface{} {
 	defer fake.evacuateCrashedActualLRPMutex.RUnlock()
 	fake.removeEvacuatingActualLRPMutex.RLock()
 	defer fake.removeEvacuatingActualLRPMutex.RUnlock()
-	fake.convergeLRPsMutex.RLock()
-	defer fake.convergeLRPsMutex.RUnlock()
-	fake.convergeTasksMutex.RLock()
-	defer fake.convergeTasksMutex.RUnlock()
 	fake.startTaskMutex.RLock()
 	defer fake.startTaskMutex.RUnlock()
 	fake.failTaskMutex.RLock()

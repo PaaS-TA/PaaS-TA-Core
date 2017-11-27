@@ -6,7 +6,7 @@ cp -R ${PWD}/acceptance-tests/* "${BOSH_INSTALL_TARGET}/src/github.com/cloudfoun
 mkdir -p "${BOSH_INSTALL_TARGET}/src/github.com/cloudfoundry-incubator/check-a-record"
 cp -R ${PWD}/acceptance-tests/vendor/github.com/cloudfoundry-incubator/check-a-record/ "${BOSH_INSTALL_TARGET}/src/github.com/cloudfoundry-incubator/"
 
-export GOROOT="$(readlink -nf /var/vcap/packages/golang1.7)"
+export GOROOT="$(readlink -nf /var/vcap/packages/golang1.8)"
 export GOPATH="${BOSH_INSTALL_TARGET}"
 export PATH="${GOROOT}/bin:${PATH}"
 

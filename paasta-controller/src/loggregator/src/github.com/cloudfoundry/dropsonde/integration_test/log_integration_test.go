@@ -12,7 +12,6 @@ import (
 	"github.com/cloudfoundry/dropsonde/metric_sender"
 	"github.com/cloudfoundry/dropsonde/metricbatcher"
 	"github.com/cloudfoundry/dropsonde/metrics"
-	"github.com/cloudfoundry/loggregatorlib/loggertesthelper"
 	"github.com/cloudfoundry/sonde-go/events"
 	"github.com/gogo/protobuf/proto"
 	. "github.com/onsi/ginkgo"
@@ -47,7 +46,7 @@ var _ = Describe("LogIntegration", func() {
 		})
 
 		It("sends dropped error message for messages which are just under 64k and don't fit in UDP packet", func() {
-			logSender := log_sender.NewLogSender(dropsonde.AutowiredEmitter(), loggertesthelper.Logger())
+			logSender := log_sender.NewLogSender(dropsonde.AutowiredEmitter())
 
 			const length = 64*1024 - 1
 			reader := strings.NewReader(strings.Repeat("s", length) + "\n")
@@ -61,7 +60,7 @@ var _ = Describe("LogIntegration", func() {
 		})
 
 		It("sends dropped error message for messages which are over 64k", func() {
-			logSender := log_sender.NewLogSender(dropsonde.AutowiredEmitter(), loggertesthelper.Logger())
+			logSender := log_sender.NewLogSender(dropsonde.AutowiredEmitter())
 
 			const length = 64*1024 + 1
 			reader := strings.NewReader(strings.Repeat("s", length) + "\n")

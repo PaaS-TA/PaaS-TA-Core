@@ -6,12 +6,12 @@ templates:
 packages:
  - acceptance-tests
  - etcd
- - golang1.7
+ - golang1.8
 
 properties:
   etcd.acceptance_tests.bosh.target:
    description: "Location of the BOSH Director to target when deploying etcd"
-   default: "192.168.50.4"
+   default: "https://192.168.50.4:25555"
 
   etcd.acceptance_tests.bosh.username:
    description: "BOSH Director username"
@@ -25,22 +25,6 @@ properties:
    description: "BOSH Director CA Cert"
    default: ""
 
-  etcd.acceptance_tests.registry.host:
-   description: "Host for the BOSH registry"
-   default: "127.0.0.1"
-
-  etcd.acceptance_tests.registry.port:
-   description: "Port for the BOSH registry"
-   default: 25777
-
-  etcd.acceptance_tests.registry.username:
-   description: "Username for the BOSH registry"
-   default: "admin"
-
-  etcd.acceptance_tests.registry.password:
-   description: "Password for the BOSH registry"
-   default: "password"
-
   etcd.acceptance_tests.parallel_nodes:
    description: "Number of parallel nodes to use for tests"
    default: 1
@@ -48,3 +32,11 @@ properties:
   etcd.acceptance_tests.etcd_release_version:
    description: "The default etcd-release version number to deploy"
    default: latest
+
+  etcd.acceptance_tests.latest_etcd_release_version:
+   description: "The latest bosh.io etcd-release version number to deploy"
+   default: latest
+
+  etcd.acceptance_tests.enable_turbulence_tests:
+   description: "Run tests in turbulence package"
+   default: false

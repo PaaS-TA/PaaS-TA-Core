@@ -7,7 +7,6 @@ function main() {
   local root_dir
   root_dir=$(cd "${scripts_dir}/.." && pwd)
 
-  export GO15VENDOREXPERIMENT=1
   export PATH="${root_dir}/bin:${PATH}"
 
   install_ginkgo "${root_dir}"
@@ -17,16 +16,26 @@ function main() {
       -succinct \
       precheck
 
+    local test_args
+    test_args=(
+      "-r"
+      "-randomizeAllSpecs"
+      "-randomizeSuites"
+      "-failFast"
+      "-succinct"
+      "-skipPackage" "precheck"
+      "-slowSpecThreshold" "300"
+    )
+
+    if [ "${1-}" != "cf-tls-upgrade" ]; then
+      test_args+=(
+        "-race"
+        "-skipPackage" "cf-tls-upgrade"
+      )
+    fi
+
     ginkgo \
-      -r \
-      -race \
-      -randomizeAllSpecs \
-      -randomizeSuites \
-      -failFast \
-      -succinct \
-      -skipPackage precheck \
-      -skipPackage cf-tls-upgrade \
-      -slowSpecThreshold 300 \
+      "${test_args[@]}" \
       "$@"
   popd > /dev/null
 }

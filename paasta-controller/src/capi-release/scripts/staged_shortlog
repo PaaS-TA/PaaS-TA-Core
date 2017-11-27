@@ -15,9 +15,9 @@ puts # Second line of git commit message should always be empty
 locations.each do |location, shas|
   Dir.chdir(location) do
     puts "Bump #{location}"
-    
+
     commit_messages_by_author = Hash.new([])
-    `git log #{shas} --pretty=format:'%h %an: %s'`.split("\n").each do |commit|
+    `git log #{shas} --pretty=format:'%h %an: %s'`.force_encoding('UTF-8').split("\n").each do |commit|
       _sha, rest_of_commit = commit.split(" ", 2)
       author, message = rest_of_commit.split(":", 2)
       commit_messages_by_author[author] += [message]

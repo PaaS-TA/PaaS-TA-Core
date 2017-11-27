@@ -35,6 +35,7 @@ type StagingRequestFromCC struct {
 	Lifecycle          string                        `json:"lifecycle"`
 	LifecycleData      *json.RawMessage              `json:"lifecycle_data,omitempty"`
 	CompletionCallback string                        `json:"completion_callback"`
+	IsolationSegment   string                        `json:"isolation_segment"`
 }
 
 type BuildpackStagingData struct {

@@ -23,11 +23,12 @@ const POLL_INTERVAL = time.Millisecond * 250
 
 var _ = Describe("confab", func() {
 	var (
-		tempDir         string
-		dataDir         string
-		consulConfigDir string
-		pidFile         *os.File
-		configFile      *os.File
+		tempDir              string
+		dataDir              string
+		consulConfigDir      string
+		pidFile              *os.File
+		configFile           *os.File
+		configConsulLinkFile *os.File
 	)
 
 	BeforeEach(func() {
@@ -57,6 +58,14 @@ var _ = Describe("confab", func() {
 
 		writeConfigurationFile(configFile.Name(), map[string]interface{}{})
 
+		configConsulLinkFile, err = ioutil.TempFile(tempDir, "config-consul-link-file")
+		Expect(err).NotTo(HaveOccurred())
+
+		err = configConsulLinkFile.Close()
+		Expect(err).NotTo(HaveOccurred())
+
+		writeConfigurationFile(configConsulLinkFile.Name(), map[string]interface{}{})
+
 		options := []byte(`{"Members": ["member-1", "member-2", "member-3"]}`)
 		err = ioutil.WriteFile(filepath.Join(consulConfigDir, "options.json"), options, 0600)
 		Expect(err).NotTo(HaveOccurred())
@@ -74,7 +83,24 @@ var _ = Describe("confab", func() {
 	})
 
 	Context("when managing the entire process lifecycle", func() {
+		var (
+			expectedCloudControllerServiceConfig []byte
+			expectedRouterServiceConfig          []byte
+		)
+
 		BeforeEach(func() {
+			os := "linux"
+			if Windows {
+				os = "windows"
+			}
+
+			var err error
+			expectedCloudControllerServiceConfig, err = ioutil.ReadFile(filepath.Join("fixtures", fmt.Sprintf("service-cloud-controller-%s.json", os)))
+			Expect(err).NotTo(HaveOccurred())
+
+			expectedRouterServiceConfig, err = ioutil.ReadFile(filepath.Join("fixtures", fmt.Sprintf("service-router-%s.json", os)))
+			Expect(err).NotTo(HaveOccurred())
+
 			writeConfigurationFile(configFile.Name(), map[string]interface{}{
 				"node": map[string]interface{}{
 					"name":        "my-node",
@@ -113,6 +139,7 @@ var _ = Describe("confab", func() {
 					"performance": map[string]int{
 						"raft_multiplier": 1,
 					},
+					"tls_min_version": "tls12",
 				},
 			})
 		})
@@ -122,10 +149,10 @@ var _ = Describe("confab", func() {
 		})
 
 		testStoppingConsulProcess := func(pid int) {
-
 			stop := exec.Command(pathToConfab,
 				"stop",
 				"--config-file", configFile.Name(),
+				"--config-consul-link-file", configConsulLinkFile.Name(),
 			)
 			Eventually(stop.Run, COMMAND_TIMEOUT, COMMAND_TIMEOUT).Should(Succeed())
 
@@ -142,42 +169,16 @@ var _ = Describe("confab", func() {
 					"-recursor=10.0.2.3",
 				},
 				LeaveCallCount: 1,
+				SelfCallCount:  1,
 			}))
 
 			serviceConfig, err := ioutil.ReadFile(filepath.Join(consulConfigDir, "service-cloud_controller.json"))
 			Expect(err).NotTo(HaveOccurred())
-			Expect(string(serviceConfig)).To(MatchJSON(`{
-				"service": {
-					"name": "cloud-controller",
-					"check": {
-						"name": "dns_health_check",
-						"script": "/var/vcap/jobs/cloud_controller/bin/dns_health_check",
-						"interval": "3s"
-					},
-					"checks": [
-						{
-							"name": "do_something",
-							"script": "/var/vcap/jobs/cloudcontroller/bin/do_something",
-							"interval": "5m"
-						}
-					],
-					"tags": ["my-node-3"]
-				}
-			}`))
+			Expect(string(serviceConfig)).To(MatchJSON(string(expectedCloudControllerServiceConfig)))
 
 			serviceConfig, err = ioutil.ReadFile(filepath.Join(consulConfigDir, "service-router.json"))
 			Expect(err).NotTo(HaveOccurred())
-			Expect(string(serviceConfig)).To(MatchJSON(`{
-				"service": {
-					"name": "gorouter",
-					"check": {
-						"name": "dns_health_check",
-						"script": "/var/vcap/jobs/router/bin/dns_health_check",
-						"interval": "3s"
-					},
-					"tags": ["my-node-3"]
-				}
-			}`))
+			Expect(string(serviceConfig)).To(MatchJSON(string(expectedRouterServiceConfig)))
 
 			consulConfig, err := ioutil.ReadFile(filepath.Join(consulConfigDir, "config.json"))
 			Expect(err).NotTo(HaveOccurred())
@@ -212,6 +213,7 @@ var _ = Describe("confab", func() {
 				"performance": map[string]int{
 					"raft_multiplier": 1,
 				},
+				"tls_min_version": "tls12",
 			}
 			body, err := json.Marshal(conf)
 			Expect(err).To(BeNil())
@@ -219,11 +221,15 @@ var _ = Describe("confab", func() {
 		}
 
 		It("starts and stops the consul process as a daemon", func() {
+			if Windows {
+				Skip("On Windows Consul is ran as a foreground process")
+			}
 			start := exec.Command(pathToConfab,
 				"start",
 				"--recursor", "8.8.8.8",
 				"--recursor", "10.0.2.3",
 				"--config-file", configFile.Name(),
+				"--config-consul-link-file", configConsulLinkFile.Name(),
 			)
 			Eventually(start.Run, COMMAND_TIMEOUT, COMMAND_TIMEOUT).Should(Succeed())
 
@@ -241,6 +247,7 @@ var _ = Describe("confab", func() {
 				"--recursor", "8.8.8.8",
 				"--recursor", "10.0.2.3",
 				"--config-file", configFile.Name(),
+				"--config-consul-link-file", configConsulLinkFile.Name(),
 			)
 			Eventually(start.Start, COMMAND_TIMEOUT, COMMAND_TIMEOUT).Should(Succeed())
 
@@ -273,6 +280,7 @@ var _ = Describe("confab", func() {
 				"--recursor", "8.8.8.8",
 				"--recursor", "10.0.2.3",
 				"--config-file", configFile.Name(),
+				"--config-consul-link-file", configConsulLinkFile.Name(),
 			)
 			Eventually(start.Start, COMMAND_TIMEOUT, COMMAND_TIMEOUT).Should(Succeed())
 
@@ -299,7 +307,6 @@ var _ = Describe("confab", func() {
 
 			Eventually(func() error { wg.Wait(); return nil }).Should(Succeed())
 		})
-
 	})
 
 	Context("when starting", func() {
@@ -333,6 +340,7 @@ var _ = Describe("confab", func() {
 				cmd := exec.Command(pathToConfab,
 					"start",
 					"--config-file", configFile.Name(),
+					"--config-consul-link-file", configConsulLinkFile.Name(),
 				)
 				Eventually(cmd.Run, COMMAND_TIMEOUT, COMMAND_TIMEOUT).Should(Succeed())
 
@@ -346,6 +354,7 @@ var _ = Describe("confab", func() {
 						"agent",
 						fmt.Sprintf("-config-dir=%s", consulConfigDir),
 					},
+					SelfCallCount: 1,
 				}))
 			})
 		})
@@ -381,6 +390,7 @@ var _ = Describe("confab", func() {
 				cmd := exec.Command(pathToConfab,
 					"start",
 					"--config-file", configFile.Name(),
+					"--config-consul-link-file", configConsulLinkFile.Name(),
 				)
 				Eventually(cmd.Run, COMMAND_TIMEOUT, COMMAND_TIMEOUT).Should(Succeed())
 
@@ -412,7 +422,7 @@ var _ = Describe("confab", func() {
 					PID:                 pid,
 					UseKeyCallCount:     1,
 					InstallKeyCallCount: 2,
-					StatsCallCount:      1,
+					SelfCallCount:       2,
 					ConsulConfig: ConsulConfig{
 						Server:    true,
 						Bootstrap: true,
@@ -454,6 +464,7 @@ var _ = Describe("confab", func() {
 				cmd := exec.Command(pathToConfab,
 					"start",
 					"--config-file", configFile.Name(),
+					"--config-consul-link-file", configConsulLinkFile.Name(),
 				)
 
 				start := time.Now()
@@ -462,8 +473,8 @@ var _ = Describe("confab", func() {
 
 				output, err := fakeAgentOutputFromFile(consulConfigDir, "fake-output-2.json")
 				Expect(err).NotTo(HaveOccurred())
-				Expect(output.StatsCallCount).To(BeNumerically(">", 0))
-				Expect(output.StatsCallCount).To(BeNumerically("<", 4))
+				Expect(output.SelfCallCount).To(BeNumerically(">", 0))
+				Expect(output.SelfCallCount).To(BeNumerically("<", 4))
 			})
 		})
 	})
@@ -496,11 +507,12 @@ var _ = Describe("confab", func() {
 			cmd := exec.Command(pathToConfab,
 				"start",
 				"--config-file", configFile.Name(),
+				"--config-consul-link-file", configConsulLinkFile.Name(),
 			)
 			Eventually(cmd.Run, COMMAND_TIMEOUT, COMMAND_TIMEOUT).Should(Succeed())
 
 			Eventually(func() error {
-				conn, err := net.Dial("tcp", "localhost:8400")
+				conn, err := net.Dial("tcp", "localhost:8500")
 				if err == nil {
 					conn.Close()
 				}
@@ -513,6 +525,7 @@ var _ = Describe("confab", func() {
 			cmd = exec.Command(pathToConfab,
 				"stop",
 				"--config-file", configFile.Name(),
+				"--config-consul-link-file", configConsulLinkFile.Name(),
 			)
 			Eventually(cmd.Run, COMMAND_TIMEOUT, COMMAND_TIMEOUT).Should(Succeed())
 
@@ -535,7 +548,7 @@ var _ = Describe("confab", func() {
 				LeaveCallCount:      1,
 				InstallKeyCallCount: 2,
 				UseKeyCallCount:     1,
-				StatsCallCount:      1,
+				SelfCallCount:       2,
 			}))
 		})
 	})
@@ -577,6 +590,7 @@ var _ = Describe("confab", func() {
 				cmd := exec.Command(pathToConfab,
 					"--recursor=8.8.8.8",
 					"--config-file", configFile.Name(),
+					"--config-consul-link-file", configConsulLinkFile.Name(),
 				)
 				buffer := bytes.NewBuffer([]byte{})
 				cmd.Stderr = buffer
@@ -589,7 +603,8 @@ var _ = Describe("confab", func() {
 		Context("when an invalid command is provided", func() {
 			It("returns a non-zero status code and prints usage", func() {
 				cmd := exec.Command(pathToConfab, "banana",
-					"--config-file", configFile.Name())
+					"--config-file", configFile.Name(),
+					"--config-consul-link-file", configConsulLinkFile.Name())
 				buffer := bytes.NewBuffer([]byte{})
 				cmd.Stderr = buffer
 				Eventually(cmd.Run, COMMAND_TIMEOUT, COMMAND_TIMEOUT).ShouldNot(Succeed())
@@ -601,7 +616,8 @@ var _ = Describe("confab", func() {
 		Context("expected-member is missing", func() {
 			It("prints an error and usage", func() {
 				cmd := exec.Command(pathToConfab, "start",
-					"--config-file", configFile.Name())
+					"--config-file", configFile.Name(),
+					"--config-consul-link-file", configConsulLinkFile.Name())
 				buffer := bytes.NewBuffer([]byte{})
 				cmd.Stderr = buffer
 				Eventually(cmd.Run, COMMAND_TIMEOUT, COMMAND_TIMEOUT).ShouldNot(Succeed())
@@ -631,7 +647,8 @@ var _ = Describe("confab", func() {
 
 			It("prints an error and usage", func() {
 				cmd := exec.Command(pathToConfab, "start",
-					"--config-file", configFile.Name())
+					"--config-file", configFile.Name(),
+					"--config-consul-link-file", configConsulLinkFile.Name())
 				buffer := bytes.NewBuffer([]byte{})
 				cmd.Stderr = buffer
 				Eventually(cmd.Run, COMMAND_TIMEOUT, COMMAND_TIMEOUT).ShouldNot(Succeed())
@@ -661,7 +678,8 @@ var _ = Describe("confab", func() {
 
 			It("prints an error and usage", func() {
 				cmd := exec.Command(pathToConfab, "start",
-					"--config-file", configFile.Name())
+					"--config-file", configFile.Name(),
+					"--config-consul-link-file", configConsulLinkFile.Name())
 				buffer := bytes.NewBuffer([]byte{})
 				cmd.Stderr = buffer
 				Eventually(cmd.Run, COMMAND_TIMEOUT, COMMAND_TIMEOUT).ShouldNot(Succeed())
@@ -691,7 +709,8 @@ var _ = Describe("confab", func() {
 
 			It("prints an error and usage", func() {
 				cmd := exec.Command(pathToConfab, "start",
-					"--config-file", configFile.Name())
+					"--config-file", configFile.Name(),
+					"--config-consul-link-file", configConsulLinkFile.Name())
 				buffer := bytes.NewBuffer([]byte{})
 				cmd.Stderr = buffer
 				Eventually(cmd.Run, COMMAND_TIMEOUT, COMMAND_TIMEOUT).ShouldNot(Succeed())
@@ -723,12 +742,14 @@ var _ = Describe("confab", func() {
 				cmd := exec.Command(pathToConfab,
 					"start",
 					"--config-file", configFile.Name(),
+					"--config-consul-link-file", configConsulLinkFile.Name(),
 				)
 				Eventually(cmd.Run, COMMAND_TIMEOUT, COMMAND_TIMEOUT).Should(Succeed())
 
 				cmd = exec.Command(pathToConfab,
 					"start",
 					"--config-file", configFile.Name(),
+					"--config-consul-link-file", configConsulLinkFile.Name(),
 				)
 
 				stdout := bytes.NewBuffer([]byte{})
@@ -742,50 +763,6 @@ var _ = Describe("confab", func() {
 				pid, err := getPID(pidFile.Name())
 				Expect(err).NotTo(HaveOccurred())
 				Expect(utils.IsPIDRunning(pid)).To(BeTrue())
-			})
-		})
-
-		Context("when the rpc connection cannot be created", func() {
-			BeforeEach(func() {
-				writeConfigurationFile(configFile.Name(), map[string]interface{}{
-					"path": map[string]interface{}{
-						"agent_path":        pathToFakeAgent,
-						"consul_config_dir": consulConfigDir,
-						"pid_file":          pidFile.Name(),
-						"data_dir":          dataDir,
-					},
-					"consul": map[string]interface{}{
-						"agent": map[string]interface{}{
-							"mode": "server",
-							"servers": map[string]interface{}{
-								"lan": []string{"member-1", "member-2", "member-3"},
-							},
-						},
-					},
-				})
-			})
-
-			AfterEach(func() {
-				err := os.Remove(configFile.Name())
-				Expect(err).NotTo(HaveOccurred())
-			})
-
-			It("returns an error and exits with status 1", func() {
-				options := []byte(`{ "Members": ["member-1", "member-2", "member-3"], "FailRPCServer": true }`)
-				Expect(ioutil.WriteFile(filepath.Join(consulConfigDir, "options.json"), options, 0600)).To(Succeed())
-
-				cmd := exec.Command(pathToConfab,
-					"start",
-					"--config-file", configFile.Name(),
-				)
-				buffer := bytes.NewBuffer([]byte{})
-				cmd.Stderr = buffer
-				Eventually(cmd.Run, COMMAND_TIMEOUT, COMMAND_TIMEOUT).ShouldNot(Succeed())
-				Expect(buffer).To(ContainSubstring("error during start"))
-				Expect(buffer).To(Or(
-					ContainSubstring("connection refused"),
-					ContainSubstring("No connection could be made"), // Windows
-				))
 			})
 		})
 
@@ -829,6 +806,7 @@ var _ = Describe("confab", func() {
 				cmd := exec.Command(pathToConfab,
 					"start",
 					"--config-file", tmpFile.Name(),
+					"--config-consul-link-file", configConsulLinkFile.Name(),
 				)
 				buffer := bytes.NewBuffer([]byte{})
 				cmd.Stderr = buffer
@@ -876,6 +854,7 @@ var _ = Describe("confab", func() {
 				cmd := exec.Command(pathToConfab,
 					"start",
 					"--config-file", configFile.Name(),
+					"--config-consul-link-file", configConsulLinkFile.Name(),
 				)
 				buffer := bytes.NewBuffer([]byte{})
 				cmd.Stderr = buffer

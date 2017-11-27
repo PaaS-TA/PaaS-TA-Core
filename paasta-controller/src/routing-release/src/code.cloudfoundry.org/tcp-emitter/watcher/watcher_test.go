@@ -15,6 +15,7 @@ import (
 	"code.cloudfoundry.org/tcp-emitter/routing_table/fakes"
 	"code.cloudfoundry.org/tcp-emitter/watcher"
 	"github.com/tedsuo/ifrit"
+	"github.com/vito/go-sse/sse"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -55,6 +56,7 @@ var _ = Describe("Watcher", func() {
 					ActualLRPInstanceKey: models.NewActualLRPInstanceKey(instanceGuid, "cell-id-1"),
 					ActualLRPNetInfo: models.NewActualLRPNetInfo(
 						hostAddress,
+						"1.2.3.4",
 						models.NewPortMapping(hostPort, containerPort),
 					),
 					State: models.ActualLRPStateRunning,
@@ -67,6 +69,7 @@ var _ = Describe("Watcher", func() {
 					ActualLRPInstanceKey: models.NewActualLRPInstanceKey(instanceGuid, "cell-id-1"),
 					ActualLRPNetInfo: models.NewActualLRPNetInfo(
 						hostAddress,
+						"1.2.3.4",
 						models.NewPortMapping(hostPort, containerPort),
 					),
 					State: models.ActualLRPStateRunning,
@@ -83,8 +86,6 @@ var _ = Describe("Watcher", func() {
 		testWatcher         *watcher.Watcher
 		clock               *fakeclock.FakeClock
 		process             ifrit.Process
-		eventChannel        chan models.Event
-		errorChannel        chan error
 		syncChannel         chan struct{}
 	)
 
@@ -94,27 +95,10 @@ var _ = Describe("Watcher", func() {
 		routingTableHandler = new(fakes.FakeRoutingTableHandler)
 
 		clock = fakeclock.NewFakeClock(time.Now())
-
 		bbsClient.SubscribeToEventsReturns(eventSource, nil)
+
 		syncChannel = make(chan struct{})
 		testWatcher = watcher.NewWatcher(bbsClient, clock, routingTableHandler, syncChannel, logger)
-
-		eventChannel = make(chan models.Event)
-		errorChannel = make(chan error)
-
-		eventSource.CloseStub = func() error {
-			errorChannel <- errors.New("closed")
-			return nil
-		}
-
-		eventSource.NextStub = func() (models.Event, error) {
-			select {
-			case event := <-eventChannel:
-				return event, nil
-			case err := <-errorChannel:
-				return nil, err
-			}
-		}
 	})
 
 	JustBeforeEach(func() {
@@ -131,14 +115,14 @@ var _ = Describe("Watcher", func() {
 			event models.Event
 		)
 
-		JustBeforeEach(func() {
+		BeforeEach(func() {
 			desiredLRP := getDesiredLRP("process-guid-1", "log-guid-1", 5222, 61000)
 			event = models.NewDesiredLRPCreatedEvent(desiredLRP)
-			eventChannel <- event
+			eventSource.NextReturns(event, nil)
 		})
 
 		It("calls routingTableHandler HandleEvent", func() {
-			Eventually(routingTableHandler.HandleEventCallCount, 5*time.Second, 300*time.Millisecond).Should(Equal(1))
+			Eventually(routingTableHandler.HandleEventCallCount).Should(BeNumerically(">=", 1))
 			createEvent := routingTableHandler.HandleEventArgsForCall(0)
 			Expect(createEvent).Should(Equal(event))
 		})
@@ -149,15 +133,15 @@ var _ = Describe("Watcher", func() {
 			event models.Event
 		)
 
-		JustBeforeEach(func() {
+		BeforeEach(func() {
 			beforeLRP := getDesiredLRP("process-guid-1", "log-guid-1", 5222, 61000)
 			afterLRP := getDesiredLRP("process-guid-1", "log-guid-1", 5222, 61001)
 			event = models.NewDesiredLRPChangedEvent(beforeLRP, afterLRP)
-			eventChannel <- event
+			eventSource.NextReturns(event, nil)
 		})
 
 		It("calls routingTableHandler HandleEvent", func() {
-			Eventually(routingTableHandler.HandleEventCallCount, 5*time.Second, 300*time.Millisecond).Should(Equal(1))
+			Eventually(routingTableHandler.HandleEventCallCount).Should(BeNumerically(">=", 1))
 			changeEvent := routingTableHandler.HandleEventArgsForCall(0)
 			Expect(changeEvent).Should(Equal(event))
 		})
@@ -168,14 +152,14 @@ var _ = Describe("Watcher", func() {
 			event models.Event
 		)
 
-		JustBeforeEach(func() {
+		BeforeEach(func() {
 			desiredLRP := getDesiredLRP("process-guid-1", "log-guid-1", 5222, 61000)
 			event = models.NewDesiredLRPRemovedEvent(desiredLRP)
-			eventChannel <- event
+			eventSource.NextReturns(event, nil)
 		})
 
 		It("calls routingTableHandler HandleDesiredDelete", func() {
-			Eventually(routingTableHandler.HandleEventCallCount, 5*time.Second, 300*time.Millisecond).Should(Equal(1))
+			Eventually(routingTableHandler.HandleEventCallCount).Should(BeNumerically(">=", 1))
 			deleteEvent := routingTableHandler.HandleEventArgsForCall(0)
 			Expect(deleteEvent).Should(Equal(event))
 		})
@@ -186,14 +170,14 @@ var _ = Describe("Watcher", func() {
 			event models.Event
 		)
 
-		JustBeforeEach(func() {
+		BeforeEach(func() {
 			actualLRP := getActualLRP("process-guid-1", "instance-guid-1", "some-ip", 61000, 5222, false)
 			event = models.NewActualLRPCreatedEvent(actualLRP)
-			eventChannel <- event
+			eventSource.NextReturns(event, nil)
 		})
 
 		It("calls routingTableHandler HandleActualCreate", func() {
-			Eventually(routingTableHandler.HandleEventCallCount, 5*time.Second, 300*time.Millisecond).Should(Equal(1))
+			Eventually(routingTableHandler.HandleEventCallCount).Should(BeNumerically(">=", 1))
 			createEvent := routingTableHandler.HandleEventArgsForCall(0)
 			Expect(createEvent).Should(Equal(event))
 		})
@@ -204,15 +188,15 @@ var _ = Describe("Watcher", func() {
 			event models.Event
 		)
 
-		JustBeforeEach(func() {
+		BeforeEach(func() {
 			beforeLRP := getActualLRP("process-guid-1", "instance-guid-1", "some-ip", 61000, 5222, false)
 			afterLRP := getActualLRP("process-guid-1", "instance-guid-1", "some-ip", 61001, 5222, false)
 			event = models.NewActualLRPChangedEvent(beforeLRP, afterLRP)
-			eventChannel <- event
+			eventSource.NextReturns(event, nil)
 		})
 
 		It("calls routingTableHandler HandleActualUpdate", func() {
-			Eventually(routingTableHandler.HandleEventCallCount, 5*time.Second, 300*time.Millisecond).Should(Equal(1))
+			Eventually(routingTableHandler.HandleEventCallCount).Should(BeNumerically(">=", 1))
 			changeEvent := routingTableHandler.HandleEventArgsForCall(0)
 			Expect(changeEvent).Should(Equal(event))
 		})
@@ -224,19 +208,48 @@ var _ = Describe("Watcher", func() {
 		})
 
 		It("calls routingTableHandler HandleSync", func() {
-			Eventually(routingTableHandler.SyncCallCount, 5*time.Second, 300*time.Millisecond).Should(Equal(1))
+			Eventually(routingTableHandler.SyncCallCount).Should(Equal(1))
+		})
+	})
+
+	Context("when an unrecognized event is received", func() {
+		var (
+			fakeRawEventSource *eventfakes.FakeRawEventSource
+		)
+		BeforeEach(func() {
+			fakeRawEventSource = new(eventfakes.FakeRawEventSource)
+			fakeEventSource := events.NewEventSource(fakeRawEventSource)
+
+			fakeRawEventSource.NextReturns(
+				sse.Event{
+					ID:   "sup",
+					Name: "unrecognized-event-type",
+					Data: []byte("c3Nzcw=="),
+				},
+				nil,
+			)
+
+			bbsClient.SubscribeToEventsReturns(fakeEventSource, nil)
+			testWatcher = watcher.NewWatcher(bbsClient, clock, routingTableHandler, syncChannel, logger)
+		})
+
+		It("should not close the current connection", func() {
+			Consistently(fakeRawEventSource.CloseCallCount).Should(Equal(0))
 		})
 	})
 
 	Context("when eventSource returns error", func() {
-		JustBeforeEach(func() {
-			Eventually(bbsClient.SubscribeToEventsCallCount).Should(Equal(1))
-			errorChannel <- errors.New("buzinga...")
+		BeforeEach(func() {
+			eventSource.NextReturns(nil, errors.New("bazinga..."))
+		})
+
+		It("closes the current event source", func() {
+			Eventually(eventSource.CloseCallCount).Should(BeNumerically(">=", 1))
 		})
 
 		It("resubscribes to SSE from bbs", func() {
-			Eventually(bbsClient.SubscribeToEventsCallCount, 5*time.Second, 300*time.Millisecond).Should(Equal(2))
-			Eventually(logger).Should(gbytes.Say("failed-getting-next-event"))
+			Eventually(bbsClient.SubscribeToEventsCallCount, 5*time.Second, 300*time.Millisecond).Should(BeNumerically(">=", 2))
+			Eventually(logger).Should(gbytes.Say("event-source-error"))
 		})
 	})
 
@@ -267,8 +280,7 @@ var _ = Describe("Watcher", func() {
 		It("retries to subscribe", func() {
 			close(bbsErrorChannel)
 			Eventually(bbsClient.SubscribeToEventsCallCount, 5*time.Second, 300*time.Millisecond).Should(Equal(2))
-			Eventually(logger).Should(gbytes.Say("failed-subscribing-to-bbs-events"))
+			Eventually(logger).Should(gbytes.Say("kaboom"))
 		})
 	})
-
 })

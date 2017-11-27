@@ -1,0 +1,18 @@
+---
+platform: linux
+
+image: docker:///cfinfrastructure/deployment
+
+inputs:
+  - name: postgres-release
+
+run:
+  path: postgres-release/ci/scripts/run-bosh-delete-release/task.sh
+
+params:
+  BOSH_DIRECTOR:
+  BOSH_CLIENT:
+  BOSH_CLIENT_SECRET:
+  BOSH_CA_CERT:
+  REL_NAME:
+  REL_VERSION:

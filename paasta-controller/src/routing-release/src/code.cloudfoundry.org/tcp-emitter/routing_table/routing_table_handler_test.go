@@ -205,6 +205,7 @@ var _ = Describe("RoutingTableHandler", func() {
 							ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
 							ActualLRPNetInfo: models.NewActualLRPNetInfo(
 								"some-ip",
+								"1.2.3.4",
 								models.NewPortMapping(611006, 5222),
 							),
 							State: models.ActualLRPStateRunning,
@@ -250,6 +251,7 @@ var _ = Describe("RoutingTableHandler", func() {
 							ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
 							ActualLRPNetInfo: models.NewActualLRPNetInfo(
 								"some-ip",
+								"1.2.3.4",
 								models.NewPortMapping(611006, 5222),
 							),
 							State: models.ActualLRPStateClaimed,
@@ -285,6 +287,7 @@ var _ = Describe("RoutingTableHandler", func() {
 							ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
 							ActualLRPNetInfo: models.NewActualLRPNetInfo(
 								"",
+								"",
 							),
 							State: models.ActualLRPStateClaimed,
 						},
@@ -297,6 +300,7 @@ var _ = Describe("RoutingTableHandler", func() {
 							ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
 							ActualLRPNetInfo: models.NewActualLRPNetInfo(
 								"some-ip",
+								"1.2.3.4",
 								models.NewPortMapping(611006, 5222),
 							),
 							State: models.ActualLRPStateRunning,
@@ -342,6 +346,7 @@ var _ = Describe("RoutingTableHandler", func() {
 							ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
 							ActualLRPNetInfo: models.NewActualLRPNetInfo(
 								"some-ip",
+								"1.2.3.4",
 								models.NewPortMapping(611006, 5222),
 							),
 							State: models.ActualLRPStateRunning,
@@ -354,6 +359,7 @@ var _ = Describe("RoutingTableHandler", func() {
 							ActualLRPKey:         models.NewActualLRPKey("process-guid", 0, "domain"),
 							ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
 							ActualLRPNetInfo: models.NewActualLRPNetInfo(
+								"",
 								"",
 							),
 							State: models.ActualLRPStateCrashed,
@@ -399,6 +405,7 @@ var _ = Describe("RoutingTableHandler", func() {
 							ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", ""),
 							ActualLRPNetInfo: models.NewActualLRPNetInfo(
 								"",
+								"",
 							),
 							State: models.ActualLRPStateUnclaimed,
 						},
@@ -410,6 +417,7 @@ var _ = Describe("RoutingTableHandler", func() {
 							ActualLRPKey:         models.NewActualLRPKey("process-guid", 0, "domain"),
 							ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
 							ActualLRPNetInfo: models.NewActualLRPNetInfo(
+								"",
 								"",
 							),
 							State: models.ActualLRPStateClaimed,
@@ -445,6 +453,7 @@ var _ = Describe("RoutingTableHandler", func() {
 							ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
 							ActualLRPNetInfo: models.NewActualLRPNetInfo(
 								"some-ip",
+								"1.2.3.4",
 								models.NewPortMapping(611006, 5222),
 							),
 							State: models.ActualLRPStateRunning,
@@ -489,6 +498,7 @@ var _ = Describe("RoutingTableHandler", func() {
 							ActualLRPKey:         models.NewActualLRPKey("process-guid", 0, "domain"),
 							ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
 							ActualLRPNetInfo: models.NewActualLRPNetInfo(
+								"",
 								"",
 							),
 							State: models.ActualLRPStateClaimed,
@@ -642,6 +652,7 @@ var _ = Describe("RoutingTableHandler", func() {
 							ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
 							ActualLRPNetInfo: models.NewActualLRPNetInfo(
 								"some-ip",
+								"1.2.3.4",
 								models.NewPortMapping(61006, 5222),
 							),
 							State:           models.ActualLRPStateRunning,
@@ -687,6 +698,7 @@ var _ = Describe("RoutingTableHandler", func() {
 								ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id-1"),
 								ActualLRPNetInfo: models.NewActualLRPNetInfo(
 									"some-ip-1",
+									"1.2.3.4",
 									models.NewPortMapping(61007, 5222),
 								),
 								State:           models.ActualLRPStateRunning,

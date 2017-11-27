@@ -307,6 +307,7 @@ var _ = Describe("Routes API", func() {
 			})
 		})
 	}
+
 	TestTCPRoutes := func() {
 		Context("TCP Routes", func() {
 			var (
@@ -337,6 +338,45 @@ var _ = Describe("Routes API", func() {
 						return tcpRouteMappingsResponse
 					}, "10s", 1).Should(ConsistOf(matchers.MatchTcpRoute(tcpRouteMapping1)))
 
+				})
+				Context("when tcp route mappings already exist", func() {
+					BeforeEach(func() {
+						client = routing_api.NewClient(fmt.Sprintf("http://127.0.0.1:%d", routingAPIPort), false)
+						var err error
+						tcpRouteMapping1 = models.NewTcpRouteMapping(routerGroupGuid, 52000, "1.2.3.4", 60000, 60)
+
+						tcpRouteMappings := []models.TcpRouteMapping{tcpRouteMapping1}
+						err = client.UpsertTcpRouteMappings(tcpRouteMappings)
+						Expect(err).NotTo(HaveOccurred())
+
+						Eventually(func() []models.TcpRouteMapping {
+							tcpRouteMappingsResponse, err := client.TcpRouteMappings()
+							Expect(err).ToNot(HaveOccurred())
+							return tcpRouteMappingsResponse
+						}, "10s", 1).Should(ConsistOf(matchers.MatchTcpRoute(tcpRouteMapping1)))
+
+					})
+					It("allows to update existing tcp route mappings", func() {
+						maxTTL := 60
+						tcpRouteMapping2 = models.TcpRouteMapping{
+							TcpMappingEntity: models.TcpMappingEntity{
+								RouterGroupGuid:  routerGroupGuid,
+								ExternalPort:     52000,
+								HostIP:           "1.2.3.4",
+								HostPort:         60000,
+								TTL:              &maxTTL,
+								IsolationSegment: "some-iso-seg",
+							}}
+						tcpRouteMappings := []models.TcpRouteMapping{tcpRouteMapping2}
+						err := client.UpsertTcpRouteMappings(tcpRouteMappings)
+						Expect(err).NotTo(HaveOccurred())
+
+						Eventually(func() []models.TcpRouteMapping {
+							tcpRouteMappingsResponse, err := client.TcpRouteMappings()
+							Expect(err).ToNot(HaveOccurred())
+							return tcpRouteMappingsResponse
+						}, "10s", 1).Should(ConsistOf(matchers.MatchTcpRoute(tcpRouteMapping2)))
+					})
 				})
 			})
 
@@ -401,7 +441,7 @@ var _ = Describe("Routes API", func() {
 		})
 	}
 
-	TestRouterGroups := func() {
+	TestRouterGroups := func(createRouterGroup func()) {
 		Context("Router Groups", func() {
 			Context("GET (LIST)", func() {
 				It("returns seeded router groups", func() {
@@ -441,8 +481,73 @@ var _ = Describe("Routes API", func() {
 					Expect(len(routerGroups)).To(Equal(1))
 					Expect(routerGroups[0].ReservablePorts).To(Equal(models.ReservablePorts("6000-8000")))
 				})
+
+				It("validates updates", func() {
+					var routerGroups models.RouterGroups
+					client = routing_api.NewClient(fmt.Sprintf("http://127.0.0.1:%d", routingAPIPort), false)
+					Eventually(func() error {
+						var err error
+						routerGroups, err = client.RouterGroups()
+						return err
+					}, "30s", "1s").ShouldNot(HaveOccurred(), "Failed to connect to Routing API server after 30s.")
+					Expect(len(routerGroups)).To(Equal(1))
+					routerGroup := routerGroups[0]
+
+					routerGroup.ReservablePorts = ""
+					err := client.UpdateRouterGroup(routerGroup)
+					Expect(err).To(HaveOccurred())
+
+					routerGroups, err = client.RouterGroups()
+					Expect(err).NotTo(HaveOccurred())
+					Expect(len(routerGroups)).To(Equal(1))
+					Expect(routerGroups[0].ReservablePorts).To(Equal(models.ReservablePorts("1024-65535")))
+				})
+			})
+
+			Context("POST", func() {
+				It("returns new router group", func() {
+					createRouterGroup()
+				})
 			})
 		})
+	}
+
+	withCreateRouterGroup := func() {
+		var routerGroup models.RouterGroup
+		var routerGroups models.RouterGroups
+
+		client = routing_api.NewClient(fmt.Sprintf("http://127.0.0.1:%d", routingAPIPort), false)
+		Eventually(func() error {
+			var err error
+			routerGroups, err = client.RouterGroups()
+			return err
+		}, "30s", "1s").ShouldNot(HaveOccurred(), "Failed to connect to Routing API server after 30s.")
+
+		Expect(len(routerGroups)).To(Equal(1))
+
+		routerGroup.ReservablePorts = "6000-8000"
+		routerGroup.Name = "test-group"
+		routerGroup.Type = "tcp"
+		routerGroup.Guid = "blah-blue"
+
+		err := client.CreateRouterGroup(routerGroup)
+		Expect(err).NotTo(HaveOccurred())
+
+		routerGroups, err = client.RouterGroups()
+		Expect(err).NotTo(HaveOccurred())
+		Expect(len(routerGroups)).To(Equal(2))
+		for i, rg := range routerGroups {
+			if rg.Guid == "blah-blue" {
+				Expect(routerGroups[i].ReservablePorts).To(Equal(models.ReservablePorts("6000-8000")))
+				Expect(routerGroups[i].Type).To(Equal(models.RouterGroupType("tcp")))
+				Expect(routerGroups[i].Name).To(Equal("test-group"))
+			}
+		}
+	}
+
+	withoutCreateRouterGroup := func() {
+		// NO OP
+		fmt.Println("not supported for etcd")
 	}
 
 	Describe("API with MySQL", func() {
@@ -457,7 +562,7 @@ var _ = Describe("Routes API", func() {
 			ginkgomon.Kill(routingAPIProcess)
 		})
 
-		TestRouterGroups()
+		TestRouterGroups(withCreateRouterGroup)
 		TestTCPRoutes()
 		TestTCPEvents()
 		TestHTTPRoutes()
@@ -480,6 +585,6 @@ var _ = Describe("Routes API", func() {
 		TestHTTPRoutes()
 		TestTCPRoutes()
 		TestTCPEvents()
-		TestRouterGroups()
+		TestRouterGroups(withoutCreateRouterGroup)
 	})
 })

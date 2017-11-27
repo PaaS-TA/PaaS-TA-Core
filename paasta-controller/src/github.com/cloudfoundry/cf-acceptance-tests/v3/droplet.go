@@ -45,16 +45,17 @@ var _ = V3Describe("droplet features", func() {
 		)
 
 		BeforeEach(func() {
-			sourceDropletGuid = StageBuildpackPackage(packageGuid, Config.GetRubyBuildpackName())
-			WaitForDropletToStage(sourceDropletGuid)
+			buildGuid := StageBuildpackPackage(packageGuid, Config.GetRubyBuildpackName())
+			WaitForBuildToStage(buildGuid)
+			sourceDropletGuid = GetDropletFromBuild(buildGuid)
 
 			destinationAppName = random_name.CATSRandomName("APP")
 			destinationAppGuid = CreateApp(destinationAppName, spaceGuid, "{}")
 		})
 
 		It("can copy a droplet", func() {
-			copyRequestBody := fmt.Sprintf("{\"relationships\":{\"app\":{\"guid\":\"%s\"}}}", destinationAppGuid)
-			copyUrl := fmt.Sprintf("/v3/droplets/%s/copy", sourceDropletGuid)
+			copyRequestBody := fmt.Sprintf("{\"relationships\": {\"app\": {\"data\": {\"guid\":\"%s\"}}}}", destinationAppGuid)
+			copyUrl := fmt.Sprintf("/v3/droplets?source_guid=%s", sourceDropletGuid)
 			session := cf.Cf("curl", copyUrl, "-X", "POST", "-d", copyRequestBody)
 
 			bytes := session.Wait(Config.DefaultTimeoutDuration()).Out.Contents()
@@ -64,7 +65,7 @@ var _ = V3Describe("droplet features", func() {
 			json.Unmarshal(bytes, &droplet)
 			copiedDropletGuid := droplet.Guid
 
-			WaitForDropletToStage(copiedDropletGuid)
+			WaitForDropletToCopy(copiedDropletGuid)
 
 			DeleteApp(appGuid) // to prove that the new app does not depend on the old app
 
@@ -85,8 +86,8 @@ var _ = V3Describe("droplet features", func() {
 		})
 
 		It("creates an audit.app.droplet.create event for the copied droplet", func() {
-			copyRequestBody := fmt.Sprintf("{\"relationships\":{\"app\":{\"guid\":\"%s\"}}}", destinationAppGuid)
-			copyUrl := fmt.Sprintf("/v3/droplets/%s/copy", sourceDropletGuid)
+			copyRequestBody := fmt.Sprintf("{\"relationships\": {\"app\": {\"data\": {\"guid\":\"%s\"}}}}", destinationAppGuid)
+			copyUrl := fmt.Sprintf("/v3/droplets?source_guid=%s", sourceDropletGuid)
 			session := cf.Cf("curl", copyUrl, "-X", "POST", "-d", copyRequestBody)
 
 			bytes := session.Wait(Config.DefaultTimeoutDuration()).Out.Contents()
@@ -96,7 +97,7 @@ var _ = V3Describe("droplet features", func() {
 			json.Unmarshal(bytes, &droplet)
 			copiedDropletGuid := droplet.Guid
 
-			WaitForDropletToStage(copiedDropletGuid)
+			WaitForDropletToCopy(copiedDropletGuid)
 
 			DeleteApp(appGuid) // to prove that the new app does not depend on the old app
 

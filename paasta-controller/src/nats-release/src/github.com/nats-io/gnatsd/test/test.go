@@ -34,10 +34,11 @@ type tLogger interface {
 
 // DefaultTestOptions are default options for the unit tests.
 var DefaultTestOptions = server.Options{
-	Host:   "localhost",
-	Port:   4222,
-	NoLog:  true,
-	NoSigs: true,
+	Host:           "localhost",
+	Port:           4222,
+	NoLog:          true,
+	NoSigs:         true,
+	MaxControlLine: 256,
 }
 
 // RunDefaultServer starts a new Go routine based server using the default options
@@ -96,28 +97,11 @@ func RunServerWithAuth(opts *server.Options, auth server.Auth) *server.Server {
 	// Run server in Go routine.
 	go s.Start()
 
-	end := time.Now().Add(10 * time.Second)
-	for time.Now().Before(end) {
-		addr := s.GetListenEndpoint()
-		if addr == "" {
-			time.Sleep(50 * time.Millisecond)
-			// Retry. We might take a little while to open a connection.
-			continue
-		}
-		conn, err := net.Dial("tcp", addr)
-		if err != nil {
-			// Retry after 50ms
-			time.Sleep(50 * time.Millisecond)
-			continue
-		}
-		conn.Close()
-		// Wait a bit to give a chance to the server to remove this
-		// "client" from its state, which may otherwise interfere with
-		// some tests.
-		time.Sleep(25 * time.Millisecond)
-		return s
+	// Wait for accept loop(s) to be started
+	if !s.ReadyForConnections(10 * time.Second) {
+		panic("Unable to start NATS Server in Go Routine")
 	}
-	panic("Unable to start NATS Server in Go Routine")
+	return s
 }
 
 func stackFatalf(t tLogger, f string, args ...interface{}) {
@@ -225,8 +209,8 @@ func doRouteAuthConnect(t tLogger, c net.Conn, user, pass, id string) {
 }
 
 func setupRouteEx(t tLogger, c net.Conn, opts *server.Options, id string) (sendFun, expectFun) {
-	user := opts.ClusterUsername
-	pass := opts.ClusterPassword
+	user := opts.Cluster.Username
+	pass := opts.Cluster.Password
 	doRouteAuthConnect(t, c, user, pass, id)
 	return sendCommand(t, c), expectCommand(t, c)
 }
@@ -240,6 +224,13 @@ func setupRoute(t tLogger, c net.Conn, opts *server.Options) (sendFun, expectFun
 
 func setupConn(t tLogger, c net.Conn) (sendFun, expectFun) {
 	doDefaultConnect(t, c)
+	return sendCommand(t, c), expectCommand(t, c)
+}
+
+func setupConnWithProto(t tLogger, c net.Conn, proto int) (sendFun, expectFun) {
+	checkInfoMsg(t, c)
+	cs := fmt.Sprintf("CONNECT {\"verbose\":%v,\"pedantic\":%v,\"ssl_required\":%v,\"protocol\":%d}\r\n", false, false, false, proto)
+	sendProto(t, c, cs)
 	return sendCommand(t, c), expectCommand(t, c)
 }
 
@@ -402,7 +393,7 @@ func checkForPubSids(t tLogger, matches [][][]byte, sids []string) {
 func nextServerOpts(opts *server.Options) *server.Options {
 	nopts := *opts
 	nopts.Port++
-	nopts.ClusterPort++
+	nopts.Cluster.Port++
 	nopts.HTTPPort++
 	return &nopts
 }

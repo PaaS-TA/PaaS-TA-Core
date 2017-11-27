@@ -44,6 +44,13 @@ track_activity_query_size = 4096
 pg_stat_statements.track = all
 <% end %>
 
+<% if p("databases.tls.certificate") != '' %>
+ssl=on
+ssl_ca_file='/var/vcap/jobs/postgres/config/certificates/server.ca_cert'
+ssl_key_file='/var/vcap/jobs/postgres/config/certificates/server.private_key'
+ssl_cert_file='/var/vcap/jobs/postgres/config/certificates/server.public_cert'
+<% end %>
+
 <% if_p("databases.additional_config") do |db_config| %>
 # Additional configuration
 <% db_config.each do |key, value| %>

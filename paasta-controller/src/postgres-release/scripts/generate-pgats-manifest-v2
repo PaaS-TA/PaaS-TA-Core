@@ -1,0 +1,53 @@
+#!/bin/bash
+
+set -e
+
+manifest_dir=$(dirname $0)/../templates/v2
+
+usage() {
+  >&2 cat <<EOF
+SYNOPSIS:
+    Generate a bosh v2 manifest for a postgres-release acceptance test errand job deployment.
+
+USAGE:
+    $0 -v <path-to-variable-file> [ -o <path-to-operations-file> -b <bosh-cli-v2-alias> ]
+
+MANDATORY ARGUMENTS:
+    -v <path-to-variable-file>   Path to variables file containing BOSH director url, user, password, and ca certificate. See by way of example 'manifest/v2/bosh-lite/pgats-vars.yml'.
+
+OPTIONAL ARGUMENTS:
+    -o <path-to-operations-file> Path to operation file. You can use it to customize properties (see by way of example 'templates/v2/operations/pgats-props.yml').
+    -b <bosh-cli-v2-alias>          Specify the bosh cli v2 if different from 'bosh'.
+
+EOF
+  exit 1
+}
+
+boshcli=bosh
+
+while getopts "v:o:b:" opt; do
+  case $opt in
+    o)
+      operations_file="--ops-file ${OPTARG}"
+      ;;
+    v)
+      variables_file="--vars-file=${OPTARG}"
+      ;;
+    b)
+      boshcli=${OPTARG}
+      ;;
+    *)
+      echo "Unknown arguments"
+      usage
+      ;;
+  esac
+done
+
+if [ -z ${variables_file} ]; then
+  >&2 echo "ERROR: variables file is missing"
+  exit 1
+fi
+
+${boshcli} interpolate ${manifest_dir}/pgats-errand.yml \
+  ${variables_file} \
+  ${operations_file}

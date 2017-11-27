@@ -1,0 +1,18 @@
+<%=
+  consul_hash = {}
+
+  respond_to?(:if_link) && if_link('consul_common') do |consul_link|
+    consul_hash.merge!(consul_link.p('consul'))
+    consul_hash['agent']['servers']['lan'] = consul_link.instances.map(&:address)
+  end
+
+  respond_to?(:if_link) && if_link('consul_server') do |consul_link|
+    consul_hash.merge(consul_link.p('consul'))
+  end
+
+  respond_to?(:if_link) && if_link('consul_client') do |consul_link|
+    consul_hash.merge(consul_link.p('consul'))
+  end
+
+  consul_hash.to_json
+%>

@@ -1,0 +1,37 @@
+#!/bin/bash -exu
+
+SCRIPT_NAME=$(basename ${0})
+RUN_DIR=/var/vcap/sys/run/monit_agent
+LOG_DIR=/var/vcap/sys/log/monit_agent
+PKG_DIR=/var/vcap/packages/acceptance-tests
+PIDFILE=${RUN_DIR}/monit_agent.pid
+
+exec > >(tee -a >(logger -p user.info -t vcap.${SCRIPT_NAME}.stdout) | awk -W interactive '{ system("echo -n [$(date +\"%Y-%m-%d %H:%M:%S%z\")]"); print " " $0 }' >> ${LOG_DIR}/${SCRIPT_NAME}.log)
+exec 2> >(tee -a >(logger -p user.error -t vcap.${SCRIPT_NAME}.stderr) | awk -W interactive '{ system("echo -n [$(date +\"%Y-%m-%d %H:%M:%S%z\")]"); print " " $0 }' >> ${LOG_DIR}/${SCRIPT_NAME}.err.log)
+
+function main() {
+  case "${1}" in
+    "start")
+      "${PKG_DIR}/bin/monit_agent" --port 6789 \
+        2> >(tee -a ${LOG_DIR}/monit_agent.stderr.log | logger -p user.error -t vcap.monit_agent) \
+        1> >(tee -a ${LOG_DIR}/monit_agent.stdout.log | logger -p user.info  -t vcap.monit_agent) &
+
+      echo "${!}" > "${PIDFILE}"
+      ;;
+
+    "stop")
+      local pid
+      pid="$(cat "${PIDFILE}")"
+
+      kill -9 "${pid}"
+      rm "${PIDFILE}"
+      ;;
+
+    *)
+      echo "Usage: $0 {start|stop}"
+      ;;
+
+  esac
+}
+
+main ${@}

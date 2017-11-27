@@ -1,6 +1,7 @@
 #!/bin/bash
-
 set -e -x
+
+PACKAGE=$1
 
 function printStatus {
   if [ $? -eq 0 ]; then
@@ -20,65 +21,82 @@ run_go_vet() {
   for component in "$@"
   do
     pushd $component
-      # for file in $(find . -name "*.go" -not -iname "*test.go"); do
-      #   go tool vet -v -all -shadow=true $file
-      # done
       go vet ./...
     popd
   done
 }
 
-if uname -a | grep Darwin; then os=darwin; else os=linux; fi
+if uname -a | grep Darwin; then OS=darwin; else OS=linux; fi
 
+# get consul if needed
 set +e
-CONSUL_VERSION=`consul -v | grep 0.6.3`
+consul --version
+consul_status=$?
 set -e
-if [ "$CONSUL_VERSION" != "Consul v0.6.3" ]; then
-  curl -L -o ${tmpdir}/consul-0.6.3.zip "https://releases.hashicorp.com/consul/0.6.3/consul_0.6.3_${os}_amd64.zip"
+if [ ${consul_status} -ne 0 ]; then
+  curl -L -o ${tmpdir}/consul-0.6.3.zip "https://releases.hashicorp.com/consul/0.6.3/consul_0.6.3_${OS}_amd64.zip"
   unzip -o ${tmpdir}/consul-0.6.3.zip -d ./${bin_dir}
   rm ${tmpdir}/consul-0.6.3.zip
 fi
 
-pushd src/github.com/coreos/etcd
-  git checkout v2.1.1
-  go install .
-  git checkout -
-popd
+# install etcd if needed
+set +e
+etcd --version
+etcd_status=$?
+set -e
+if [ ${etcd_status} -ne 0 ]; then
+  if [ "$OS" == darwin ]; then
+    pushd src/github.com/coreos/etcd
+      git checkout v2.1.1
+      go install .
+      git checkout -
+    popd
+  else
+   OUTPUT="etcd-v2.1.1-linux-amd64.tar.gz"
+   curl -L "https://github.com/coreos/etcd/releases/download/v2.1.1/etcd-v2.1.1-linux-amd64.tar.gz" -o ${OUTPUT}
+   tar -xzf ${OUTPUT} -C /tmp
+   mv /tmp/etcd-v2.1.1-linux-amd64/etcd $GOPATH/bin
+   rm -rf ${OUTPUT}
+   rm -rf /tmp/etcd-v2.1.1-linux-amd64
+  fi
+fi
+
+GINKGO_FLAGS="ginkgo -r -race -keepGoing -p -trace -randomizeAllSpecs -progress  --nodes 4"
 
 export PATH=$PATH:$PWD/bin
-
+go get github.com/nats-io/gnatsd
 go get github.com/onsi/ginkgo/ginkgo
 go get github.com/onsi/gomega
 
+echo $PACKAGE
 if [ -n "$PACKAGE" ]; then
-  ginkgo -r -p "$@" "./src/${PACKAGE}"
+  $GINKGO_FLAGS "./src/code.cloudfoundry.org/${PACKAGE}"
 else
-  pushd src/code.cloudfoundry.org/uaa-go-client
-  popd
-
   pushd src/code.cloudfoundry.org
-    ginkgo -r -keepGoing -p -trace -randomizeAllSpecs -progress  --nodes 4 \
-      "$@" uaa-go-client
+      $GINKGO_FLAGS uaa-go-client
 
-    ginkgo -r -keepGoing -p -trace -randomizeAllSpecs -progress --nodes 4 \
-      "$@" routing-api routing-api-cli
+      $GINKGO_FLAGS multierror routing-api-cli
 
-    ginkgo -r -keepGoing -p -trace -randomizeAllSpecs -progress --nodes 4 \
-      "$@" cf-tcp-router tcp-emitter route-registrar
+      $GINKGO_FLAGS -skipPackage=cmd/routing-api routing-api
 
-    # Run go vet after ginkgo so that all necessary packages are compiled
-    run_go_vet tcp-emitter
+      $GINKGO_FLAGS -v routing-api/cmd/routing-api
+
+      # Run go vet after ginkgo so that all necessary packages are compiled
+      run_go_vet tcp-emitter
+
+      $GINKGO_FLAGS cf-tcp-router tcp-emitter route-registrar
   popd
 
   pushd src/code.cloudfoundry.org/gorouter
-    ginkgo -r -p -keepGoing -trace -randomizeAllSpecs -progress --nodes 4 \
-      "$@"
+    # Build gorouter source code to verify no errors
+    go build -race .
 
-    # Installing dependencies needed by go vet
-    go install .
-
-    #run_go_vet gorouter
     go vet ./...
-    go tool vet --shadow .
-  popd
+
+    $GINKGO_FLAGS
+    popd
+fi
+
+if [ "$OS" == linux ]; then
+  rm -rf $GOPATH/bin/{gnatsd,ginkgo,etcd}
 fi

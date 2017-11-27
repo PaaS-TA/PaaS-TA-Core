@@ -151,7 +151,7 @@ var _ = Describe("Deploy", func() {
 			})
 
 			_, err := client.Deploy([]byte("some-yaml"))
-			Expect(err).To(MatchError(errors.New("bosh task failed with an error status \"some-better-error-message\"")))
+			Expect(err).To(MatchError("task error: 100 has occurred: some-better-error-message"))
 		})
 
 		It("return result error if events error fails", func() {
@@ -238,7 +238,7 @@ var _ = Describe("Deploy", func() {
 			})
 
 			_, err := client.Deploy([]byte("some-yaml"))
-			Expect(err).To(MatchError(errors.New("bosh task failed with an errored status \"some-better-error-message\"")))
+			Expect(err).To(MatchError("task error: 100 has occurred: some-better-error-message"))
 		})
 
 		It("should error on a cancelled task status", func() {

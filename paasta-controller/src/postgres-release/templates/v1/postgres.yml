@@ -1,0 +1,51 @@
+name: (( meta.environment ))
+
+director_uuid: (( merge ))
+
+default_releases: [{name: postgres, version: latest}]
+releases: (( merge || default_releases ))
+
+networks: (( merge ))
+
+jobs:
+- name: postgres
+  templates:
+  - name: postgres
+    release: postgres
+  instances: 1
+  resource_pool: medium
+  persistent_disk: 4096
+  default_networks:
+  - name: default
+  networks: (( merge || default_networks ))
+  update: (( merge || empty_hash ))
+
+properties:
+  <<: (( merge ))
+
+  databases: ~
+
+resource_pools:
+  - name: medium
+    network: default
+    stemcell: (( meta.stemcell ))
+    cloud_properties: (( merge ))
+
+compilation:
+  workers: 1
+  network: default
+  reuse_compilation_vms: true
+  cloud_properties: (( merge ))
+
+update:
+  canaries: 1
+  max_in_flight: 1
+  canary_watch_time: 30000-600000
+  update_watch_time: 5000-600000
+  serial: true
+
+meta:
+  environment: ~
+  stemcell: (( merge ))
+
+empty_hash: {}

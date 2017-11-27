@@ -6,10 +6,22 @@ module VCAP::CloudController
       end
 
       def generate(task)
-        auth      = "#{@config[:internal_api][:auth_user]}:#{@config[:internal_api][:auth_password]}"
-        host_port = "#{@config[:internal_service_hostname]}:#{@config[:external_port]}"
-        path      = "/internal/v3/tasks/#{task.guid}/completed"
-        "http://#{auth}@#{host_port}#{path}"
+        schema = 'https'
+        auth = ''
+        host = @config[:internal_service_hostname]
+        port = @config[:tls_port]
+        api_version = 'v4'
+
+        unless @config.fetch(:diego, {})[:temporary_local_sync]
+          schema = 'http'
+          auth = "#{@config[:internal_api][:auth_user]}:#{@config[:internal_api][:auth_password]}@"
+          port = @config[:external_port]
+          api_version = 'v3'
+        end
+
+        path = "/internal/#{api_version}/tasks/#{task.guid}/completed"
+
+        "#{schema}://#{auth}#{host}:#{port}#{path}"
       end
     end
   end

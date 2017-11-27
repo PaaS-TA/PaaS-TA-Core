@@ -18,11 +18,13 @@ import java.util.List;
 
 public interface RevocableTokenProvisioning extends ResourceManager<RevocableToken> {
 
-    List<RevocableToken> getUserTokens(String userId);
+    int deleteRefreshTokensForClientAndUserId(String clientId, String userId, String zoneId);
 
-    List<RevocableToken> getUserTokens(String userId, String clientId);
+    List<RevocableToken> getUserTokens(String userId, String zoneId);
 
-    List<RevocableToken> getClientTokens(String clientId);
+    List<RevocableToken> getUserTokens(String userId, String clientId, String zoneId);
+
+    List<RevocableToken> getClientTokens(String clientId, String zoneId);
 
 
 

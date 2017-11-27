@@ -1,0 +1,36 @@
+/bin/
+/pkg/
+.blobs/
+blobs/
+config/dev.yml
+config/private.yml
+/*.yml
+stub.yml
+.final_builds/jobs/**/*.tgz
+.final_builds/packages/**/*.tgz
+.dev_builds
+output/
+tmp/
+releases/**/*.tgz
+dev_releases
+*.swp
+*~
+*#
+#*
+
+bosh-lite/manifests
+bosh-lite/deployments
+# gosub and friends
+src/github.com/vito/gosub
+# lol bet you were looking for this
+src/github.com/cloudfoundry-incubator/spiff/
+router-deployments-runtime/ci/credentials.yml
+tags
+.tags
+
+# built .test files from run-inigo compile check
+*.test
+
+# go packages
+src/golang.org/x/tools/
+src/github.com/kisielk/

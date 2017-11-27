@@ -1,0 +1,20 @@
+---
+packages:
+- name: dotnet-core-buildpack
+  version: 12eb0f780a02fd675caa7e18b70447beaa443a1c
+  fingerprint: 12eb0f780a02fd675caa7e18b70447beaa443a1c
+  sha1: 246dd4726fdb04efa56636da5d5f6c726574262c
+  dependencies: []
+jobs:
+- name: dotnet-core-buildpack
+  version: 1ef120904474b6048cb9737fe6c2526ecb9f6ebf
+  fingerprint: 1ef120904474b6048cb9737fe6c2526ecb9f6ebf
+  sha1: ddff52b2d08af5684a57f105745f878fdd619e2b
+license:
+  version: 26d59fe43ca1d3b97f4df622eb9d18aafbadf674
+  fingerprint: 26d59fe43ca1d3b97f4df622eb9d18aafbadf674
+  sha1: b919285ab5171cf0dcaaf94fb868f6f9df191988
+commit_hash: 19b310a4
+uncommitted_changes: true
+name: dotnet-core-buildpack
+version: 1.0.11

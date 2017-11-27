@@ -2,19 +2,25 @@ package main_test
 
 import (
 	"fmt"
+	"io/ioutil"
+	"log"
 	"net"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
 
+	"google.golang.org/grpc/grpclog"
+
 	"code.cloudfoundry.org/bbs"
-	"code.cloudfoundry.org/bbs/cmd/bbs/testrunner"
+	bbsconfig "code.cloudfoundry.org/bbs/cmd/bbs/config"
 	"code.cloudfoundry.org/bbs/db/etcd"
+	"code.cloudfoundry.org/bbs/encryption"
 	"code.cloudfoundry.org/bbs/test_helpers"
 	"code.cloudfoundry.org/bbs/test_helpers/sqlrunner"
 	"code.cloudfoundry.org/consuladapter"
 	"code.cloudfoundry.org/consuladapter/consulrunner"
+	"code.cloudfoundry.org/durationjson"
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/lager/lagertest"
 	"github.com/cloudfoundry/sonde-go/events"
@@ -48,7 +54,7 @@ var (
 	bbsHealthAddress    string
 	bbsPort             int
 	bbsURL              *url.URL
-	bbsArgs             testrunner.Args
+	bbsConfig           bbsconfig.BBSConfig
 	bbsRunner           *ginkgomon.Runner
 	bbsProcess          ifrit.Process
 	consulRunner        *consulrunner.ClusterRunner
@@ -57,6 +63,7 @@ var (
 	auctioneerServer    *ghttp.Server
 	testMetricsListener net.PacketConn
 	testMetricsChan     chan *events.Envelope
+	locketBinPath       string
 
 	sqlProcess ifrit.Process
 	sqlRunner  sqlrunner.SQLRunner
@@ -69,28 +76,37 @@ func TestBBS(t *testing.T) {
 
 var _ = SynchronizedBeforeSuite(
 	func() []byte {
-		bbsConfig, err := gexec.Build("code.cloudfoundry.org/bbs/cmd/bbs", "-race")
+		bbsPath, err := gexec.Build("code.cloudfoundry.org/bbs/cmd/bbs", "-race")
 		Expect(err).NotTo(HaveOccurred())
-		return []byte(bbsConfig)
+
+		locketPath, err := gexec.Build("code.cloudfoundry.org/locket/cmd/locket", "-race")
+		Expect(err).NotTo(HaveOccurred())
+
+		return []byte(strings.Join([]string{bbsPath, locketPath}, ","))
 	},
-	func(bbsConfig []byte) {
-		bbsBinPath = string(bbsConfig)
+	func(binPaths []byte) {
+		grpclog.SetLogger(log.New(ioutil.Discard, "", 0))
+
+		path := string(binPaths)
+		bbsBinPath = strings.Split(path, ",")[0]
+		locketBinPath = strings.Split(path, ",")[1]
+
 		SetDefaultEventuallyTimeout(15 * time.Second)
 
 		etcdPort = 4001 + GinkgoParallelNode()
 		etcdUrl = fmt.Sprintf("http://127.0.0.1:%d", etcdPort)
 		etcdRunner = etcdstorerunner.NewETCDClusterRunner(etcdPort, 1, nil)
 
-		if test_helpers.UseSQL() {
-			dbName := fmt.Sprintf("diego_%d", GinkgoParallelNode())
-			sqlRunner = test_helpers.NewSQLRunner(dbName)
-			sqlProcess = ginkgomon.Invoke(sqlRunner)
-		}
+		dbName := fmt.Sprintf("diego_%d", GinkgoParallelNode())
+		sqlRunner = test_helpers.NewSQLRunner(dbName)
+		sqlProcess = ginkgomon.Invoke(sqlRunner)
 
 		consulRunner = consulrunner.NewClusterRunner(
-			9001+config.GinkgoConfig.ParallelNode*consulrunner.PortOffsetLength,
-			1,
-			"http",
+			consulrunner.ClusterRunnerConfig{
+				StartingPort: 9001 + config.GinkgoConfig.ParallelNode*consulrunner.PortOffsetLength,
+				NumNodes:     1,
+				Scheme:       "http",
+			},
 		)
 
 		consulRunner.Start()
@@ -157,23 +173,25 @@ var _ = BeforeEach(func() {
 
 	client = bbs.NewClient(bbsURL.String())
 
-	bbsArgs = testrunner.Args{
-		Address:               bbsAddress,
-		AdvertiseURL:          bbsURL.String(),
-		AuctioneerAddress:     auctioneerServer.URL(),
-		ConsulCluster:         consulRunner.ConsulCluster(),
-		DropsondePort:         port,
-		EtcdCluster:           etcdUrl,
-		MetricsReportInterval: 10 * time.Millisecond,
-		HealthAddress:         bbsHealthAddress,
+	bbsConfig = bbsconfig.BBSConfig{
+		ListenAddress:     bbsAddress,
+		AdvertiseURL:      bbsURL.String(),
+		AuctioneerAddress: auctioneerServer.URL(),
+		ConsulCluster:     consulRunner.ConsulCluster(),
+		DropsondePort:     port,
+		ETCDConfig: bbsconfig.ETCDConfig{
+			ClusterUrls: []string{etcdUrl}, // etcd is still being used to test version migration in migration_version_test.go
+		},
+		DatabaseDriver:           sqlRunner.DriverName(),
+		DatabaseConnectionString: sqlRunner.ConnectionString(),
+		ReportInterval:           durationjson.Duration(10 * time.Millisecond),
+		HealthAddress:            bbsHealthAddress,
 
-		EncryptionKeys:         []string{"label:key"},
-		ActiveKeyLabel:         "label",
-		ConvergeRepeatInterval: time.Hour,
-	}
-	if test_helpers.UseSQL() {
-		bbsArgs.DatabaseDriver = sqlRunner.DriverName()
-		bbsArgs.DatabaseConnectionString = sqlRunner.ConnectionString()
+		EncryptionConfig: encryption.EncryptionConfig{
+			EncryptionKeys: map[string]string{"label": "key"},
+			ActiveKeyLabel: "label",
+		},
+		ConvergeRepeatInterval: durationjson.Duration(time.Hour),
 	}
 	storeClient = etcd.NewStoreClient(etcdClient)
 	consulHelper = test_helpers.NewConsulHelper(logger, consulClient)
@@ -198,7 +216,5 @@ var _ = AfterEach(func() {
 	testMetricsListener.Close()
 	Eventually(testMetricsChan).Should(BeClosed())
 
-	if test_helpers.UseSQL() {
-		sqlRunner.Reset()
-	}
+	sqlRunner.Reset()
 })

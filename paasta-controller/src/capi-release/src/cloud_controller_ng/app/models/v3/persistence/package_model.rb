@@ -22,7 +22,10 @@ module VCAP::CloudController
                                 key: :package_guid, primary_key: :guid,
                                 order: [Sequel.desc(:created_at), Sequel.desc(:id)], limit: 1
 
+    encrypt :docker_password, salt: :docker_password_salt, column: :encrypted_docker_password
+
     def validate
+      validates_max_length 1_000, :docker_password, message: 'can be up to 1,000 characters', allow_nil: true
       validates_includes PACKAGE_STATES, :state, allow_missing: true
       errors.add(:type, 'cannot have docker data if type is bits') if docker_image && type != DOCKER_TYPE
     end
@@ -47,11 +50,26 @@ module VCAP::CloudController
       state == READY_STATE
     end
 
-    def succeed_upload!(package_hash)
+    def checksum_info
+      if sha256_checksum.blank? && package_hash.present?
+        {
+          type:  'sha1',
+          value: package_hash,
+        }
+      else
+        {
+          type:  'sha256',
+          value: sha256_checksum,
+        }
+      end
+    end
+
+    def succeed_upload!(checksums)
       db.transaction do
         self.lock!
-        self.package_hash = package_hash
-        self.state        = VCAP::CloudController::PackageModel::READY_STATE
+        self.package_hash = checksums[:sha1]
+        self.sha256_checksum = checksums[:sha256]
+        self.state = VCAP::CloudController::PackageModel::READY_STATE
         self.save
       end
     end

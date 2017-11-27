@@ -13,7 +13,7 @@ func (WardenConfig) NetworkSubnet(string) core.NetworkSubnetCloudProperties {
 	return core.NetworkSubnetCloudProperties{Name: "random"}
 }
 
-func (WardenConfig) Compilation() core.CompilationCloudProperties {
+func (WardenConfig) Compilation(ignored string) core.CompilationCloudProperties {
 	return core.CompilationCloudProperties{}
 }
 
@@ -52,4 +52,8 @@ func (WardenConfig) Properties(string) Properties {
 
 func (WardenConfig) Stemcell() string {
 	return WardenStemcell
+}
+
+func (WardenConfig) WindowsStemcell() string {
+	panic("windows stemcell not available on warden")
 }

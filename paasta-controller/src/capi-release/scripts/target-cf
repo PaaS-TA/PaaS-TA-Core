@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+
+set -ue
+
+get_cf_admin_password() {
+  echo "Getting CF admin password from credhub... "
+  credhub login -s "$CREDHUB_SERVER" -u "$CREDHUB_USERNAME" -p "$CREDHUB_PASSWORD" --skip-tls-validation
+  cf_admin_password=$(credhub get --name '/bosh-lite/cf/cf_admin_password' --output-json | jq -r '.value')
+}
+
+login() {
+  cf api https://api.${BOSH_LITE_DOMAIN} --skip-ssl-validation
+  cf auth admin $cf_admin_password
+}
+
+main() {
+  get_cf_admin_password
+  login
+}
+
+main

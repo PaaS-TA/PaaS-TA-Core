@@ -1,0 +1,20 @@
+---
+packages:
+- name: java-buildpack
+  version: 6401ff751c8a37aaabcc68a951d611e126b81aea
+  fingerprint: 6401ff751c8a37aaabcc68a951d611e126b81aea
+  sha1: 1a28b1a2c8723bb9610b816178039b44b46f4288
+  dependencies: []
+jobs:
+- name: java-buildpack
+  version: 756afa69d5fe5b1fc38031df9f775be9ab56e730
+  fingerprint: 756afa69d5fe5b1fc38031df9f775be9ab56e730
+  sha1: 57b25fb393851237c18bfa1c17982cc591a3178e
+license:
+  version: a9c9d300b55b9c342d1d1a6a9d6ebff24a23c61b
+  fingerprint: a9c9d300b55b9c342d1d1a6a9d6ebff24a23c61b
+  sha1: a6edf04a7851f58dee6884fba7f40e7ee59c9fde
+commit_hash: aaaa501a
+uncommitted_changes: true
+name: java-buildpack
+version: '3.15'

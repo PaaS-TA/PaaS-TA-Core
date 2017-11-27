@@ -10,7 +10,6 @@ import (
 	"github.com/cloudfoundry-incubator/consul-release/src/confab/config"
 	"github.com/cloudfoundry-incubator/consul-release/src/confab/utils"
 	"github.com/hashicorp/consul/api"
-	consulagent "github.com/hashicorp/consul/command/agent"
 )
 
 type stopper interface {
@@ -31,9 +30,12 @@ type agentClient interface {
 	VerifySynced() error
 	SetKeys([]string) error
 	Leave() error
-	SetConsulRPCClient(agent.ConsulRPCClient)
 	JoinMembers() error
 	Self() error
+	ListKeys() ([]string, error)
+	InstallKey(key string) error
+	UseKey(key string) error
+	RemoveKey(key string) error
 }
 
 type serviceDefiner interface {
@@ -97,11 +99,7 @@ func (c Controller) BootAgent(timeout utils.Timeout) error {
 	return nil
 }
 
-func (c Controller) ConfigureServer(timeout utils.Timeout, rpcClient *consulagent.RPCClient) error {
-	if rpcClient != nil {
-		c.AgentClient.SetConsulRPCClient(&agent.RPCClient{*rpcClient})
-	}
-
+func (c Controller) ConfigureServer(timeout utils.Timeout) error {
 	if len(c.EncryptKeys) == 0 {
 		err := errors.New("encrypt keys cannot be empty if ssl is enabled")
 		c.Logger.Error("controller.configure-server.no-encrypt-keys", err)
@@ -146,11 +144,7 @@ func (c Controller) ConfigureClient() error {
 	return nil
 }
 
-func (c Controller) StopAgent(rpcClient *consulagent.RPCClient) {
-	if rpcClient != nil {
-		c.AgentClient.SetConsulRPCClient(&agent.RPCClient{*rpcClient})
-	}
-
+func (c Controller) StopAgent() {
 	c.Logger.Info("controller.stop-agent.leave")
 	if err := c.AgentClient.Leave(); err != nil {
 		c.Logger.Error("controller.stop-agent.leave.failed", err)

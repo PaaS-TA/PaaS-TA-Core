@@ -14,7 +14,7 @@ The Routing API uses OAuth tokens to authenticate clients. To obtain a token fro
 
 ### Download Binaries
 
-See [Releases](https://github.com/cloudfoundry-incubator/routing-api-cli/releases)
+Download the binary at [Releases](https://github.com/cloudfoundry-incubator/routing-api-cli/releases). Move the binary to a directory in your $PATH. Run `rtr -v` to confirm that the Routing API CLI is working properly.
 
 ### Compile
 

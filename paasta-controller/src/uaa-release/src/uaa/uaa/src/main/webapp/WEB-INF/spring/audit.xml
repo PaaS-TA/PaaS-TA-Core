@@ -26,7 +26,8 @@
     </bean>
 
     <bean id="jdbcAuditService" class="org.cloudfoundry.identity.uaa.audit.JdbcFailedLoginCountingAuditService">
-        <constructor-arg ref="dataSource" />
+        <constructor-arg index="0" ref="jdbcTemplate" />
+        <property name="timeService" ref="timeService"/>
     </bean>
 
     <!-- Keep this as a top-level bean to ensure it is exposed as a @ManagedResource -->

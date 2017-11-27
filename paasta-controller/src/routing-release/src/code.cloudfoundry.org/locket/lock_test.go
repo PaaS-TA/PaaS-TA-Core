@@ -1,9 +1,14 @@
 package locket_test
 
 import (
+	"net/http"
+	"net/http/httptest"
+	"net/http/httputil"
+	"net/url"
 	"strings"
 	"time"
 
+	"code.cloudfoundry.org/cfhttp"
 	"code.cloudfoundry.org/consuladapter"
 	"code.cloudfoundry.org/locket"
 	"github.com/cloudfoundry/dropsonde/metric_sender/fake"
@@ -76,7 +81,7 @@ var _ = Describe("Lock", func() {
 	})
 
 	AfterEach(func() {
-		ginkgomon.Kill(lockProcess)
+		ginkgomon.Interrupt(lockProcess)
 	})
 
 	var shouldEventuallyHaveNumSessions = func(numSessions int) {
@@ -99,7 +104,7 @@ var _ = Describe("Lock", func() {
 				Consistently(lockProcess.Ready()).ShouldNot(BeClosed())
 				Consistently(lockProcess.Wait()).ShouldNot(Receive())
 
-				clock.Increment(retryInterval)
+				clock.WaitForWatcherAndIncrement(retryInterval)
 				Eventually(logger).Should(Say("acquire-lock-failed"))
 				Eventually(logger).Should(Say("retrying-acquiring-lock"))
 				Expect(sender.GetValue(lockHeldMetricName).Value).To(Equal(float64(0)))
@@ -122,15 +127,15 @@ var _ = Describe("Lock", func() {
 				})
 
 				It("continues to emit lock metric", func() {
-					clock.IncrementBySeconds(30)
+					clock.WaitForWatcherAndIncrement(30 * time.Second)
 					Eventually(func() float64 {
 						return sender.GetValue(lockUptimeMetricName).Value
 					}, 2).Should(Equal(float64(30 * time.Second)))
-					clock.IncrementBySeconds(30)
+					clock.WaitForWatcherAndIncrement(30 * time.Second)
 					Eventually(func() float64 {
 						return sender.GetValue(lockUptimeMetricName).Value
 					}, 2).Should(Equal(float64(60 * time.Second)))
-					clock.IncrementBySeconds(30)
+					clock.WaitForWatcherAndIncrement(30 * time.Second)
 					Eventually(func() float64 {
 						return sender.GetValue(lockUptimeMetricName).Value
 					}, 2).Should(Equal(float64(90 * time.Second)))
@@ -160,6 +165,87 @@ var _ = Describe("Lock", func() {
 						Eventually(lockProcess.Wait()).Should(Receive(BeNil()))
 						_, err := getLockValue()
 						Expect(err).To(Equal(consuladapter.NewKeyNotFoundError(lockKey)))
+					})
+				})
+
+				Context("and consul goes through a period of instability", func() {
+					var serveFiveHundreds chan bool
+					var fakeConsul *httptest.Server
+
+					BeforeEach(func() {
+						serveFiveHundreds = make(chan bool, 4)
+
+						consulClusterURL, err := url.Parse(consulRunner.URL())
+						Expect(err).NotTo(HaveOccurred())
+						proxy := httputil.NewSingleHostReverseProxy(consulClusterURL)
+						fakeConsul = httptest.NewServer(
+							http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+								// We only want to return 500's on the lock monitor query which is of the form /v1/kv/some-key?consistent=
+								_, hasConsistent := r.URL.Query()["consistent"]
+								if !hasConsistent {
+									By(time.Now().String() + ": forwarding request to " + r.URL.String())
+									proxy.ServeHTTP(w, r)
+									return
+								}
+
+								if <-serveFiveHundreds {
+									By(time.Now().String() + ": returning 500 to " + r.URL.String())
+									w.WriteHeader(http.StatusInternalServerError)
+								} else {
+									By(time.Now().String() + ": forwarding request to " + r.URL.String())
+									proxy.ServeHTTP(w, r)
+								}
+							}),
+						)
+
+						fakeConsulURL, err := url.Parse(fakeConsul.URL)
+						Expect(err).NotTo(HaveOccurred())
+
+						client, err := api.NewClient(&api.Config{
+							Address:    fakeConsulURL.Host,
+							Scheme:     fakeConsulURL.Scheme,
+							HttpClient: cfhttp.NewStreamingClient(),
+						})
+						Expect(err).NotTo(HaveOccurred())
+
+						consulClient = consuladapter.NewConsulClient(client)
+						lockTTL = 6 * time.Second
+					})
+
+					Context("for longer than the MonitorRetries * MonitorRetryTime", func() {
+						It("loses lock", func() {
+							Expect(sender.GetValue(lockUptimeMetricName).Value).Should(Equal(float64(0)))
+							Expect(getLockValue()).To(Equal(lockValue))
+							Expect(sender.GetValue(lockHeldMetricName).Value).To(Equal(float64(1)))
+
+							// Serve 500's to simulate a leader election. We know that we need
+							// to serve more than lockTTL / 2 500's to lose the lock.
+							for i := 0; i < 4; i++ {
+								Eventually(serveFiveHundreds).Should(BeSent(true))
+							}
+
+							close(serveFiveHundreds)
+
+							Eventually(lockProcess.Wait(), 7*time.Second).Should(Receive())
+						})
+					})
+
+					Context("for less than the MonitorRetries * MonitorRetryTime", func() {
+						It("does not lose the lock", func() {
+							Expect(sender.GetValue(lockUptimeMetricName).Value).Should(Equal(float64(0)))
+							Expect(getLockValue()).To(Equal(lockValue))
+							Expect(sender.GetValue(lockHeldMetricName).Value).To(Equal(float64(1)))
+
+							// Serve 500's to simulate a leader election. We know that if we
+							// serve less than lockTTL / 2 500's, we will not lose the lock.
+							for i := 0; i < 2; i++ {
+								Eventually(serveFiveHundreds).Should(BeSent(true))
+							}
+
+							close(serveFiveHundreds)
+
+							Consistently(lockProcess.Wait(), 7*time.Second).ShouldNot(Receive())
+						})
 					})
 				})
 			})
@@ -210,7 +296,7 @@ var _ = Describe("Lock", func() {
 					Consistently(lockProcess.Wait()).ShouldNot(Receive())
 
 					Eventually(logger).Should(Say("acquire-lock-failed"))
-					clock.Increment(retryInterval)
+					clock.WaitForWatcherAndIncrement(retryInterval)
 					Eventually(logger).Should(Say("retrying-acquiring-lock"))
 					Expect(sender.GetValue(lockHeldMetricName).Value).To(Equal(float64(0)))
 				})
@@ -238,7 +324,7 @@ var _ = Describe("Lock", func() {
 
 					Eventually(logger, 10*time.Second).Should(Say("consul-error"))
 					Eventually(logger, 15*time.Second).Should(Say("acquire-lock-failed"))
-					clock.Increment(retryInterval)
+					clock.WaitForWatcherAndIncrement(retryInterval)
 					Eventually(logger).Should(Say("retrying-acquiring-lock"))
 					shouldEventuallyHaveNumSessions(2)
 				})
@@ -262,7 +348,7 @@ var _ = Describe("Lock", func() {
 
 					ginkgomon.Interrupt(otherProcess)
 
-					Eventually(lockProcess.Ready(), 7*time.Second).Should(BeClosed())
+					Eventually(lockProcess.Ready(), 6*time.Second).Should(BeClosed())
 					Expect(getLockValue()).To(Equal(lockValue))
 				})
 			})
@@ -297,7 +383,7 @@ var _ = Describe("Lock", func() {
 				lockProcess = ifrit.Background(lockRunner)
 
 				Eventually(logger).Should(Say("acquire-lock-failed"))
-				clock.Increment(retryInterval)
+				clock.WaitForWatcherAndIncrement(retryInterval)
 				Eventually(logger).Should(Say("retrying-acquiring-lock"))
 				Consistently(lockProcess.Ready()).ShouldNot(BeClosed())
 				Consistently(lockProcess.Wait()).ShouldNot(Receive())
@@ -305,7 +391,7 @@ var _ = Describe("Lock", func() {
 				consulRunner.Start()
 				consulRunner.WaitUntilReady()
 
-				clock.Increment(retryInterval)
+				clock.WaitForWatcherAndIncrement(retryInterval)
 				Eventually(lockProcess.Ready()).Should(BeClosed())
 				Expect(getLockValue()).To(Equal(lockValue))
 			})

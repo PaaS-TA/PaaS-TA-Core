@@ -2,11 +2,7 @@
 name: acceptance-tests
 
 dependencies:
-  - golang1.7
+  - golang1.8
 
 files:
  - acceptance-tests/**/*
- - gopkg.in/yaml.v2/**/*
- - github.com/**/*
-excluded_files:
-  - github.com/coreos/etcd/Godeps/_workspace/src/github.com/prometheus/procfs/fixtures/26231/exe

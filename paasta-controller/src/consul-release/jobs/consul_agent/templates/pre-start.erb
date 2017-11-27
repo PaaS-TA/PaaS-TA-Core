@@ -9,6 +9,17 @@ PKG_DIR=/var/vcap/packages
 RUN_DIR=/var/vcap/sys/run/consul_agent
 
 function setup_resolvconf() {
+  local rewrite_resolv=<%= p('consul.agent.rewrite_resolv') %>
+
+  if [ "$rewrite_resolv" = "false" ]; then
+    return
+  fi
+
+  if [ "$rewrite_resolv" != "true" ]; then
+    echo "rewrite_resolv property must be a boolean" >&2
+    exit 1
+  fi
+
   local resolvconf_file
   resolvconf_file=/etc/resolvconf/resolv.conf.d/head
 

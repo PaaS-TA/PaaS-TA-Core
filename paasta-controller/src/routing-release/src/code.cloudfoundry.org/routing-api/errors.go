@@ -24,6 +24,7 @@ const (
 	RouteInvalidError           Type = "RouteInvalidError"
 	RouteServiceUrlInvalidError Type = "RouteServiceUrlInvalidError"
 	DBCommunicationError        Type = "DBCommunicationError"
+	GuidGenerationError         Type = "GuidGenerationError"
 	UnauthorizedError           Type = "UnauthorizedError"
 	TcpRouteMappingInvalidError Type = "TcpRouteMappingInvalidError"
 	DBConflictError             Type = "DBConflictError"

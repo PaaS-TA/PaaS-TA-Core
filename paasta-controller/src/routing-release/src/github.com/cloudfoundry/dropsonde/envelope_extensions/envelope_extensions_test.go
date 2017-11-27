@@ -16,37 +16,6 @@ var _ = Describe("EnvelopeExtensions", func() {
 	}
 
 	Describe("GetAppId", func() {
-		Context("HttpStart", func() {
-			It("returns the App ID if it has one", func() {
-				envelope := &events.Envelope{
-					EventType: events.Envelope_HttpStart.Enum(),
-					HttpStart: &events.HttpStart{ApplicationId: testAppUuid},
-				}
-				appId := envelope_extensions.GetAppId(envelope)
-				Expect(appId).To(Equal("01000000-0000-0000-0200-000000000000"))
-			})
-
-			It("returns system app ID if there isn't an App ID", func() {
-				envelope := &events.Envelope{
-					EventType: events.Envelope_HttpStart.Enum(),
-					HttpStart: &events.HttpStart{},
-				}
-				appId := envelope_extensions.GetAppId(envelope)
-				Expect(appId).To(Equal(envelope_extensions.SystemAppId))
-			})
-		})
-
-		Context("HttpStop", func() {
-			It("returns the App ID if it has one", func() {
-				envelope := &events.Envelope{
-					EventType: events.Envelope_HttpStop.Enum(),
-					HttpStop:  &events.HttpStop{ApplicationId: testAppUuid},
-				}
-				appId := envelope_extensions.GetAppId(envelope)
-				Expect(appId).To(Equal("01000000-0000-0000-0200-000000000000"))
-			})
-		})
-
 		Context("HttpStartStop", func() {
 			It("returns the App ID if it has one", func() {
 				envelope := &events.Envelope{

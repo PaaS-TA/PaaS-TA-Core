@@ -2,8 +2,11 @@ package main
 
 import (
 	"bytes"
+	"crypto/tls"
+	"crypto/x509"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"net/http/httputil"
@@ -14,23 +17,56 @@ import (
 	"github.com/cloudfoundry-incubator/consul-release/src/acceptance-tests/testing/testconsumer/handlers"
 )
 
+type commandLineFlags struct {
+	port               string
+	consulURL          string
+	consulCACertPath   string
+	consulCertPath     string
+	consulKeyPath      string
+	pathToCheckARecord string
+}
+
 func main() {
-	port, consulURL, pathToCheckARecord := parseCommandLineFlags()
-	proxyURL, err := url.Parse(consulURL)
+	commandLineFlags := parseCommandLineFlags()
+	proxyURL, err := url.Parse(commandLineFlags.consulURL)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	if pathToCheckARecord == "" {
+	if commandLineFlags.pathToCheckARecord == "" {
 		log.Fatal("--path-to-check-a-record is required")
 	}
 
 	mux := http.NewServeMux()
 	logBuffer := bytes.NewBuffer([]byte{})
 	healthCheckHandler := handlers.NewHealthCheckHandler()
-	dnsHandler := handlers.NewDNSHandler(pathToCheckARecord)
+	dnsHandler := handlers.NewDNSHandler(commandLineFlags.pathToCheckARecord)
 
 	proxy := httputil.NewSingleHostReverseProxy(proxyURL)
+
+	if commandLineFlags.consulCertPath != "" && commandLineFlags.consulKeyPath != "" && commandLineFlags.consulCACertPath != "" {
+		cert, err := tls.LoadX509KeyPair(commandLineFlags.consulCertPath, commandLineFlags.consulKeyPath)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		caCert, err := ioutil.ReadFile(commandLineFlags.consulCACertPath)
+		if err != nil {
+			log.Fatal(err)
+		}
+		caCertPool := x509.NewCertPool()
+		caCertPool.AppendCertsFromPEM(caCert)
+
+		tlsConfig := &tls.Config{
+			Certificates: []tls.Certificate{cert},
+			RootCAs:      caCertPool,
+		}
+		tlsConfig.BuildNameToCertificate()
+		transport := &http.Transport{TLSClientConfig: tlsConfig}
+
+		proxy.Transport = transport
+	}
+
 	director := proxy.Director
 	proxy.Director = func(request *http.Request) {
 		director(request)
@@ -53,18 +89,19 @@ func main() {
 		dnsHandler.ServeHTTP(w, req)
 	})
 
-	log.Fatal(http.ListenAndServe(fmt.Sprintf("0.0.0.0:%s", port), mux))
+	log.Fatal(http.ListenAndServe(fmt.Sprintf("0.0.0.0:%s", commandLineFlags.port), mux))
 }
 
-func parseCommandLineFlags() (string, string, string) {
-	var port string
-	var consulURL string
-	var pathToCheckARecord string
+func parseCommandLineFlags() commandLineFlags {
+	var clFlags commandLineFlags
 
-	flag.StringVar(&port, "port", "", "port to use for test consumer server")
-	flag.StringVar(&consulURL, "consul-url", "", "url of local consul agent")
-	flag.StringVar(&pathToCheckARecord, "path-to-check-a-record", "", "path to check-a-record binary")
+	flag.StringVar(&clFlags.port, "port", "", "port to use for test consumer server")
+	flag.StringVar(&clFlags.consulURL, "consul-url", "", "url of local consul agent")
+	flag.StringVar(&clFlags.consulCACertPath, "cacert", "", "path to cacert of local consul agent")
+	flag.StringVar(&clFlags.consulCertPath, "cert", "", "path to cert of local consul agent")
+	flag.StringVar(&clFlags.consulKeyPath, "key", "", "path to key of local consul agent")
+	flag.StringVar(&clFlags.pathToCheckARecord, "path-to-check-a-record", "", "path to check-a-record binary")
 	flag.Parse()
 
-	return port, consulURL, pathToCheckARecord
+	return clFlags
 }

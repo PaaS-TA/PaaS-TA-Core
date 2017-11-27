@@ -1,9 +1,14 @@
 require File.expand_path('../../config/boot', __FILE__)
 
 if ENV['CODECLIMATE_REPO_TOKEN'] && ENV['COVERAGE']
-  require 'codeclimate-test-reporter'
-  CodeClimate::TestReporter.start
+  require 'simplecov'
+  SimpleCov.start do
+    add_filter '/spec/'
+    add_filter '/vendor/'
+    add_filter '/docs/'
+  end
 end
+ENV['PB_IGNORE_DEPRECATIONS'] = 'true'
 
 require 'fakefs/safe'
 require 'machinist/sequel'
@@ -14,7 +19,8 @@ require 'awesome_print'
 
 require 'steno'
 require 'webmock/rspec'
-require 'cf_message_bus/mock_message_bus'
+
+require 'pry'
 
 require 'cloud_controller'
 require 'allowy/rspec'
@@ -37,9 +43,11 @@ RSpec.configure do |rspec_config|
   rspec_config.backtrace_exclusion_patterns = [%r{/gems/}, %r{/bin/rspec}]
 
   rspec_config.expect_with(:rspec) { |config| config.syntax = :expect }
+  rspec_config.extend DeprecationHelpers
   rspec_config.include Rack::Test::Methods
   rspec_config.include ModelCreation
   rspec_config.include TimeHelpers
+  rspec_config.include LinkHelpers
   rspec_config.include BackgroundJobHelpers
 
   rspec_config.include ServiceBrokerHelpers
@@ -59,13 +67,18 @@ RSpec.configure do |rspec_config|
   rspec_config.include IntegrationSetup, type: :integration
 
   rspec_config.before(:all) { WebMock.disable_net_connect!(allow: 'codeclimate.com') }
-  rspec_config.before(:all, type: :integration) { WebMock.allow_net_connect! }
-  rspec_config.after(:all, type: :integration) { WebMock.disable_net_connect!(allow: 'codeclimate.com') }
+  rspec_config.before(:all, type: :integration) do
+    WebMock.allow_net_connect!
+    @uaa_server = FakeUAAServer.new(6789)
+    @uaa_server.start
+  end
+  rspec_config.after(:all, type: :integration) do
+    WebMock.disable_net_connect!(allow: 'codeclimate.com')
+    @uaa_server.stop
+  end
 
   rspec_config.example_status_persistence_file_path = 'spec/examples.txt'
   rspec_config.expose_current_running_example_as :example # Can be removed when we upgrade to rspec 3
-
-  Delayed::Worker.plugins << DeserializationRetry
 
   rspec_config.before :suite do
     VCAP::CloudController::SpecBootstrap.seed
@@ -80,6 +93,8 @@ RSpec.configure do |rspec_config|
     TestConfig.reset
 
     VCAP::CloudController::SecurityContext.clear
+    allow_any_instance_of(VCAP::CloudController::UaaTokenDecoder).to receive(:uaa_issuer).and_return(nil)
+    TestConfig.config[:uaa][:internal_url] = 'https://uaa.service.cf.internal'
   end
 
   rspec_config.around :each do |example|

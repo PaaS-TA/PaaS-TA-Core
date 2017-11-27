@@ -12,8 +12,8 @@
  *******************************************************************************/
 package org.cloudfoundry.identity.uaa.account;
 
-import org.cloudfoundry.identity.uaa.resources.jdbc.DefaultLimitSqlAdapter;
 import org.cloudfoundry.identity.uaa.resources.jdbc.JdbcPagingListFactory;
+import org.cloudfoundry.identity.uaa.resources.jdbc.LimitSqlAdapterFactory;
 import org.cloudfoundry.identity.uaa.scim.ScimUser;
 import org.cloudfoundry.identity.uaa.scim.exception.InvalidPasswordException;
 import org.cloudfoundry.identity.uaa.scim.exception.ScimException;
@@ -21,6 +21,7 @@ import org.cloudfoundry.identity.uaa.scim.jdbc.JdbcScimUserProvisioning;
 import org.cloudfoundry.identity.uaa.scim.test.TestUtils;
 import org.cloudfoundry.identity.uaa.scim.validate.PasswordValidator;
 import org.cloudfoundry.identity.uaa.security.SecurityContextAccessor;
+import org.cloudfoundry.identity.uaa.zone.IdentityZoneHolder;
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.MigrationVersion;
 import org.junit.After;
@@ -66,7 +67,7 @@ public class PasswordChangeEndpointTests {
 
         JdbcTemplate jdbcTemplate = new JdbcTemplate(database);
         JdbcScimUserProvisioning dao = new JdbcScimUserProvisioning(jdbcTemplate,
-                        new JdbcPagingListFactory(jdbcTemplate, new DefaultLimitSqlAdapter()));
+                        new JdbcPagingListFactory(jdbcTemplate, LimitSqlAdapterFactory.getLimitSqlAdapter()));
         dao.setPasswordEncoder(NoOpPasswordEncoder.getInstance());
 
         endpoints = new PasswordChangeEndpoint();
@@ -76,8 +77,8 @@ public class PasswordChangeEndpointTests {
         joel.addEmail("jdsa@vmware.com");
         dale = new ScimUser(null, "olds", "Dale", "Olds");
         dale.addEmail("olds@vmware.com");
-        joel = dao.createUser(joel, "password");
-        dale = dao.createUser(dale, "password");
+        joel = dao.createUser(joel, "password", IdentityZoneHolder.get().getId());
+        dale = dao.createUser(dale, "password", IdentityZoneHolder.get().getId());
 
     }
 

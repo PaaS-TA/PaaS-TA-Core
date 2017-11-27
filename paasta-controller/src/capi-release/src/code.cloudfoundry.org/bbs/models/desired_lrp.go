@@ -18,7 +18,8 @@ type DesiredLRPChange struct {
 }
 
 type DesiredLRPFilter struct {
-	Domain string
+	Domain       string
+	ProcessGuids []string
 }
 
 func PreloadedRootFS(stack string) string {
@@ -45,6 +46,7 @@ func NewDesiredLRP(schedInfo DesiredLRPSchedulingInfo, runInfo DesiredLRPRunInfo
 		LogGuid:                       schedInfo.LogGuid,
 		MemoryMb:                      schedInfo.MemoryMb,
 		DiskMb:                        schedInfo.DiskMb,
+		MaxPids:                       schedInfo.MaxPids,
 		RootFs:                        schedInfo.RootFs,
 		Instances:                     schedInfo.Instances,
 		Annotation:                    schedInfo.Annotation,
@@ -67,6 +69,9 @@ func NewDesiredLRP(schedInfo DesiredLRPSchedulingInfo, runInfo DesiredLRPRunInfo
 		VolumeMounts:                  runInfo.VolumeMounts,
 		Network:                       runInfo.Network,
 		PlacementTags:                 schedInfo.PlacementTags,
+		CertificateProperties:         runInfo.CertificateProperties,
+		ImageUsername:                 runInfo.ImageUsername,
+		ImagePassword:                 runInfo.ImagePassword,
 	}
 }
 
@@ -121,22 +126,25 @@ func (*DesiredLRP) Version() format.Version {
 }
 
 func (d *DesiredLRP) VersionDownTo(v format.Version) *DesiredLRP {
+
+	versionedLRP := d.Copy()
+
 	switch v {
 
 	case format.V1:
-		d.Action.SetDeprecatedTimeoutNs()
-		d.Setup.SetDeprecatedTimeoutNs()
-		d.Monitor.SetDeprecatedTimeoutNs()
-		d.DeprecatedStartTimeoutS = uint32(d.StartTimeoutMs) / 1000
-		return d
+		versionedLRP.Action.SetDeprecatedTimeoutNs()
+		versionedLRP.Setup.SetDeprecatedTimeoutNs()
+		versionedLRP.Monitor.SetDeprecatedTimeoutNs()
+		versionedLRP.DeprecatedStartTimeoutS = uint32(versionedLRP.StartTimeoutMs) / 1000
+		return versionedLRP
 	case format.V0:
-		d.Action.SetDeprecatedTimeoutNs()
-		d.Setup.SetDeprecatedTimeoutNs()
-		d.Monitor.SetDeprecatedTimeoutNs()
-		d.DeprecatedStartTimeoutS = uint32(d.StartTimeoutMs) / 1000
-		return newDesiredLRPWithCachedDependenciesAsSetupActions(d)
+		versionedLRP.Action.SetDeprecatedTimeoutNs()
+		versionedLRP.Setup.SetDeprecatedTimeoutNs()
+		versionedLRP.Monitor.SetDeprecatedTimeoutNs()
+		versionedLRP.DeprecatedStartTimeoutS = uint32(versionedLRP.StartTimeoutMs) / 1000
+		return newDesiredLRPWithCachedDependenciesAsSetupActions(versionedLRP)
 	default:
-		return d.Copy()
+		return versionedLRP
 	}
 }
 
@@ -145,7 +153,7 @@ func (d *DesiredLRP) DesiredLRPKey() DesiredLRPKey {
 }
 
 func (d *DesiredLRP) DesiredLRPResource() DesiredLRPResource {
-	return NewDesiredLRPResource(d.MemoryMb, d.DiskMb, d.RootFs)
+	return NewDesiredLRPResource(d.MemoryMb, d.DiskMb, d.MaxPids, d.RootFs)
 }
 
 func (d *DesiredLRP) DesiredLRPSchedulingInfo() DesiredLRPSchedulingInfo {
@@ -205,6 +213,9 @@ func (d *DesiredLRP) DesiredLRPRunInfo(createdAt time.Time) DesiredLRPRunInfo {
 		d.TrustedSystemCertificatesPath,
 		d.VolumeMounts,
 		d.Network,
+		d.CertificateProperties,
+		d.ImageUsername,
+		d.ImagePassword,
 	)
 }
 
@@ -240,10 +251,6 @@ func (desired DesiredLRP) Validate() error {
 		validationError = validationError.Append(ErrInvalidField{"domain"})
 	}
 
-	if !processGuidPattern.MatchString(desired.GetProcessGuid()) {
-		validationError = validationError.Append(ErrInvalidField{"process_guid"})
-	}
-
 	if desired.GetRootFs() == "" {
 		validationError = validationError.Append(ErrInvalidField{"rootfs"})
 	}
@@ -253,33 +260,8 @@ func (desired DesiredLRP) Validate() error {
 		validationError = validationError.Append(ErrInvalidField{"rootfs"})
 	}
 
-	if desired.Setup != nil {
-		if err := desired.Setup.Validate(); err != nil {
-			validationError = validationError.Append(ErrInvalidField{"setup"})
-			validationError = validationError.Append(err)
-		}
-	}
-
-	if desired.Action == nil {
-		validationError = validationError.Append(ErrInvalidActionType)
-	} else if err := desired.Action.Validate(); err != nil {
-		validationError = validationError.Append(ErrInvalidField{"action"})
-		validationError = validationError.Append(err)
-	}
-
-	if desired.Monitor != nil {
-		if err := desired.Monitor.Validate(); err != nil {
-			validationError = validationError.Append(ErrInvalidField{"monitor"})
-			validationError = validationError.Append(err)
-		}
-	}
-
 	if desired.GetInstances() < 0 {
 		validationError = validationError.Append(ErrInvalidField{"instances"})
-	}
-
-	if desired.GetCpuWeight() > 100 {
-		validationError = validationError.Append(ErrInvalidField{"cpu_weight"})
 	}
 
 	if desired.GetMemoryMb() < 0 {
@@ -294,6 +276,10 @@ func (desired DesiredLRP) Validate() error {
 		validationError = validationError.Append(ErrInvalidField{"annotation"})
 	}
 
+	if desired.GetMaxPids() < 0 {
+		validationError = validationError.Append(ErrInvalidField{"max_pids"})
+	}
+
 	totalRoutesLength := 0
 	if desired.Routes != nil {
 		for _, value := range *desired.Routes {
@@ -305,21 +291,9 @@ func (desired DesiredLRP) Validate() error {
 		}
 	}
 
-	for _, rule := range desired.EgressRules {
-		err := rule.Validate()
-		if err != nil {
-			validationError = validationError.Append(ErrInvalidField{"egress_rules"})
-			validationError = validationError.Append(err)
-		}
-	}
-
-	err = validateCachedDependencies(desired.CachedDependencies, desired.LegacyDownloadUser)
-	if err != nil {
-		validationError = validationError.Append(err)
-	}
-
-	for _, mount := range desired.VolumeMounts {
-		validationError = validationError.Check(mount)
+	runInfoErrors := desired.DesiredLRPRunInfo(time.Now()).Validate()
+	if runInfoErrors != nil {
+		validationError = validationError.Append(runInfoErrors)
 	}
 
 	return validationError.ToError()
@@ -411,25 +385,26 @@ func (*DesiredLRPSchedulingInfo) Version() format.Version {
 }
 
 func (s DesiredLRPSchedulingInfo) Validate() error {
-	var ve ValidationError
+	var validationError ValidationError
 
-	ve = ve.Check(s.DesiredLRPKey, s.DesiredLRPResource, s.Routes)
+	validationError = validationError.Check(s.DesiredLRPKey, s.DesiredLRPResource, s.Routes)
 
 	if s.GetInstances() < 0 {
-		ve = ve.Append(ErrInvalidField{"instances"})
+		validationError = validationError.Append(ErrInvalidField{"instances"})
 	}
 
 	if len(s.GetAnnotation()) > maximumAnnotationLength {
-		ve = ve.Append(ErrInvalidField{"annotation"})
+		validationError = validationError.Append(ErrInvalidField{"annotation"})
 	}
 
-	return ve.ToError()
+	return validationError.ToError()
 }
 
-func NewDesiredLRPResource(memoryMb, diskMb int32, rootFs string) DesiredLRPResource {
+func NewDesiredLRPResource(memoryMb, diskMb, maxPids int32, rootFs string) DesiredLRPResource {
 	return DesiredLRPResource{
 		MemoryMb: memoryMb,
 		DiskMb:   diskMb,
+		MaxPids:  maxPids,
 		RootFs:   rootFs,
 	}
 }
@@ -448,6 +423,10 @@ func (resource DesiredLRPResource) Validate() error {
 
 	if resource.GetDiskMb() < 0 {
 		validationError = validationError.Append(ErrInvalidField{"disk_mb"})
+	}
+
+	if resource.GetMaxPids() < 0 {
+		validationError = validationError.Append(ErrInvalidField{"max_pids"})
 	}
 
 	return validationError.ToError()
@@ -472,6 +451,8 @@ func NewDesiredLRPRunInfo(
 	trustedSystemCertificatesPath string,
 	volumeMounts []*VolumeMount,
 	network *Network,
+	certificateProperties *CertificateProperties,
+	imageUsername, imagePassword string,
 ) DesiredLRPRunInfo {
 	return DesiredLRPRunInfo{
 		DesiredLRPKey:                 key,
@@ -492,43 +473,82 @@ func NewDesiredLRPRunInfo(
 		TrustedSystemCertificatesPath: trustedSystemCertificatesPath,
 		VolumeMounts:                  volumeMounts,
 		Network:                       network,
+		CertificateProperties:         certificateProperties,
+		ImageUsername:                 imageUsername,
+		ImagePassword:                 imagePassword,
 	}
 }
 
 func (runInfo DesiredLRPRunInfo) Validate() error {
-	var ve ValidationError
+	var validationError ValidationError
 
-	ve = ve.Check(
-		runInfo.DesiredLRPKey,
-		runInfo.Setup,
-		runInfo.Action,
-		runInfo.Monitor,
-	)
+	validationError = validationError.Check(runInfo.DesiredLRPKey)
+
+	if runInfo.Setup != nil {
+		if err := runInfo.Setup.Validate(); err != nil {
+			validationError = validationError.Append(ErrInvalidField{"setup"})
+			validationError = validationError.Append(err)
+		}
+	}
+
+	if runInfo.Action == nil {
+		validationError = validationError.Append(ErrInvalidActionType)
+	} else if err := runInfo.Action.Validate(); err != nil {
+		validationError = validationError.Append(ErrInvalidField{"action"})
+		validationError = validationError.Append(err)
+	}
+
+	if runInfo.Monitor != nil {
+		if err := runInfo.Monitor.Validate(); err != nil {
+			validationError = validationError.Append(ErrInvalidField{"monitor"})
+			validationError = validationError.Append(err)
+		}
+	}
 
 	for _, envVar := range runInfo.EnvironmentVariables {
-		ve = ve.Check(envVar)
+		validationError = validationError.Check(envVar)
 	}
 
 	for _, rule := range runInfo.EgressRules {
-		ve = ve.Check(rule)
+		err := rule.Validate()
+		if err != nil {
+			validationError = validationError.Append(ErrInvalidField{"egress_rules"})
+			validationError = validationError.Append(err)
+		}
 	}
 
 	if runInfo.GetCpuWeight() > 100 {
-		ve = ve.Append(ErrInvalidField{"cpu_weight"})
+		validationError = validationError.Append(ErrInvalidField{"cpu_weight"})
 	}
 
 	err := validateCachedDependencies(runInfo.CachedDependencies, runInfo.LegacyDownloadUser)
 	if err != nil {
-		ve = ve.Append(err)
+		validationError = validationError.Append(err)
 	}
 
 	for _, mount := range runInfo.VolumeMounts {
-		ve = ve.Check(mount)
+		validationError = validationError.Check(mount)
 	}
 
-	return ve.ToError()
+	if runInfo.ImageUsername == "" && runInfo.ImagePassword != "" {
+		validationError = validationError.Append(ErrInvalidField{"image_username"})
+	}
+
+	if runInfo.ImageUsername != "" && runInfo.ImagePassword == "" {
+		validationError = validationError.Append(ErrInvalidField{"image_password"})
+	}
+
+	return validationError.ToError()
 }
 
 func (*DesiredLRPRunInfo) Version() format.Version {
 	return format.V0
+}
+
+func (*CertificateProperties) Version() format.Version {
+	return format.V0
+}
+
+func (CertificateProperties) Validate() error {
+	return nil
 }

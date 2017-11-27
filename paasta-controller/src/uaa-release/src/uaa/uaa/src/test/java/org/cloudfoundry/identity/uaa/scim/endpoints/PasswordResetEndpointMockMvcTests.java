@@ -24,6 +24,7 @@ import org.cloudfoundry.identity.uaa.mock.util.MockMvcUtils;
 import org.cloudfoundry.identity.uaa.scim.ScimUser;
 import org.cloudfoundry.identity.uaa.util.JsonUtils;
 import org.cloudfoundry.identity.uaa.zone.IdentityZone;
+import org.cloudfoundry.identity.uaa.zone.IdentityZoneHolder;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -34,6 +35,7 @@ import org.springframework.test.web.servlet.ResultMatcher;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
 import java.io.UnsupportedEncodingException;
+import java.net.URLEncoder;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Map;
@@ -61,7 +63,6 @@ public class PasswordResetEndpointMockMvcTests extends InjectedMockContextTest {
 
     private String loginToken;
     private ScimUser user;
-    private RandomValueStringGenerator originalGenerator;
     private String adminToken;
     private RandomValueStringGenerator generator = new RandomValueStringGenerator();
 
@@ -100,7 +101,7 @@ public class PasswordResetEndpointMockMvcTests extends InjectedMockContextTest {
                 .andExpect(jsonPath("$.username").value(user.getUserName()))
                 .andExpect(jsonPath("$.code").value("test" + generator.counter.get()));
 
-        ExpiringCode expiringCode = store.retrieveCode("test" + generator.counter.get());
+        ExpiringCode expiringCode = store.retrieveCode("test" + generator.counter.get(), IdentityZoneHolder.get().getId());
         assertThat(expiringCode.getIntent(), is(ExpiringCodeType.AUTOLOGIN.name()));
         Map<String,String> data = JsonUtils.readValue(expiringCode.getData(), new TypeReference<Map<String,String>>() {});
         assertThat(data.get("user_id"), is(user.getId()));
@@ -129,7 +130,7 @@ public class PasswordResetEndpointMockMvcTests extends InjectedMockContextTest {
                 .andExpect(jsonPath("$.username").value(user.getUserName()))
                 .andExpect(jsonPath("$.code").value("test" + generator.counter.get()));
 
-        ExpiringCode expiringCode = store.retrieveCode("test" + generator.counter.get());
+        ExpiringCode expiringCode = store.retrieveCode("test" + generator.counter.get(), IdentityZoneHolder.get().getId());
         Map<String,String> data = JsonUtils.readValue(expiringCode.getData(), new TypeReference<Map<String,String>>() {});
         assertThat(data.get(OAuth2Utils.CLIENT_ID), is("another-client"));
     }
@@ -145,12 +146,12 @@ public class PasswordResetEndpointMockMvcTests extends InjectedMockContextTest {
 
         MvcResult result = getMockMvc().perform(get)
             .andExpect(status().isOk())
-            .andExpect(content().string(containsString(String.format("<input type=\"hidden\" name=\"email\" value=\"%s\" />", email))))
+            .andExpect(content().string(containsString(String.format("<input type=\"hidden\" name=\"email\" value=\"%s\"/>", email))))
             .andReturn();
 
         String resultingCodeString = getCodeFromPage(result);
         ExpiringCodeStore expiringCodeStore = (ExpiringCodeStore) getWebApplicationContext().getBean("codeStore");
-        ExpiringCode resultingCode = expiringCodeStore.retrieveCode(resultingCodeString);
+        ExpiringCode resultingCode = expiringCodeStore.retrieveCode(resultingCodeString, IdentityZoneHolder.get().getId());
 
         Map<String, String> resultingCodeData = JsonUtils.readValue(resultingCode.getData(), new TypeReference<Map<String, String>>() {
         });
@@ -172,7 +173,7 @@ public class PasswordResetEndpointMockMvcTests extends InjectedMockContextTest {
 
         MvcResult result = getMockMvc().perform(get)
             .andExpect(status().isOk())
-            .andExpect(content().string(containsString(String.format("<input type=\"hidden\" name=\"email\" value=\"%s\" />", email))))
+            .andExpect(content().string(containsString(String.format("<input type=\"hidden\" name=\"email\" value=\"%s\"/>", email))))
             .andReturn();
 
         String resultingCodeString = getCodeFromPage(result);
@@ -190,6 +191,7 @@ public class PasswordResetEndpointMockMvcTests extends InjectedMockContextTest {
             .andExpect(savedAccountCookie(user));
     }
 
+    @SuppressWarnings("deprecation")
     private ResultMatcher savedAccountCookie(ScimUser user) {
         return result -> {
             SavedAccountOption savedAccountOption = new SavedAccountOption();
@@ -198,7 +200,7 @@ public class PasswordResetEndpointMockMvcTests extends InjectedMockContextTest {
             savedAccountOption.setOrigin(user.getOrigin());
             savedAccountOption.setUserId(user.getId());
             String cookieName = "Saved-Account-" + user.getId();
-            cookie().value(cookieName, JsonUtils.writeValueAsString(savedAccountOption)).match(result);
+            cookie().value(cookieName, URLEncoder.encode(JsonUtils.writeValueAsString(savedAccountOption))).match(result);
             cookie().maxAge(cookieName, 365*24*60*60);
         };
     }
@@ -321,7 +323,7 @@ public class PasswordResetEndpointMockMvcTests extends InjectedMockContextTest {
     }
 
     private String getCodeFromPage(MvcResult result) throws UnsupportedEncodingException {
-        Pattern codePattern = Pattern.compile("<input type=\"hidden\" name=\"code\" value=\"([A-Za-z0-9]+)\" />");
+        Pattern codePattern = Pattern.compile("<input type=\"hidden\" name=\"code\" value=\"([A-Za-z0-9]+)\"/>");
         Matcher codeMatcher = codePattern.matcher(result.getResponse().getContentAsString());
 
         assertTrue(codeMatcher.find());

@@ -1,5 +1,5 @@
 /*******************************************************************************
- *     Cloud Foundry 
+ *     Cloud Foundry
  *     Copyright (c) [2009-2016] Pivotal Software, Inc. All Rights Reserved.
  *
  *     This product is licensed to you under the Apache License, Version 2.0 (the "License").
@@ -12,6 +12,9 @@
  *******************************************************************************/
 package org.cloudfoundry.identity.uaa.codestore;
 
+import org.cloudfoundry.identity.uaa.util.TimeService;
+import org.cloudfoundry.identity.uaa.util.TimeServiceImpl;
+import org.cloudfoundry.identity.uaa.zone.IdentityZoneHolder;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.oauth2.common.util.RandomValueStringGenerator;
 import org.springframework.util.Assert;
@@ -26,13 +29,15 @@ public class InMemoryExpiringCodeStore implements ExpiringCodeStore {
 
     private ConcurrentMap<String, ExpiringCode> store = new ConcurrentHashMap<String, ExpiringCode>();
 
+    private TimeService timeService = new TimeServiceImpl();
+
     @Override
-    public ExpiringCode generateCode(String data, Timestamp expiresAt, String intent) {
+    public ExpiringCode generateCode(String data, Timestamp expiresAt, String intent, String zoneId) {
         if (data == null || expiresAt == null) {
             throw new NullPointerException();
         }
 
-        if (expiresAt.getTime() < System.currentTimeMillis()) {
+        if (expiresAt.getTime() < timeService.getCurrentTimeMillis()) {
             throw new IllegalArgumentException();
         }
 
@@ -40,7 +45,7 @@ public class InMemoryExpiringCodeStore implements ExpiringCodeStore {
 
         ExpiringCode expiringCode = new ExpiringCode(code, expiresAt, data, intent);
 
-        ExpiringCode duplicate = store.putIfAbsent(code, expiringCode);
+        ExpiringCode duplicate = store.putIfAbsent(code + IdentityZoneHolder.get().getId(), expiringCode);
         if (duplicate != null) {
             throw new DataIntegrityViolationException("Duplicate code: " + code);
         }
@@ -49,18 +54,22 @@ public class InMemoryExpiringCodeStore implements ExpiringCodeStore {
     }
 
     @Override
-    public ExpiringCode retrieveCode(String code) {
+    public ExpiringCode retrieveCode(String code, String zoneId) {
         if (code == null) {
             throw new NullPointerException();
         }
 
-        ExpiringCode expiringCode = store.remove(code);
+        ExpiringCode expiringCode = store.remove(code + IdentityZoneHolder.get().getId());
 
-        if (expiringCode == null || expiringCode.getExpiresAt().getTime() < System.currentTimeMillis()) {
+        if (expiringCode == null || isExpired(expiringCode)) {
             expiringCode = null;
         }
 
         return expiringCode;
+    }
+
+    private boolean isExpired(ExpiringCode expiringCode) {
+        return expiringCode.getExpiresAt().getTime() < timeService.getCurrentTimeMillis();
     }
 
     @Override
@@ -69,9 +78,14 @@ public class InMemoryExpiringCodeStore implements ExpiringCodeStore {
     }
 
     @Override
-    public void expireByIntent(String intent) {
+    public void expireByIntent(String intent, String zoneId) {
         Assert.hasText(intent);
 
-        store.values().stream().filter(c -> intent.equals(c.getIntent())).forEach(c -> store.remove(c.getCode()));
+        store.values().stream().filter(c -> intent.equals(c.getIntent())).forEach(c -> store.remove(c.getCode() + IdentityZoneHolder.get().getId()));
+    }
+
+    public InMemoryExpiringCodeStore setTimeService(TimeService timeService) {
+        this.timeService = timeService;
+        return this;
     }
 }

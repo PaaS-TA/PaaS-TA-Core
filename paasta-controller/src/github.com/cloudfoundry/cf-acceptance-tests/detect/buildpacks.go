@@ -1,6 +1,7 @@
 package detect
 
 import (
+	"path/filepath"
 	"time"
 
 	. "github.com/cloudfoundry/cf-acceptance-tests/cats_suite_helpers"
@@ -68,7 +69,7 @@ var _ = DetectDescribe("Buildpacks", func() {
 
 	Describe("golang", func() {
 		It("makes the app reachable via its bound route", func() {
-			Expect(cf.Cf("push", appName, "--no-start", "-m", DEFAULT_MEMORY_LIMIT, "-p", assets.NewAssets().Golang, "-d", Config.GetAppsDomain()).Wait(Config.DefaultTimeoutDuration())).To(Exit(0))
+			Expect(cf.Cf("push", appName, "--no-start", "-m", DEFAULT_MEMORY_LIMIT, "-p", assets.NewAssets().Golang, "-f", filepath.Join(assets.NewAssets().Golang, "manifest.yml"), "-d", Config.GetAppsDomain()).Wait(Config.DefaultTimeoutDuration())).To(Exit(0))
 			app_helpers.SetBackend(appName)
 			Expect(cf.Cf("start", appName).Wait(Config.DetectTimeoutDuration())).To(Exit(0))
 
@@ -109,20 +110,12 @@ var _ = DetectDescribe("Buildpacks", func() {
 		})
 	})
 
-	Describe("dotnet-core", func() {
-		// This test requires more disk quota due to dotnet-core buildpack's current implementation
-		var dotnetCorePushTimeout time.Duration
-		var dotnetCoreDiskQuota string
-		var dotnetCoreMemoryQuota string
-
-		BeforeEach(func() {
-			dotnetCorePushTimeout = Config.DetectTimeoutDuration() + 6*time.Minute
-			dotnetCoreDiskQuota = "1536M"
-			dotnetCoreMemoryQuota = "512M"
-		})
+	PDescribe("dotnet-core", func() {
+		// This test involves a vendored dotnet core app whose locked dotnet version will not be removed
+		// from the dotnet core buildpack until end of the version's LTS in 2019
 
 		It("makes the app reachable via its bound route", func() {
-			Expect(cf.Cf("push", appName, "--no-start", "-m", dotnetCoreMemoryQuota, "-k", dotnetCoreDiskQuota, "-p", assets.NewAssets().DotnetCore, "-d", Config.GetAppsDomain()).Wait(dotnetCorePushTimeout)).To(Exit(0))
+			Expect(cf.Cf("push", appName, "--no-start", "-m", DEFAULT_MEMORY_LIMIT, "-p", assets.NewAssets().DotnetCore, "-d", Config.GetAppsDomain()).Wait(Config.CfPushTimeoutDuration())).To(Exit(0))
 			app_helpers.SetBackend(appName)
 			Expect(cf.Cf("start", appName).Wait(Config.DetectTimeoutDuration())).To(Exit(0))
 

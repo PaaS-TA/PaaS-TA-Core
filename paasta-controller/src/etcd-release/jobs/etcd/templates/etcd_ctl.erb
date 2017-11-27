@@ -2,6 +2,7 @@
 
 SCRIPT_NAME=$(basename $0)
 RUN_DIR=/var/vcap/sys/run/etcd
+JOB_DIR=/var/vcap/jobs/etcd
 PIDFILE=${RUN_DIR}/etcd.pid
 
 source /var/vcap/packages/etcd-common/utils.sh
@@ -12,7 +13,7 @@ exec > >(tee -a >(logger -p user.info -t vcap.${SCRIPT_NAME}.stdout) | awk -W in
 exec 2> >(tee -a >(logger -p user.error -t vcap.${SCRIPT_NAME}.stderr) | awk -W interactive '{ system("echo -n [$(date +\"%Y-%m-%d %H:%M:%S%z\")]"); print " " $0 }' >> ${LOG_DIR}/${SCRIPT_NAME}.err.log)
 
 function wait_for_this_node_to_synchronize() {
-  for i in $(seq 55); do
+  for i in $(seq 40); do
     if /var/vcap/packages/etcd/etcdctl ${etcdctl_sec_flags} -debug -C ${advertise_client_url} ls; then
       synced=true
       break
@@ -60,7 +61,14 @@ function main() {
 
       create_cert_files
 
-      prior_member_list=$(member_list)
+      prior_member_list=""
+      for i in $(seq 5); do
+        prior_member_list=$(member_list)
+        if [ -n "${prior_member_list}" ]; then
+          break
+        fi
+        sleep 1
+      done
 
       if [ -z "${prior_member_list}" ]; then
         cluster_state=new
@@ -85,21 +93,24 @@ function main() {
       # the server subsequently expects all peers to agree on the cluster members
       sleep 2
 
-      /var/vcap/packages/etcd/etcd ${etcd_sec_flags}                                              \
-          --name                        ${node_name}                                              \
-          --data-dir                    ${DATA_DIR}                                               \
-          --heartbeat-interval          <%= p("etcd.heartbeat_interval_in_milliseconds") %>       \
-          --election-timeout            <%= p("etcd.election_timeout_in_milliseconds") %>         \
-          --listen-peer-urls            ${listen_peer_url}                                        \
-          --listen-client-urls          ${listen_client_url}                                      \
-          --initial-advertise-peer-urls ${advertise_peer_url}                                     \
-          --advertise-client-urls       ${advertise_client_url}                                   \
-          --initial-cluster             ${cluster}                                                \
-          --initial-cluster-state       ${cluster_state}                                          \
-          2> >(tee -a ${LOG_DIR}/etcd.stderr.log | logger -p user.error -t vcap.etcd)             \
-          1> >(tee -a ${LOG_DIR}/etcd.stdout.log | logger -p user.info  -t vcap.etcd) &
+      local tmp_pid_file
+      tmp_pid_file="/tmp/etcd_pid"
 
-      etcd_pid=$!
+      /var/vcap/packages/etcdfab/bin/etcdfab                                                \
+          ${tmp_pid_file}                                                                   \
+          ${JOB_DIR}/config/etcdfab.json                                                    \
+          ${etcd_sec_flags}                                                                 \
+          --initial-cluster             ${cluster}                                          \
+          --initial-cluster-state       ${cluster_state}                                    \
+          2> >(tee -a ${LOG_DIR}/etcd.stderr.log | logger -p user.error -t vcap.etcd)       \
+          1> >(tee -a ${LOG_DIR}/etcd.stdout.log | logger -p user.info  -t vcap.etcd)
+
+      if [ -r ${tmp_pid_file} ]; then
+        etcd_pid=$(cat ${tmp_pid_file})
+      else
+        echo "etcdfab didn't write the etcd pid to file"
+        exit 1
+      fi
 
       synced=false
       wait_for_this_node_to_synchronize # mutates $synced
@@ -119,6 +130,7 @@ function main() {
       /var/vcap/jobs/etcd/bin/etcd_network_diagnostics_run_ctl.sh stop
       set -e
 
+      safe_teardown "$(member_list)"
       kill_and_wait ${PIDFILE}
 
       ;;

@@ -8,6 +8,7 @@ import (
 )
 
 type VM struct {
+	ID      string   `json:"id"`
 	Index   int      `json:"index"`
 	State   string   `json:"job_state"`
 	JobName string   `json:"job_name"`

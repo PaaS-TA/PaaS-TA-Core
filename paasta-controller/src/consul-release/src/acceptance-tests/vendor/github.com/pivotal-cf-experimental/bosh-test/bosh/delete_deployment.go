@@ -11,7 +11,7 @@ func (c Client) DeleteDeployment(name string) error {
 		return errors.New("a valid deployment name is required")
 	}
 
-	request, err := http.NewRequest("DELETE", fmt.Sprintf("%s/deployments/%s", c.config.URL, name), nil)
+	request, err := http.NewRequest("DELETE", fmt.Sprintf("%s/deployments/%s?force=true", c.config.URL, name), nil)
 	if err != nil {
 		return err
 	}

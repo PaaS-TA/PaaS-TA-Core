@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package loggregator.v2;
+
+import "envelope.proto";
+
+service EgressQuery {
+  rpc ContainerMetrics(ContainerMetricRequest) returns (QueryResponse) {}
+}
+
+message ContainerMetricRequest {
+  string source_id = 1;
+
+  // TODO: This can be removed once the envelope.deprecated_tags is removed.
+  bool use_preferred_tags = 2;
+}
+
+message QueryResponse {
+  repeated Envelope envelopes = 1;
+}

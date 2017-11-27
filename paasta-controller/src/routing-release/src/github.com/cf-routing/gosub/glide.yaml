@@ -1,0 +1,4 @@
+package: github.com/cf-routing/gosub
+import:
+- package: github.com/codegangsta/cli
+  version: ^1.19.1

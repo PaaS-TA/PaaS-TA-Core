@@ -129,9 +129,9 @@ var _ = Describe("MatchYAMLMatcher", func() {
 						ContainSubstring("error at [population][1980][absolute]:"),
 						ContainSubstring("  value mismatch:"),
 						ContainSubstring("    Expected"),
-						ContainSubstring("        <int64> 999999999"),
+						ContainSubstring("        <int> 999999999"),
 						ContainSubstring("    to equal"),
-						ContainSubstring("        <int64> 88314"),
+						ContainSubstring("        <int> 88314"),
 					),
 					SatisfyAll(
 						ContainSubstring("error at [population][2000][absolute]:"),
@@ -139,7 +139,7 @@ var _ = Describe("MatchYAMLMatcher", func() {
 						ContainSubstring("    Expected"),
 						ContainSubstring("        <string> wrong type"),
 						ContainSubstring("    to be of type"),
-						ContainSubstring("        <int64>"),
+						ContainSubstring("        <int>"),
 					),
 					SatisfyAll(
 						ContainSubstring("error at [population][1990]:"),

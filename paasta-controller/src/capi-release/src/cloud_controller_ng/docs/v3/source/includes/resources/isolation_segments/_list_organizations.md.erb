@@ -1,0 +1,41 @@
+### List organizations relationship
+
+```
+Example Request
+```
+
+```shell
+curl "https://api.example.org/v3/isolation_segments/[guid]/relationships/organizations" \
+  -X GET \
+  -H "Authorization: bearer [token]"
+```
+
+```
+Example Response
+```
+
+```http
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+<%= yield_content :relationships_organizations %>
+```
+
+This endpoint lists the organizations entitled for the isolation segment.  For an Admin, this will list all entitled organizations in the system.  For any other user, this will list only the entitled organizations to which the user belongs.
+
+#### Definition
+`GET /v3/isolation_segments/:guid/relationships/organizations`
+
+#### Permitted Roles
+ |
+--- | ---
+Org Manager |
+Org Auditor |
+Org Billing Manager |
+Org Member
+Space Developer |
+Space Manager |
+Space Auditor |
+Admin |
+Admin Read-Only |
+Global Auditor |

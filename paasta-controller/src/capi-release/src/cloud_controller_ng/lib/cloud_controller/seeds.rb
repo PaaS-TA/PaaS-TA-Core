@@ -13,7 +13,7 @@ module VCAP::CloudController
       end
 
       def create_seed_shared_isolation_segment(config)
-        shared_isolation_segment_model = IsolationSegmentModel.find(guid: IsolationSegmentModel::SHARED_ISOLATION_SEGMENT_GUID)
+        shared_isolation_segment_model = IsolationSegmentModel.first(guid: IsolationSegmentModel::SHARED_ISOLATION_SEGMENT_GUID)
 
         if shared_isolation_segment_model
           if !shared_isolation_segment_model.name.eql?(config[:shared_isolation_segment_name])
@@ -66,9 +66,8 @@ module VCAP::CloudController
       end
 
       def create_seed_domains(config, system_org)
-        system_domain = config[:system_domain]
         domains = parsed_domains(config[:app_domains])
-        raise 'app_domains can not be empty' if domains.empty?
+        system_domain = config[:system_domain]
 
         domains.each do |domain|
           domain_name = domain['name']

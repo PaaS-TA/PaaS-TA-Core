@@ -4,19 +4,13 @@ import (
 	"encoding/json"
 	"net"
 	"net/http"
-	"os"
-	"time"
 
 	"github.com/hashicorp/consul/api"
-	"github.com/hashicorp/consul/command/agent"
 )
 
 type Server struct {
 	HTTPAddr     string
 	HTTPListener net.Listener
-
-	TCPAddr     string
-	TCPListener *net.TCPListener
 
 	OutputWriter *OutputWriter
 
@@ -32,23 +26,19 @@ func (s *Server) Serve() error {
 		return err
 	}
 
-	tcpAddr, err := net.ResolveTCPAddr("tcp", s.TCPAddr)
-	if err != nil {
-		return err
-	}
-
-	s.TCPListener, err = net.ListenTCP("tcp", tcpAddr)
-	if err != nil {
-		return err
-	}
-
-	go s.ServeTCP()
 	go s.ServeHTTP()
 
 	return nil
 }
 
 func (s *Server) ServeHTTP() {
+	var (
+		useKeyCallCount     int
+		installKeyCallCount int
+		leaveCallCount      int
+		selfCallCount       int
+	)
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/v1/agent/members", func(w http.ResponseWriter, req *http.Request) {
 		var members []api.AgentMember
@@ -64,14 +54,59 @@ func (s *Server) ServeHTTP() {
 	})
 	mux.HandleFunc("/v1/agent/self", func(w http.ResponseWriter, req *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{}`))
+		if s.FailStatsEndpoint {
+			w.Write([]byte(`{
+				"Stats": {
+					"raft": {
+						"commit_index":   "5",
+						"last_log_index": "2"
+					}
+				}
+			}`))
+		} else {
+			w.Write([]byte(`{
+				"Stats": {
+					"raft": {
+						"commit_index":   "2",
+						"last_log_index": "2"
+					}
+				}
+			}`))
+		}
+		selfCallCount++
+		s.OutputWriter.SelfCalled()
 	})
 	mux.HandleFunc("/v1/agent/join/", func(w http.ResponseWriter, req *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
+	mux.HandleFunc("/v1/agent/leave", func(w http.ResponseWriter, req *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		leaveCallCount++
+		s.OutputWriter.LeaveCalled()
+		s.DidLeave = true
+	})
 	mux.HandleFunc("/v1/status/leader", func(w http.ResponseWriter, req *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(`""`)) //s.Members[0]
+	})
+	mux.HandleFunc("/v1/operator/keyring", func(w http.ResponseWriter, req *http.Request) {
+		switch req.Method {
+		case "GET":
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(`[]`))
+		case "POST":
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(`[]`))
+			installKeyCallCount++
+			s.OutputWriter.InstallKeyCalled()
+		case "PUT":
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(`[]`))
+			useKeyCallCount++
+			s.OutputWriter.UseKeyCalled()
+		case "DELETE":
+			w.WriteHeader(http.StatusInternalServerError)
+		}
 	})
 
 	server := &http.Server{
@@ -82,55 +117,8 @@ func (s *Server) ServeHTTP() {
 	server.Serve(s.HTTPListener)
 }
 
-func (s *Server) ServeTCP() {
-	mockAgent := new(FakeAgentBackend)
-	if s.FailStatsEndpoint {
-		mockAgent.StatsReturns(map[string]map[string]string{
-			"raft": {
-				"commit_index":   "5",
-				"last_log_index": "2",
-			},
-		})
-	}
-
-	agentRPCServer := agent.NewAgentRPC(mockAgent, s.TCPListener, os.Stderr, agent.NewLogWriter(42))
-
-	var (
-		useKeyCallCount     int
-		installKeyCallCount int
-		leaveCallCount      int
-		statsCallCount      int
-	)
-
-	for {
-		switch {
-		case mockAgent.UseKeyCallCount() > useKeyCallCount:
-			useKeyCallCount++
-			s.OutputWriter.UseKeyCalled()
-		case mockAgent.InstallKeyCallCount() > installKeyCallCount:
-			installKeyCallCount++
-			s.OutputWriter.InstallKeyCalled()
-		case mockAgent.LeaveCallCount() > leaveCallCount:
-			leaveCallCount++
-			s.OutputWriter.LeaveCalled()
-			agentRPCServer.Shutdown()
-			s.DidLeave = true
-		case mockAgent.StatsCallCount() > statsCallCount:
-			statsCallCount++
-			s.OutputWriter.StatsCalled()
-		}
-
-		time.Sleep(10 * time.Millisecond)
-	}
-}
-
 func (s Server) Exit() error {
 	err := s.HTTPListener.Close()
-	if err != nil {
-		return err
-	}
-
-	err = s.TCPListener.Close()
 	if err != nil {
 		return err
 	}

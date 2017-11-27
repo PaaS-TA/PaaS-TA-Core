@@ -1,8 +1,12 @@
 package testrunner
 
 import (
+	"encoding/json"
+	"io/ioutil"
 	"os/exec"
 	"time"
+
+	"code.cloudfoundry.org/stager/config"
 
 	"github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -10,43 +14,36 @@ import (
 )
 
 type StagerRunner struct {
-	Config      Config
+	Config      config.StagerConfig
 	CompilerUrl string
 	session     *gexec.Session
 }
 
-type Config struct {
-	StagerBin          string
-	ListenAddress      string
-	TaskCallbackURL    string
-	BBSURL             string
-	CCBaseURL          string
-	DockerStagingStack string
-	ConsulCluster      string
-}
-
-func New(config Config) *StagerRunner {
+func New(config config.StagerConfig) *StagerRunner {
 	return &StagerRunner{
 		Config: config,
 	}
 }
 
-func (r *StagerRunner) Start(args ...string) {
+func (r *StagerRunner) Start(stagerBin string) {
 	if r.session != nil {
 		panic("starting more than one stager runner!!!")
 	}
 
+	stagerFile, err := ioutil.TempFile("", "stager_config")
+	Expect(err).NotTo(HaveOccurred())
+
+	stagerJSON, err := json.Marshal(r.Config)
+	Expect(err).NotTo(HaveOccurred())
+	err = ioutil.WriteFile(stagerFile.Name(), stagerJSON, 0644)
+	Expect(err).NotTo(HaveOccurred())
+
 	stagerSession, err := gexec.Start(
 		exec.Command(
-			r.Config.StagerBin,
+			stagerBin,
 			append([]string{
-				"-bbsAddress", r.Config.BBSURL,
-				"-listenAddress", r.Config.ListenAddress,
-				"-stagingTaskCallbackURL", r.Config.TaskCallbackURL,
-				"-ccBaseURL", r.Config.CCBaseURL,
-				"-dockerStagingStack", r.Config.DockerStagingStack,
-				"-consulCluster", r.Config.ConsulCluster,
-			}, args...)...,
+				"-configPath", stagerFile.Name(),
+			})...,
 		),
 		gexec.NewPrefixedWriter("\x1b[32m[o]\x1b[95m[stager]\x1b[0m ", ginkgo.GinkgoWriter),
 		gexec.NewPrefixedWriter("\x1b[91m[e]\x1b[95m[stager]\x1b[0m ", ginkgo.GinkgoWriter),

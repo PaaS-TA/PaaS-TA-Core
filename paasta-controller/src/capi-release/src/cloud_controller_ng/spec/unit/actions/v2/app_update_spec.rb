@@ -8,8 +8,43 @@ module VCAP::CloudController
     subject(:app_update) { described_class.new(access_validator: access_validator, stagers: stagers) }
 
     describe 'update' do
+      it 'updates the process' do
+        process = ProcessModel.make
+        app     = process.app
+
+        request_attrs = {
+          'production'                 => false,
+          'memory'                     => 4,
+          'instances'                  => 2,
+          'disk_quota'                 => 30,
+          'command'                    => 'new-command',
+          'health_check_type'          => 'http',
+          'health_check_timeout'       => 20,
+          'health_check_http_endpoint' => '/health',
+          'diego'                      => true,
+          'enable_ssh'                 => true,
+          'ports'                      => [8080],
+          'route_guids'                => [],
+        }
+
+        app_update.update(app, process, request_attrs)
+
+        expect(process.production).to eq(false)
+        expect(process.memory).to eq(4)
+        expect(process.instances).to eq(2)
+        expect(process.disk_quota).to eq(30)
+        expect(process.command).to eq('new-command')
+        expect(process.health_check_type).to eq('http')
+        expect(process.health_check_timeout).to eq(20)
+        expect(process.health_check_http_endpoint).to eq('/health')
+        expect(process.diego).to eq(true)
+        expect(process.enable_ssh).to eq(true)
+        expect(process.ports).to eq([8080])
+        expect(process.route_guids).to eq([])
+      end
+
       it 'updates the app' do
-        process = App.make
+        process = ProcessModel.make
         app     = process.app
         stack   = Stack.make(name: 'stack-name')
 
@@ -25,29 +60,27 @@ module VCAP::CloudController
         expect(process.name).to eq('maria')
         expect(process.environment_json).to eq({ 'KEY' => 'val' })
         expect(process.stack).to eq(stack)
-        expect(process.buildpack.url).to eq('http://example.com/buildpack')
+        expect(process.custom_buildpack_url).to eq('http://example.com/buildpack')
 
         expect(app.name).to eq('maria')
         expect(app.environment_variables).to eq({ 'KEY' => 'val' })
         expect(app.lifecycle_type).to eq(BuildpackLifecycleDataModel::LIFECYCLE_TYPE)
         expect(app.lifecycle_data.stack).to eq('stack-name')
-        expect(app.lifecycle_data.buildpack).to eq('http://example.com/buildpack')
+        expect(app.lifecycle_data.buildpacks).to eq(['http://example.com/buildpack'])
       end
 
       context 'when custom buildpacks are disabled' do
-        let(:process) { App.make }
+        let(:process) { ProcessModel.make }
         let(:app) { process.app }
 
-        before do
-          TestConfig.override({ disable_custom_buildpacks: true })
-        end
+        before { TestConfig.override(disable_custom_buildpacks: true) }
 
         it 'does NOT allow a public git url' do
           request_attrs = { 'buildpack' => 'http://example.com/buildpack' }
 
           expect {
             app_update.update(app, process, request_attrs)
-          }.to raise_error(/custom buildpacks are disabled/)
+          }.to raise_error(CloudController::Errors::ApiError, /Custom buildpacks are disabled/)
         end
 
         it 'does NOT allow a public http url' do
@@ -55,7 +88,7 @@ module VCAP::CloudController
 
           expect {
             app_update.update(app, process, request_attrs)
-          }.to raise_error(/custom buildpacks are disabled/)
+          }.to raise_error(CloudController::Errors::ApiError, /Custom buildpacks are disabled/)
         end
 
         it 'does allow a buildpack name' do
@@ -68,25 +101,25 @@ module VCAP::CloudController
         end
 
         it 'does not allow a private git url' do
-          request_attrs = { 'buildpack' => 'git@example.com:foo.git' }
+          request_attrs = { 'buildpack' => 'git://github.com/johndoe/my-buildpack.git' }
 
           expect {
             app_update.update(app, process, request_attrs)
-          }.to raise_error(/custom buildpacks are disabled/)
+          }.to raise_error(CloudController::Errors::ApiError, /Custom buildpacks are disabled/)
         end
 
         it 'does not allow a private git url with ssh schema' do
-          request_attrs = { 'buildpack' => 'ssh://git@example.com:foo.git' }
+          request_attrs = { 'buildpack' => 'ssh://git@example.com/foo.git' }
 
           expect {
             app_update.update(app, process, request_attrs)
-          }.to raise_error(/custom buildpacks are disabled/)
+          }.to raise_error(CloudController::Errors::ApiError, /Custom buildpacks are disabled/)
         end
       end
 
       describe 'setting stack' do
         let(:new_stack) { Stack.make }
-        let(:process) { App.make }
+        let(:process) { ProcessModel.make }
         let(:app) { process.app }
         let(:request_attrs) { { 'stack_guid' => new_stack.guid } }
 
@@ -136,7 +169,7 @@ module VCAP::CloudController
         end
 
         context 'when the app was never staged' do
-          let(:process) { App.make }
+          let(:process) { ProcessModel.make }
 
           it 'does not mark the app for staging' do
             expect(process.staged?).to be_falsey
@@ -153,7 +186,7 @@ module VCAP::CloudController
 
       describe 'changing lifecycle types' do
         context 'when changing from docker to buildpack' do
-          let(:process) { App.make(app: AppModel.make(:docker)) }
+          let(:process) { ProcessModel.make(app: AppModel.make(:docker)) }
           let(:app) { process.app }
 
           it 'raises an error setting buildpack' do
@@ -174,7 +207,7 @@ module VCAP::CloudController
         end
 
         context 'when changing from buildpack to docker' do
-          let(:process) { App.make(app: AppModel.make(:buildpack)) }
+          let(:process) { ProcessModel.make(app: AppModel.make(:buildpack)) }
           let(:app) { process.app }
 
           it 'raises an error' do
@@ -190,6 +223,12 @@ module VCAP::CloudController
       describe 'updating docker_image' do
         let(:process) { AppFactory.make(app: AppModel.make(:docker), docker_image: 'repo/original-image') }
         let!(:original_package) { process.latest_package }
+        let(:app_stage) { instance_double(V2::AppStage, stage: nil) }
+
+        before do
+          FeatureFlag.create(name: 'diego_docker', enabled: true)
+          allow(V2::AppStage).to receive(:new).and_return(app_stage)
+        end
 
         it 'creates a new docker package' do
           request_attrs = { 'docker_image' => 'repo/new-image' }
@@ -201,14 +240,95 @@ module VCAP::CloudController
           expect(process.latest_package).not_to eq(original_package)
         end
 
-        context 'when the docker image is requested but is not a change' do
-          it 'does not create a new package' do
-            request_attrs = { 'docker_image' => 'REPO/ORIGINAL-IMAGE' }
+        context 'when docker credentials are requested' do
+          it 'creates a new docker package with those credentials' do
+            request_attrs = {
+              'docker_image'       => 'repo/new-image',
+              'docker_credentials' => { 'username' => 'bob', 'password' => 'secret' }
+            }
 
+            expect(process.docker_image).not_to eq('repo/new-image')
+            expect(process.docker_username).to be_nil
+            expect(process.docker_password).to be_nil
             app_update.update(process.app, process, request_attrs)
 
-            expect(process.reload.docker_image).to eq('repo/original-image')
-            expect(process.latest_package).to eq(original_package)
+            expect(process.reload.docker_image).to eq('repo/new-image')
+            expect(process.docker_username).to eq('bob')
+            expect(process.docker_password).to eq('secret')
+            expect(process.latest_package).not_to eq(original_package)
+          end
+        end
+
+        context 'when the same docker image is requested' do
+          context 'but there are no changes' do
+            it 'does not create a new package and does not trigger staging' do
+              request_attrs = { 'docker_image' => 'REPO/ORIGINAL-IMAGE', 'state' => 'STARTED' }
+
+              app_update.update(process.app, process, request_attrs)
+
+              expect(process.reload.docker_image).to eq('repo/original-image')
+              expect(process.latest_package).to eq(original_package)
+              expect(process.needs_staging?).to be_falsey
+            end
+          end
+
+          context 'but it changes credentials' do
+            it 'creates a new docker package and triggers staging' do
+              request_attrs = {
+                'docker_image'       => 'repo/original-image',
+                'docker_credentials' => { 'username' => 'bob', 'password' => 'secret' },
+                'state'              => 'STARTED',
+              }
+
+              expect(process.reload.docker_image).to eq('repo/original-image')
+              expect(process.docker_username).to be_nil
+              expect(process.docker_password).to be_nil
+              app_update.update(process.app, process, request_attrs)
+
+              expect(process.reload.docker_image).to eq('repo/original-image')
+              expect(process.docker_username).to eq('bob')
+              expect(process.docker_password).to eq('secret')
+              expect(process.latest_package).not_to eq(original_package)
+              expect(process.needs_staging?).to be_truthy
+            end
+          end
+        end
+      end
+
+      describe 'updating docker_credentials' do
+        let(:process) { AppFactory.make(app: AppModel.make(:docker), docker_image: 'repo/original-image') }
+        let!(:original_package) { process.latest_package }
+        let(:app_stage) { instance_double(V2::AppStage, stage: nil) }
+
+        before do
+          FeatureFlag.create(name: 'diego_docker', enabled: true)
+          allow(V2::AppStage).to receive(:new).and_return(app_stage)
+        end
+
+        it 'creates a new docker package' do
+          request_attrs = { 'docker_credentials' => {
+            'username' => 'user', 'password' => 'secret' } }
+
+          expect(process.docker_image).to eq('repo/original-image')
+          expect(process.docker_username).to be_nil
+          expect(process.docker_password).to be_nil
+          app_update.update(process.app, process, request_attrs)
+
+          expect(process.reload.docker_image).to eq('repo/original-image')
+          expect(process.docker_username).to eq('user')
+          expect(process.docker_password).to eq('secret')
+          expect(process.latest_package).not_to eq(original_package)
+        end
+
+        context 'when docker_image is not requested and the app does not have a docker_image' do
+          let(:process) { AppFactory.make(app: AppModel.make(:docker)) }
+
+          it 'raises an error' do
+            request_attrs = { 'docker_credentials' => {
+              'username' => 'user', 'password' => 'secret' } }
+
+            expect { app_update.update(process.app, process, request_attrs) }.to raise_error(CloudController::Errors::ApiError,
+              /Docker credentials can only be supplied for apps with a 'docker_image'/)
           end
         end
       end
@@ -286,7 +406,7 @@ module VCAP::CloudController
       end
 
       context 'when starting an app without a package' do
-        let(:process) { App.make(instances: 1) }
+        let(:process) { ProcessModel.make(instances: 1) }
 
         it 'raises an error' do
           expect {
@@ -310,7 +430,7 @@ module VCAP::CloudController
       describe 'starting and stopping' do
         let(:app) { process.app }
         let(:process) { AppFactory.make(instances: 1, state: state) }
-        let(:sibling_process) { App.make(instances: 1, state: state, app: app, type: 'worker') }
+        let(:sibling_process) { ProcessModel.make(instances: 1, state: state, app: app, type: 'worker') }
 
         context 'starting' do
           let(:state) { 'STOPPED' }

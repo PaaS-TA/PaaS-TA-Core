@@ -27,7 +27,7 @@ module VCAP::CloudController
         logger.info('stage.response', staging_guid: staging_guid, response_code: response.code)
 
         if response.code != '202'
-          raise CloudController::Errors::ApiError.new_from_details('StagerError', "staging failed: #{error_message(response)}")
+          raise CloudController::Errors::ApiError.new_from_details('StagerError', "stager_client staging failed: #{error_message(response)}")
         end
 
         nil
@@ -54,7 +54,7 @@ module VCAP::CloudController
 
         case response.code
         when '202', '404'
-          # success
+          nil # success
         else
           raise CloudController::Errors::ApiError.new_from_details('StagerError', "stop failed: #{response.code}")
         end

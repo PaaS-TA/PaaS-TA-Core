@@ -48,10 +48,10 @@ func (a AWSConfig) NetworkSubnet(ipRange string) core.NetworkSubnetCloudProperti
 	return core.NetworkSubnetCloudProperties{}
 }
 
-func (a AWSConfig) Compilation() core.CompilationCloudProperties {
+func (a AWSConfig) Compilation(availabilityZone string) core.CompilationCloudProperties {
 	return core.CompilationCloudProperties{
 		InstanceType:     "c3.large",
-		AvailabilityZone: "us-east-1a",
+		AvailabilityZone: availabilityZone,
 		EphemeralDisk: &core.CompilationCloudPropertiesEphemeralDisk{
 			Size: 2048,
 			Type: "gp2",
@@ -115,5 +115,9 @@ func (a AWSConfig) Properties(staticIP string) Properties {
 }
 
 func (AWSConfig) Stemcell() string {
-	return AWSStemcell
+	return AWSLinuxStemcell
+}
+
+func (AWSConfig) WindowsStemcell() string {
+	return AWSWindowsStemcell
 }

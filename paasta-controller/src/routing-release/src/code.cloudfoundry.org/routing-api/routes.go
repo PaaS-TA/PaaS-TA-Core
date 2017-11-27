@@ -9,6 +9,7 @@ const (
 	EventStreamRoute      = "EventStream"
 	ListRouterGroups      = "ListRouterGroups"
 	UpdateRouterGroup     = "UpdateRouterGroup"
+	CreateRouterGroup     = "CreateRouterGroup"
 	UpsertTcpRouteMapping = "UpsertTcpRouteMapping"
 	DeleteTcpRouteMapping = "DeleteTcpRouteMapping"
 	ListTcpRouteMapping   = "ListTcpRouteMapping"
@@ -20,6 +21,7 @@ var RoutesMap = map[string]rata.Route{
 	DeleteRoute:           {Path: "/routing/v1/routes", Method: "DELETE", Name: DeleteRoute},
 	ListRoute:             {Path: "/routing/v1/routes", Method: "GET", Name: ListRoute},
 	EventStreamRoute:      {Path: "/routing/v1/events", Method: "GET", Name: EventStreamRoute},
+	CreateRouterGroup:     {Path: "/routing/v1/router_groups", Method: "POST", Name: CreateRouterGroup},
 	ListRouterGroups:      {Path: "/routing/v1/router_groups", Method: "GET", Name: ListRouterGroups},
 	UpdateRouterGroup:     {Path: "/routing/v1/router_groups/:guid", Method: "PUT", Name: UpdateRouterGroup},
 	UpsertTcpRouteMapping: {Path: "/routing/v1/tcp_routes/create", Method: "POST", Name: UpsertTcpRouteMapping},

@@ -3,20 +3,28 @@ require 'actions/app_update'
 
 module VCAP::CloudController
   RSpec.describe SetCurrentDroplet do
-    let(:app_model) { AppModel.make }
+    subject(:set_current_droplet) { SetCurrentDroplet.new(user_audit_info) }
+
+    let(:app_model) { AppModel.make desired_state: ProcessModel::STOPPED }
     let(:user) { double(:user, guid: '1337') }
     let(:user_email) { 'cool_dude@hoopy_frood.com' }
-    let(:set_current_droplet) { SetCurrentDroplet.new(user, user_email) }
+    let(:user_audit_info) { UserAuditInfo.new(user_guid: user.guid, user_email: user_email) }
     let(:current_process_types) { double(:current_process_types) }
 
     describe '.update_to' do
-      let(:droplet) { DropletModel.make(state: DropletModel::STAGED_STATE, process_types: { web: 'x' }) }
+      let(:droplet) do
+        DropletModel.make(
+          state: DropletModel::STAGED_STATE,
+          process_types: { web: 'x' },
+          app: app_model
+        )
+      end
       let(:droplet_guid) { droplet.guid }
       let(:message) { { 'droplet_guid' => droplet_guid } }
 
       before do
         app_model.add_droplet_by_guid(droplet_guid)
-        allow(CurrentProcessTypes).to receive(:new).with(user.guid, user_email).and_return(current_process_types)
+        allow(CurrentProcessTypes).to receive(:new).with(user_audit_info).and_return(current_process_types)
         allow(current_process_types).to receive(:process_current_droplet).with(app_model)
       end
 
@@ -30,8 +38,7 @@ module VCAP::CloudController
         expect_any_instance_of(Repositories::AppEventRepository).to receive(:record_app_map_droplet).with(
           app_model,
           app_model.space,
-          user.guid,
-          user_email,
+          user_audit_info,
           { droplet_guid: droplet.guid }
         )
 
@@ -43,6 +50,34 @@ module VCAP::CloudController
         expect {
           set_current_droplet.update_to(app_model, droplet)
         }.to raise_error(SetCurrentDroplet::InvalidApp)
+      end
+
+      describe 'error cases' do
+        context 'when the app is not stopped' do
+          it 'raises an error' do
+            app_model.update(desired_state: ProcessModel::STARTED)
+            expect {
+              set_current_droplet.update_to(app_model, droplet)
+            }.to raise_error SetCurrentDroplet::Error, 'Stop the app before changing droplet'
+          end
+        end
+
+        context 'when the droplet is not associated with the application' do
+          it 'raises an error' do
+            other_droplet = DropletModel.make
+            expect {
+              set_current_droplet.update_to(app_model, other_droplet)
+            }.to raise_error SetCurrentDroplet::Error, 'Unable to assign current droplet. Ensure the droplet exists and belongs to this app.'
+          end
+        end
+
+        context 'when the droplet does not exist' do
+          it 'raises an error' do
+            expect {
+              set_current_droplet.update_to(app_model, nil)
+            }.to raise_error SetCurrentDroplet::Error, 'Unable to assign current droplet. Ensure the droplet exists and belongs to this app.'
+          end
+        end
       end
     end
   end

@@ -1,16 +1,8 @@
 #!/bin/bash -e
 
 LOG_DIR=/var/vcap/sys/log/cc_uploader
+CONF_DIR=/var/vcap/jobs/cc_uploader/config
 
-exec /var/vcap/packages/cc_uploader/bin/cc-uploader \
-  -address=<%= p("capi.cc_uploader.listen_addr") %> \
-  -debugAddr=<%= p("capi.cc_uploader.debug_addr") %> \
-  -consulCluster=http://127.0.0.1:<%= p("capi.cc_uploader.consul_agent_port") %> \
-  <% if_p("capi.cc_uploader.cc.job_polling_interval_in_seconds") do |interval| %>\
-    -ccJobPollingInterval=<%= "#{interval}s" %> \
-  <% end %>\
-  -dropsondePort=<%= p("capi.cc_uploader.dropsonde_port") %> \
-  -skipCertVerify=<%= p("diego.ssl.skip_cert_verify") %> \
-  -logLevel=<%= p("capi.cc_uploader.log_level") %> \
+exec /var/vcap/packages/cc_uploader/bin/cc-uploader -configPath "${CONF_DIR}/cc_uploader_config.json" \
   2> >(tee -a $LOG_DIR/cc_uploader.stderr.log | logger -p user.error -t vcap.cc-uploader) \
   1> >(tee -a $LOG_DIR/cc_uploader.stdout.log | logger -p user.info -t vcap.cc-uploader)

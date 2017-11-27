@@ -1,0 +1,55 @@
+### Copy a Package
+
+```
+Example Request
+```
+
+```shell
+curl "https://api.example.org/v3/packages?source_guid=[guid]" \
+  -X POST \
+  -H "Authorization: bearer [token]" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "relationships": {
+      "app": {
+        "data": {
+          "guid": "[destination-app-guid]"
+        }
+      }
+    }
+  }'
+```
+
+```
+Example Response
+```
+
+```http
+HTTP/1.1 201 Created
+Content-Type: application/json
+
+<%= yield_content :copy_of_packages, '/v3/packages' %>
+```
+
+This endpoint copies the bits of a source package to a target package.
+
+#### Definition
+`POST /v3/packages?source_guid=:guid`
+
+#### Required Query Parameters
+
+Name | Type | Description
+---- | ---- | -----------
+**source_guid** | _uuid_ | GUID of the source package to copy from.
+
+#### Required Parameters
+
+Name | Type | Description
+---- | ---- | -----------
+**app** | [_to-one relationship_](#to-one-relationships) | A relationship to the destination app.
+
+#### Permitted Roles
+ |
+--- | ---
+Space Developer |
+Admin |

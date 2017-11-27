@@ -1,0 +1,44 @@
+resources:
+- name: postgres-release-develop
+  type: git
+  source:
+    uri: https://github.com/cloudfoundry/postgres-release.git
+    branch: develop
+
+jobs:
+- name: run-acceptance-tests
+  plan:
+  - aggregate:
+    - get: postgres-release
+      resource: postgres-release-develop
+      trigger: true
+  - task: create-postgres-dev-release-tarball
+    file: postgres-release/ci/scripts/create-dev-release-tarball/task.yml
+    input_mapping: {dev-release: postgres-release}
+    output_mapping: {dev-release-tarball: postgres-tarball}
+    params: &bosh1_params
+      BOSH_DIRECTOR: {{bosh1_director}}
+      BOSH_CLIENT: {{bosh1_user}}
+      BOSH_CLIENT_SECRET: {{bosh1_password}}
+      BOSH_CA_CERT: {{bosh1_ca_cert}}
+      REL_NAME: postgres
+      REL_VERSION: v99+dev.1
+      STEMCELL_VERSION: {{stemcell_version}}
+  - task: upload-postgres-dev-release
+    file: postgres-release/ci/scripts/upload-dev-release-tarball/task.yml
+    input_mapping: {dev-release-tarball: postgres-tarball}
+    params:
+      <<: *bosh1_params
+  - task: upload-stemcell
+    file: postgres-release/ci/scripts/upload-stemcell/task.yml
+    params:
+      <<: *bosh1_params
+  - task: run-acceptance-tests
+    file: postgres-release/ci/scripts/run-acceptance-tests/task.yml
+    params:
+      <<: *bosh1_params
+    ensure:
+      task: delete-postgres-dev-release
+      file: postgres-release/ci/scripts/run-bosh-delete-release/task.yml
+      params:
+        <<: *bosh1_params

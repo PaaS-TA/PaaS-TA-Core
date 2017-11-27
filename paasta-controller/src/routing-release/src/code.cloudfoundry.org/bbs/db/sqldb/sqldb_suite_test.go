@@ -10,6 +10,7 @@ import (
 	thepackagedb "code.cloudfoundry.org/bbs/db"
 	"code.cloudfoundry.org/bbs/db/migrations"
 	"code.cloudfoundry.org/bbs/db/sqldb"
+	"code.cloudfoundry.org/bbs/db/sqldb/helpers"
 	"code.cloudfoundry.org/bbs/encryption"
 	"code.cloudfoundry.org/bbs/format"
 	"code.cloudfoundry.org/bbs/guidprovider/guidproviderfakes"
@@ -46,10 +47,6 @@ func TestSql(t *testing.T) {
 }
 
 var _ = BeforeSuite(func() {
-	if !test_helpers.UseSQL() {
-		return
-	}
-
 	var err error
 	fakeClock = fakeclock.NewFakeClock(time.Now())
 	fakeGUIDProvider = &guidproviderfakes.FakeGUIDProvider{}
@@ -58,11 +55,11 @@ var _ = BeforeSuite(func() {
 	if test_helpers.UsePostgres() {
 		dbDriverName = "postgres"
 		dbBaseConnectionString = "postgres://diego:diego_pw@localhost/"
-		dbFlavor = sqldb.Postgres
+		dbFlavor = helpers.Postgres
 	} else if test_helpers.UseMySQL() {
 		dbDriverName = "mysql"
 		dbBaseConnectionString = "diego:diego_password@/"
-		dbFlavor = sqldb.MySQL
+		dbFlavor = helpers.MySQL
 	} else {
 		panic("Unsupported driver")
 	}
@@ -72,6 +69,9 @@ var _ = BeforeSuite(func() {
 	db, err = sql.Open(dbDriverName, dbBaseConnectionString)
 	Expect(err).NotTo(HaveOccurred())
 	Expect(db.Ping()).NotTo(HaveOccurred())
+
+	// Ensure that if another test failed to clean up we can still proceed
+	db.Exec(fmt.Sprintf("DROP DATABASE diego_%d", GinkgoParallelNode()))
 
 	_, err = db.Exec(fmt.Sprintf("CREATE DATABASE diego_%d", GinkgoParallelNode()))
 	Expect(err).NotTo(HaveOccurred())
@@ -98,10 +98,6 @@ var _ = BeforeSuite(func() {
 })
 
 var _ = BeforeEach(func() {
-	if !test_helpers.UseSQL() {
-		Skip("SQL Backend not available")
-	}
-
 	migrationsDone := make(chan struct{})
 
 	migrationManager := migration.NewManager(logger,
@@ -120,29 +116,30 @@ var _ = BeforeEach(func() {
 
 	Consistently(migrationProcess.Wait()).ShouldNot(Receive())
 	Eventually(migrationsDone).Should(BeClosed())
+
+	// ensure that all sqldb functions being tested only require one connection
+	// to operate, otherwise a deadlock can be caused in bbs. For more
+	// information see https://www.pivotaltracker.com/story/show/136754083
+	db.SetMaxOpenConns(1)
 })
 
 var _ = AfterEach(func() {
-	if test_helpers.UseSQL() {
-		fakeGUIDProvider.NextGUIDReturns("", nil)
-		truncateTables(db)
-	}
+	fakeGUIDProvider.NextGUIDReturns("", nil)
+	truncateTables(db)
 })
 
 var _ = AfterSuite(func() {
-	if test_helpers.UseSQL() {
-		if migrationProcess != nil {
-			migrationProcess.Signal(os.Kill)
-		}
-
-		Expect(db.Close()).NotTo(HaveOccurred())
-		db, err := sql.Open(dbDriverName, dbBaseConnectionString)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(db.Ping()).NotTo(HaveOccurred())
-		_, err = db.Exec(fmt.Sprintf("DROP DATABASE diego_%d", GinkgoParallelNode()))
-		Expect(err).NotTo(HaveOccurred())
-		Expect(db.Close()).NotTo(HaveOccurred())
+	if migrationProcess != nil {
+		migrationProcess.Signal(os.Kill)
 	}
+
+	Expect(db.Close()).NotTo(HaveOccurred())
+	db, err := sql.Open(dbDriverName, dbBaseConnectionString)
+	Expect(err).NotTo(HaveOccurred())
+	Expect(db.Ping()).NotTo(HaveOccurred())
+	_, err = db.Exec(fmt.Sprintf("DROP DATABASE diego_%d", GinkgoParallelNode()))
+	Expect(err).NotTo(HaveOccurred())
+	Expect(db.Close()).NotTo(HaveOccurred())
 })
 
 func truncateTables(db *sql.DB) {
@@ -155,10 +152,10 @@ func truncateTables(db *sql.DB) {
 
 var truncateTablesSQL = []string{
 	"TRUNCATE TABLE domains",
-	"TRUNCATE TABLE configurations",
 	"TRUNCATE TABLE tasks",
 	"TRUNCATE TABLE desired_lrps",
 	"TRUNCATE TABLE actual_lrps",
+	"TRUNCATE TABLE configurations",
 }
 
 func randStr(strSize int) string {

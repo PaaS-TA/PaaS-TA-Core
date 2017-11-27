@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"time"
 
+	"code.cloudfoundry.org/bbs/db/sqldb/helpers"
 	"code.cloudfoundry.org/bbs/models"
 	"code.cloudfoundry.org/lager"
 )
@@ -16,7 +17,7 @@ func (db *SQLDB) EvacuateActualLRP(
 	netInfo *models.ActualLRPNetInfo,
 	ttl uint64,
 ) (*models.ActualLRPGroup, error) {
-	logger = logger.Session("evacuate-lrp-sqldb", lager.Data{"lrp_key": lrpKey, "instance_key": instanceKey, "net_info": netInfo})
+	logger = logger.Session("evacuate-lrp", lager.Data{"lrp_key": lrpKey, "instance_key": instanceKey, "net_info": netInfo})
 	logger.Debug("starting")
 	defer logger.Debug("complete")
 
@@ -60,7 +61,7 @@ func (db *SQLDB) EvacuateActualLRP(
 		}
 
 		_, err = db.update(logger, tx, "actual_lrps",
-			SQLAttributes{
+			helpers.SQLAttributes{
 				"domain":                 actualLRP.Domain,
 				"instance_guid":          actualLRP.InstanceGuid,
 				"cell_id":                actualLRP.CellId,
@@ -74,7 +75,7 @@ func (db *SQLDB) EvacuateActualLRP(
 		)
 		if err != nil {
 			logger.Error("failed-update-evacuating-lrp", err)
-			return db.convertSQLError(err)
+			return err
 		}
 
 		return nil
@@ -84,7 +85,7 @@ func (db *SQLDB) EvacuateActualLRP(
 }
 
 func (db *SQLDB) RemoveEvacuatingActualLRP(logger lager.Logger, lrpKey *models.ActualLRPKey, instanceKey *models.ActualLRPInstanceKey) error {
-	logger = logger.Session("remove-evacuating-lrp-sqldb", lager.Data{"lrp_key": lrpKey, "instance_key": instanceKey})
+	logger = logger.Session("remove-evacuating-lrp", lager.Data{"lrp_key": lrpKey, "instance_key": instanceKey})
 	logger.Debug("starting")
 	defer logger.Debug("complete")
 
@@ -151,12 +152,12 @@ func (db *SQLDB) createEvacuatingActualLRP(logger lager.Logger,
 	}
 
 	_, err = db.upsert(logger, tx, "actual_lrps",
-		SQLAttributes{
+		helpers.SQLAttributes{
 			"process_guid":   actualLRP.ProcessGuid,
 			"instance_index": actualLRP.Index,
 			"evacuating":     true,
 		},
-		SQLAttributes{
+		helpers.SQLAttributes{
 			"domain":                 actualLRP.Domain,
 			"instance_guid":          actualLRP.InstanceGuid,
 			"cell_id":                actualLRP.CellId,
@@ -170,7 +171,7 @@ func (db *SQLDB) createEvacuatingActualLRP(logger lager.Logger,
 	)
 	if err != nil {
 		logger.Error("failed-insert-evacuating-lrp", err)
-		return nil, db.convertSQLError(err)
+		return nil, err
 	}
 
 	return actualLRP, nil

@@ -4,8 +4,10 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"strings"
+	"time"
 )
 
 var bodyReader = ioutil.ReadAll
@@ -30,7 +32,16 @@ func (kv HTTPKV) Set(key, value string) error {
 		return err
 	}
 
-	response, err := http.DefaultClient.Do(request)
+	client := &http.Client{
+		Transport: &http.Transport{
+			Dial: (&net.Dialer{
+				Timeout:   1 * time.Second,
+				KeepAlive: 1 * time.Second,
+			}).Dial,
+		},
+	}
+
+	response, err := client.Do(request)
 	if err != nil {
 		return err
 	}

@@ -1,9 +1,0 @@
-#!/bin/bash
-# vim: set ft=sh
-
-set -e
-
-chown -R diego volman/
-
-su diego -c ./volman/scripts/ci/run_cyclomatic_complexity
-

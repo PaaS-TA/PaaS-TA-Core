@@ -1,0 +1,20 @@
+---
+packages:
+- name: staticfile-buildpack
+  version: 359034ab79cefc822c5dc69442e6b654ba107d73
+  fingerprint: 359034ab79cefc822c5dc69442e6b654ba107d73
+  sha1: 8b33ed4d9a747634bbdd2c4225e0212c87b6602b
+  dependencies: []
+jobs:
+- name: staticfile-buildpack
+  version: 6031f7be3c42493fd3e147de50ee109d83f483c1
+  fingerprint: 6031f7be3c42493fd3e147de50ee109d83f483c1
+  sha1: 5f61ae290934124748b46261051da9f00117f35f
+license:
+  version: e6c4ccc65c76e75e2338d1edabdcf264d37ee663
+  fingerprint: e6c4ccc65c76e75e2338d1edabdcf264d37ee663
+  sha1: b7546c98cc8ea7a6c9652e10a77023d164ad8a15
+commit_hash: 92849bf7
+uncommitted_changes: true
+name: staticfile-buildpack
+version: 1.3.13

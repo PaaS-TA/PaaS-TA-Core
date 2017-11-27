@@ -1,6 +1,7 @@
 package handlers_test
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -47,7 +48,7 @@ var _ = Describe("DesiredLRP Handlers", func() {
 		desiredHub = new(eventfakes.FakeHub)
 		actualHub = new(eventfakes.FakeHub)
 		exitCh = make(chan struct{}, 1)
-		handler = handlers.NewDesiredLRPHandler(logger, 5, fakeDesiredLRPDB,
+		handler = handlers.NewDesiredLRPHandler(5, fakeDesiredLRPDB,
 			fakeActualLRPDB,
 			desiredHub,
 			actualHub,
@@ -66,7 +67,7 @@ var _ = Describe("DesiredLRP Handlers", func() {
 
 		JustBeforeEach(func() {
 			request := newTestRequest(requestBody)
-			handler.DesiredLRPs_r0(responseRecorder, request)
+			handler.DesiredLRPs_r0(logger, responseRecorder, request)
 		})
 
 		Context("when reading desired lrps from DB succeeds", func() {
@@ -193,7 +194,7 @@ var _ = Describe("DesiredLRP Handlers", func() {
 
 		JustBeforeEach(func() {
 			request := newTestRequest(requestBody)
-			handler.DesiredLRPs_r1(responseRecorder, request)
+			handler.DesiredLRPs_r1(logger, responseRecorder, request)
 		})
 
 		Context("when reading desired lrps from DB succeeds", func() {
@@ -384,7 +385,7 @@ var _ = Describe("DesiredLRP Handlers", func() {
 
 		JustBeforeEach(func() {
 			request := newTestRequest(requestBody)
-			handler.DesiredLRPByProcessGuid_r0(responseRecorder, request)
+			handler.DesiredLRPByProcessGuid_r0(logger, responseRecorder, request)
 		})
 
 		Context("when reading desired lrp from DB succeeds", func() {
@@ -490,7 +491,7 @@ var _ = Describe("DesiredLRP Handlers", func() {
 
 		JustBeforeEach(func() {
 			request := newTestRequest(requestBody)
-			handler.DesiredLRPByProcessGuid_r1(responseRecorder, request)
+			handler.DesiredLRPByProcessGuid_r1(logger, responseRecorder, request)
 		})
 
 		Context("when reading desired lrp from DB succeeds", func() {
@@ -708,7 +709,7 @@ var _ = Describe("DesiredLRP Handlers", func() {
 
 		JustBeforeEach(func() {
 			request := newTestRequest(requestBody)
-			handler.DesireDesiredLRP_r0(responseRecorder, request)
+			handler.DesireDesiredLRP_r0(logger, responseRecorder, request)
 		})
 
 		Context("when creating desired lrp in DB succeeds", func() {
@@ -791,15 +792,19 @@ var _ = Describe("DesiredLRP Handlers", func() {
 						Domain:      desiredLRP.Domain,
 						Indices:     []int{0, 1, 2, 3, 4},
 						Resource: rep.Resource{
-							MemoryMB:      desiredLRP.MemoryMb,
-							DiskMB:        desiredLRP.DiskMb,
+							MemoryMB: desiredLRP.MemoryMb,
+							DiskMB:   desiredLRP.DiskMb,
+							MaxPids:  desiredLRP.MaxPids,
+						},
+						PlacementConstraint: rep.PlacementConstraint{
 							RootFs:        desiredLRP.RootFs,
 							VolumeDrivers: volumeDrivers,
+							PlacementTags: desiredLRP.PlacementTags,
 						},
 					}
 
 					Expect(fakeAuctioneerClient.RequestLRPAuctionsCallCount()).To(Equal(1))
-					startAuctions := fakeAuctioneerClient.RequestLRPAuctionsArgsForCall(0)
+					_, startAuctions := fakeAuctioneerClient.RequestLRPAuctionsArgsForCall(0)
 					Expect(startAuctions).To(HaveLen(1))
 					Expect(startAuctions[0].ProcessGuid).To(Equal(expectedStartRequest.ProcessGuid))
 					Expect(startAuctions[0].Domain).To(Equal(expectedStartRequest.Domain))
@@ -836,6 +841,74 @@ var _ = Describe("DesiredLRP Handlers", func() {
 
 			It("does not try to create actual LRPs", func() {
 				Expect(fakeActualLRPDB.CreateUnclaimedActualLRPCallCount()).To(Equal(0))
+			})
+		})
+	})
+
+	Describe("DesireDesiredLRP_r1", func() {
+		var (
+			desiredLRP         *models.DesiredLRP
+			expectedDesiredLRP *models.DesiredLRP
+
+			requestBody interface{}
+		)
+
+		BeforeEach(func() {
+			desiredLRP = model_helpers.NewValidDesiredLRP("some-guid")
+
+			config, err := json.Marshal(map[string]string{"foo": "bar"})
+			Expect(err).NotTo(HaveOccurred())
+
+			desiredLRP.VolumeMounts = []*models.VolumeMount{{
+				Driver:             "my-driver",
+				ContainerDir:       "/mnt/mypath",
+				DeprecatedMode:     models.DeprecatedBindMountMode_RO,
+				DeprecatedConfig:   config,
+				DeprecatedVolumeId: "my-volume",
+			}}
+
+			expectedDesiredLRP = model_helpers.NewValidDesiredLRP("some-guid")
+
+			requestBody = &models.DesireLRPRequest{
+				DesiredLrp: desiredLRP,
+			}
+		})
+
+		JustBeforeEach(func() {
+			request := newTestRequest(requestBody)
+			handler.DesireDesiredLRP_r1(logger, responseRecorder, request)
+		})
+
+		Context("when creating desired lrp in DB succeeds", func() {
+			var createdActualLRPGroups []*models.ActualLRPGroup
+
+			BeforeEach(func() {
+				createdActualLRPGroups = []*models.ActualLRPGroup{}
+				for i := 0; i < 5; i++ {
+					createdActualLRPGroups = append(createdActualLRPGroups, &models.ActualLRPGroup{Instance: model_helpers.NewValidActualLRP("some-guid", int32(i))})
+				}
+				fakeDesiredLRPDB.DesireLRPReturns(nil)
+				fakeActualLRPDB.CreateUnclaimedActualLRPStub = func(_ lager.Logger, key *models.ActualLRPKey) (*models.ActualLRPGroup, error) {
+					if int(key.Index) > len(createdActualLRPGroups)-1 {
+						return nil, errors.New("boom")
+					}
+					return createdActualLRPGroups[int(key.Index)], nil
+				}
+				fakeDesiredLRPDB.DesiredLRPByProcessGuidReturns(expectedDesiredLRP, nil)
+			})
+
+			It("creates desired lrp", func() {
+				Expect(fakeDesiredLRPDB.DesireLRPCallCount()).To(Equal(1))
+				_, actualDesiredLRP := fakeDesiredLRPDB.DesireLRPArgsForCall(0)
+				Expect(actualDesiredLRP.VolumeMounts).To(Equal(expectedDesiredLRP.VolumeMounts))
+				Expect(actualDesiredLRP).To(Equal(expectedDesiredLRP))
+
+				Expect(responseRecorder.Code).To(Equal(http.StatusOK))
+				response := models.DesiredLRPLifecycleResponse{}
+				err := response.Unmarshal(responseRecorder.Body.Bytes())
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(response.Error).To(BeNil())
 			})
 		})
 	})

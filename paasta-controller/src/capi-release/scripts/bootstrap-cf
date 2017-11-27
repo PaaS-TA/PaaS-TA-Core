@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+
+set -ue
+
+__dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+create_and_target_org() {
+  cf create-org org
+  cf target -o org
+}
+
+create_and_target_space() {
+  cf create-space space
+  cf target -s space
+}
+
+main() {
+
+  ${__dir}/target-cf
+  create_and_target_org
+  create_and_target_space
+}
+
+main

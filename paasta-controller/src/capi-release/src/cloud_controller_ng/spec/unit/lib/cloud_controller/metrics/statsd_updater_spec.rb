@@ -187,5 +187,59 @@ module VCAP::CloudController::Metrics
         expect(batch).to have_received(:gauge).with('cc.tasks_running.memory_in_mb', 512)
       end
     end
+
+    describe '#update_synced_invalid_lrps' do
+      before do
+        allow(statsd_client).to receive(:gauge)
+      end
+
+      it 'emits number of running tasks and task memory to statsd' do
+        updater.update_synced_invalid_lrps(5)
+        expect(statsd_client).to have_received(:gauge).with('cc.diego_sync.invalid_desired_lrps', 5)
+      end
+    end
+
+    describe '#start_staging_request_received' do
+      before do
+        allow(statsd_client).to receive(:increment)
+      end
+
+      it 'increments "cc.staging.requested"' do
+        updater.start_staging_request_received
+        expect(statsd_client).to have_received(:increment).with('cc.staging.requested')
+      end
+    end
+
+    describe '#report_staging_success_metrics' do
+      before do
+        allow(statsd_client).to receive(:increment)
+        allow(statsd_client).to receive(:timing)
+      end
+
+      it 'emits staging success metrics' do
+        duration_ns = 10 * 1e9
+        duration_ms = (duration_ns / 1e6).to_i
+
+        updater.report_staging_success_metrics(duration_ns)
+        expect(statsd_client).to have_received(:increment).with('cc.staging.succeeded')
+        expect(statsd_client).to have_received(:timing).with('cc.staging.succeeded_duration', duration_ms)
+      end
+    end
+
+    describe '#report_staging_failure_metrics' do
+      before do
+        allow(statsd_client).to receive(:increment)
+        allow(statsd_client).to receive(:timing)
+      end
+
+      it 'emits staging failure metrics' do
+        duration_ns = 10 * 1e9
+        duration_ms = (duration_ns / 1e6).to_i
+
+        updater.report_staging_failure_metrics(duration_ns)
+        expect(statsd_client).to have_received(:increment).with('cc.staging.failed')
+        expect(statsd_client).to have_received(:timing).with('cc.staging.failed_duration', duration_ms)
+      end
+    end
   end
 end

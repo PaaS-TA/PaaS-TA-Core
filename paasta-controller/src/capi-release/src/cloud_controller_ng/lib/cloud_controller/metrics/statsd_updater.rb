@@ -61,5 +61,29 @@ module VCAP::CloudController::Metrics
         batch.gauge('cc.tasks_running.memory_in_mb', total_memory_in_mb)
       end
     end
+
+    def update_synced_invalid_lrps(lrp_count)
+      @statsd.gauge('cc.diego_sync.invalid_desired_lrps', lrp_count)
+    end
+
+    def start_staging_request_received
+      @statsd.increment('cc.staging.requested')
+    end
+
+    def report_staging_success_metrics(duration_ns)
+      @statsd.increment('cc.staging.succeeded')
+      @statsd.timing('cc.staging.succeeded_duration', nanoseconds_to_milliseconds(duration_ns))
+    end
+
+    def report_staging_failure_metrics(duration_ns)
+      @statsd.increment('cc.staging.failed')
+      @statsd.timing('cc.staging.failed_duration', nanoseconds_to_milliseconds(duration_ns))
+    end
+
+    private
+
+    def nanoseconds_to_milliseconds(time_ns)
+      (time_ns / 1e6).to_i
+    end
   end
 end

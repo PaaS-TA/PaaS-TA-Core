@@ -1,0 +1,74 @@
+#!/bin/bash
+
+set -e
+
+manifest_dir=$(dirname $0)/../templates/v2
+
+usage() {
+  >&2 cat <<EOF
+SYNOPSIS:
+    Generate a bosh v2 manifest for a postgres-release deployment.
+
+USAGE:
+    $0 [ -s -i -o <path-to-operations-file> -h <postgres-host-or-ip> -b <bosh-cli-alias> -v <var_store_file> ]
+
+OPTIONAL ARGUMENTS:
+    -s                           Enable SSL on PostgreSQL server.
+    -i                           Use a static ip for postgres vm.
+    -o <path-to-operations-file> Path to operation file. You can use it to customize the manifest (see by way of example 'templates/v2/operations/set_properties.yml').
+    -h <postgres-host-or-ip>     Required by '-s' and '-i' options. Specify the DNS hostname or the ip address of the PostgreSQL server (see note for details about ssl).
+	-v <var_store_file>          Optionally provide a read write value source where to save generated variable values.
+    -b <bosh-cli-alias>          Specify the bosh cli if different from 'bosh'.
+ Note:
+ In ssl mode 'verify-full', the hostname is matched against the common-name.
+ If the connection is made using an IP address instead of a host name,
+ the IP address will be matched (without doing any DNS lookups).
+
+EOF
+  exit 1
+}
+
+boshcli=bosh
+
+while getopts "o:h:b:v:si" opt; do
+  case $opt in
+    o)
+      operations_file="--ops-file ${OPTARG}"
+      ;;
+    s)
+      use_ssl="--ops-file ${manifest_dir}/operations/use_ssl.yml"
+      ;;
+    i)
+      use_static_ip="--ops-file ${manifest_dir}/operations/add_static_ips.yml"
+      ;;
+    h)
+      host_or_ip="-v postgres_host_or_ip=${OPTARG}"
+      ;;
+    b)
+      boshcli=${OPTARG}
+      ;;
+    v)
+      var_store="--vars-store=${OPTARG}"
+      ;;
+    *)
+      echo "Unknown arguments"
+      usage
+      ;;
+  esac
+done
+
+if [[ ! -z ${use_static_ip} && -z ${host_or_ip} ]]; then
+  >&2 echo "ERROR: In order to use static ips you must also specify the ip with option '-h'"
+  exit 1
+fi
+if [[ ! -z ${use_ssl} && -z ${host_or_ip} ]]; then
+  >&2 echo "ERROR: In order to enable ssl you must also specify the DNS hostname or the ip with option '-h'"
+  exit 1
+fi
+
+${boshcli} interpolate ${manifest_dir}/postgres.yml \
+  ${operations_file} \
+  ${use_ssl} \
+  ${use_static_ip} \
+  ${host_or_ip} \
+  ${var_store}

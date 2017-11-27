@@ -69,7 +69,7 @@ func NewLock(
 }
 
 func (l Lock) Run(signals <-chan os.Signal, ready chan<- struct{}) error {
-	logger := l.logger.Session("lock", lager.Data{"key": l.key, "value": string(l.value)})
+	logger := l.logger.Session("consul-lock", lager.Data{"key": l.key, "value": string(l.value)})
 	logger.Info("starting")
 
 	defer func() {

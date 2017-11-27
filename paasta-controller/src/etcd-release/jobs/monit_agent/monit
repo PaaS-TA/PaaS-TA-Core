@@ -1,0 +1,4 @@
+check process monit_agent
+  with pidfile /var/vcap/sys/run/monit_agent/monit_agent.pid
+  start program "/var/vcap/jobs/monit_agent/bin/monit_agent_ctl start" with timeout 60 seconds
+  stop program "/var/vcap/jobs/monit_agent/bin/monit_agent_ctl stop"

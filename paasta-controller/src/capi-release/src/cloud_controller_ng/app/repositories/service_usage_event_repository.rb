@@ -21,7 +21,7 @@ module VCAP::CloudController
           service_instance_type: service_instance.type,
         }
 
-        if 'managed_service_instance' == service_instance.type
+        if service_instance.type == 'managed_service_instance'
           service_plan = service_instance.service_plan
           service      = service_plan.service
           values       = values.merge({
@@ -83,7 +83,7 @@ module VCAP::CloudController
       end
 
       def delete_events_older_than(cutoff_age_in_days)
-        old_service_usage_events = ServiceUsageEvent.dataset.where("created_at < CURRENT_TIMESTAMP - INTERVAL '?' DAY", cutoff_age_in_days.to_i)
+        old_service_usage_events = ServiceUsageEvent.dataset.where(Sequel.lit("created_at < CURRENT_TIMESTAMP - INTERVAL '?' DAY", cutoff_age_in_days.to_i))
         old_service_usage_events.delete
       end
     end

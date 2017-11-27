@@ -13,7 +13,7 @@ var pathToFakeAgent string
 
 func TestFakeAgent(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "agent")
+	RunSpecs(t, "fake-agent")
 }
 
 var _ = BeforeSuite(func() {

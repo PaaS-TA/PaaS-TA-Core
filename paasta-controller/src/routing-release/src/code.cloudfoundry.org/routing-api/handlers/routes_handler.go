@@ -51,22 +51,23 @@ func (h *RoutesHandler) List(w http.ResponseWriter, req *http.Request) {
 
 func (h *RoutesHandler) Upsert(w http.ResponseWriter, req *http.Request) {
 	log := h.logger.Session("create-route")
+
+	err := h.uaaClient.DecodeToken(req.Header.Get("Authorization"), RoutingRoutesWriteScope)
+	if err != nil {
+		handleUnauthorizedError(w, err, log)
+		return
+	}
+
 	decoder := json.NewDecoder(req.Body)
 
 	var routes []models.Route
-	err := decoder.Decode(&routes)
+	err = decoder.Decode(&routes)
 	if err != nil {
 		handleProcessRequestError(w, err, log)
 		return
 	}
 
 	log.Info("request", lager.Data{"route_creation": routes})
-
-	err = h.uaaClient.DecodeToken(req.Header.Get("Authorization"), RoutingRoutesWriteScope)
-	if err != nil {
-		handleUnauthorizedError(w, err, log)
-		return
-	}
 
 	// set defaults
 	for i := 0; i < len(routes); i++ {
@@ -96,22 +97,23 @@ func (h *RoutesHandler) Upsert(w http.ResponseWriter, req *http.Request) {
 
 func (h *RoutesHandler) Delete(w http.ResponseWriter, req *http.Request) {
 	log := h.logger.Session("delete-route")
+
+	err := h.uaaClient.DecodeToken(req.Header.Get("Authorization"), RoutingRoutesWriteScope)
+	if err != nil {
+		handleUnauthorizedError(w, err, log)
+		return
+	}
+
 	decoder := json.NewDecoder(req.Body)
 
 	var routes []models.Route
-	err := decoder.Decode(&routes)
+	err = decoder.Decode(&routes)
 	if err != nil {
 		handleProcessRequestError(w, err, log)
 		return
 	}
 
 	log.Info("request", lager.Data{"route_deletion": routes})
-
-	err = h.uaaClient.DecodeToken(req.Header.Get("Authorization"), RoutingRoutesWriteScope)
-	if err != nil {
-		handleUnauthorizedError(w, err, log)
-		return
-	}
 
 	apiErr := h.validator.ValidateDelete(routes)
 	if apiErr != nil {

@@ -14,7 +14,6 @@ import (
 	"github.com/cloudfoundry/dropsonde/emitter/fake"
 	"github.com/cloudfoundry/dropsonde/log_sender"
 	"github.com/cloudfoundry/dropsonde/metrics"
-	"github.com/cloudfoundry/loggregatorlib/loggertesthelper"
 	"github.com/cloudfoundry/sonde-go/events"
 )
 
@@ -29,7 +28,7 @@ var _ = Describe("LogSender", func() {
 		mockBatcher = newMockMetricBatcher()
 		emitter = fake.NewFakeEventEmitter("test-origin")
 		metrics.Initialize(nil, mockBatcher)
-		sender = log_sender.NewLogSender(emitter, loggertesthelper.Logger())
+		sender = log_sender.NewLogSender(emitter)
 	})
 
 	AfterEach(func() {
@@ -295,9 +294,6 @@ var _ = Describe("LogSender", func() {
 			log := emitter.GetMessages()[0].Event.(*events.LogMessage)
 			Expect(log.GetMessageType()).To(Equal(events.LogMessage_OUT))
 			Expect(log.GetMessage()).To(BeEquivalentTo("one"))
-
-			loggerMessage := loggertesthelper.TestLoggerSink.LogContents()
-			Expect(loggerMessage).To(ContainSubstring("Read Error"))
 		})
 
 		It("stops when reader returns EOF", func() {
@@ -387,9 +383,6 @@ var _ = Describe("LogSender", func() {
 			log := emitter.GetMessages()[0].Event.(*events.LogMessage)
 			Expect(log.GetMessageType()).To(Equal(events.LogMessage_ERR))
 			Expect(log.GetMessage()).To(BeEquivalentTo("one"))
-
-			loggerMessage := loggertesthelper.TestLoggerSink.LogContents()
-			Expect(loggerMessage).To(ContainSubstring("Read Error"))
 		})
 
 		It("stops when reader returns EOF", func() {

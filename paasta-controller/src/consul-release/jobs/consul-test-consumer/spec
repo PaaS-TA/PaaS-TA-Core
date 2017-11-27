@@ -8,6 +8,11 @@ templates:
 packages:
   - acceptance-tests
 
+consumes:
+- name: dns
+  type: dns
+  optional: true
+
 properties:
   consul-test-consumer.nameserver:
     description: "Nameserver to use to mock out responses/response times"

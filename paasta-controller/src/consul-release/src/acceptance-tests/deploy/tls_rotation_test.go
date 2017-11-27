@@ -7,7 +7,7 @@ import (
 	"github.com/cloudfoundry-incubator/consul-release/src/acceptance-tests/testing/consulclient"
 	"github.com/cloudfoundry-incubator/consul-release/src/acceptance-tests/testing/helpers"
 	"github.com/pivotal-cf-experimental/bosh-test/bosh"
-	"github.com/pivotal-cf-experimental/destiny/consul"
+	"github.com/pivotal-cf-experimental/destiny/ops"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -15,162 +15,172 @@ import (
 
 const (
 	newCACert = `-----BEGIN CERTIFICATE-----
-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
+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
+SR8rzYdeD2d0YQ==
 -----END CERTIFICATE-----`
 	newAgentCert = `-----BEGIN CERTIFICATE-----
-MIIEJTCCAg2gAwIBAgIQdTV+O1prfdOP9ImicpoXNjANBgkqhkiG9w0BAQsFADAT
-MREwDwYDVQQDEwhjb25zdWxDQTAeFw0xNjAzMjIyMjEwMjhaFw0xODAzMjIyMjEw
-MjhaMBcxFTATBgNVBAMTDGNvbnN1bCBhZ2VudDCCASIwDQYJKoZIhvcNAQEBBQAD
-ggEPADCCAQoCggEBAKfYixt1UjZ0agvOjhWjHa5JWCTQxxsqClHTXLwyNrFE5eOQ
-easgHL0x/EEw2dgoWtChbAuyHPUAM90GZLRjooMZbPNdl9GhQw7Wz6UCMZCQXl4e
-3GwCm1PpgBHbnwTIr+pJZzMfC2wvkH6NILyJBnWif19T6MGKXFEsjzyIeK8PL3/f
-hEfrJM4+ff8oRLfbGrm6NrGwzFbvhVbHD3bMvYZaDdzitOOz1yykl4ABexD7Pm1m
-ISr1woiTpdnvdstziq4sYnXwvnNaZw2JZAE0vn/5VSeeWyFNQYJf48NokTIwJu4N
-b4udRCP1KzCFwWC9kBX5svLMUGm3ExCEnuXaLsMCAwEAAaNxMG8wDgYDVR0PAQH/
-BAQDAgO4MB0GA1UdJQQWMBQGCCsGAQUFBwMBBggrBgEFBQcDAjAdBgNVHQ4EFgQU
-LI71VaszpVW4LTez9zTv4AybmA4wHwYDVR0jBBgwFoAUwIxMbTsAS/l2k7DiN7SS
-rJQJLZEwDQYJKoZIhvcNAQELBQADggIBAFyhNT17KemtSRmtks32uRo2fTT8SN+V
-PAd/ArqOXMarr4nTRhz9nKVi7ZEV96PRxlX97O/WUfWeK2qIS1fqJ8rKGNYMFv/b
-LaakhFhbiGEj2Z8BI2svelx7zqZFqzpzlKBK7f/a7FSqXMpKR8ULQYBITHN3EgTM
-orZlJM6FOAOsdouzSk4Ft0TFMNXIT0mTDRssKo9ceWXH6xhwC1T84nCnv87ETGCA
-NNUrG2UZweDFed8jmHFjPP78l0I6UjW2VavQIvHqQT/xkRIfjlXiNJNsaa9Pm9wo
-42LWmy2JZbQjzqslqGk61Hxikoadvo8CHkk32/2ZaQOTKalQlbkUyIaPyd8nLfYC
-tw6Iy6EE7EtfNVS9A2N3i4n8gIyiQDR0rOinHTX7G05DgT97tbxOCxFCnFrRkq4q
-CXlpH6G5YhtV4s+l97uSB0MFHtVbqimKHL/+1w7S3yP0LkXh66YpBrHvNzItTes5
-f8LFjyouweR8WHUd+qRxS3SpqEmS/yh2jAF1Y0HPz5T+Cb0XfpBA8s1mTfAjs5++
-wrzQoMsRgnRSNPizd9JVMLYhTdYcot9wi6fl9z2LucpUXyW2lxuQ+sKVNSTwyTC+
-jGFGjHOWdhLZFZuKY0Qxb3Zi1N2FQYwRXOnKcJWpzng8E4iXL6BxFVCuD3tkx1Sr
-4lsVCjrV4+DN
+MIIEOTCCAiGgAwIBAgIRANC1J6I0SiVktHFi6Vim2A4wDQYJKoZIhvcNAQELBQAw
+EzERMA8GA1UEAxMIY29uc3VsQ0EwHhcNMTcwMTE2MjMxMDUyWhcNMTkwMTE2MjMx
+MDUyWjAXMRUwEwYDVQQDEwxjb25zdWwgYWdlbnQwggEiMA0GCSqGSIb3DQEBAQUA
+A4IBDwAwggEKAoIBAQCesalBmSbx/23SncA0kNX6wOYKLP3uQFFSGFSXdLdsAKHC
+t6FH89dbDzExCpNTJNgsKUcsiw1vIXhaGQl+GmSeXVf0m7ha5aXXH0xeRAH4AvUo
+xTZjM9QftV8E4IE71tgLx5NWCo8YIfz8XoWd/PSgLZ91wzolf6u3zSJs4Arl/55P
+pK2NRmcpUL42tUkGd+I0N6vwl1gyhcHfeyOpSz1JfeWwX3IEN7cpw1JiQ8PprwC6
+KgX6LjAyxCjMMk1UOktPcEHsVPR/6ezPG3w/tt0GU57WyVo3giUJhB3pmEzpGP8K
+8qbJZVeu6BzZbbwd4Tpaaxt+82pxRni2BVNNkba5AgMBAAGjgYMwgYAwDgYDVR0P
+AQH/BAQDAgO4MB0GA1UdJQQWMBQGCCsGAQUFBwMBBggrBgEFBQcDAjAdBgNVHQ4E
+FgQU/pvyNw6DfhusyL3Gwa4n5+JvSoYwHwYDVR0jBBgwFoAUl3loz7gsMqMHImue
+sYvU0sW0SzMwDwYDVR0RBAgwBocEfwAAATANBgkqhkiG9w0BAQsFAAOCAgEAWQC7
+fyLOTXC+Z1NpCsiIFgSlSAL0gFbGippprRzPRM7cxDsAjuNLWsfmUtLi8VpCAiEX
+No4ILjodLCywLI0vyCJU8qneH9UGYqDMx5kR8r9Iqyh13x80GZAYZjHLYxS8O+FT
+ql3XIN3IsoZlFRDYn0SSnv44neEnfnoMwaDNjxSkxZJ6kiP1UUyyW8NU9EbZq2Q0
+h5fbj7GcQ0zBltRiE8sxj0ZnA6d4Nlfcdjh/oX7csHzyqsoAFzPXri7E4j2L91g1
+Kc4MESayzlB4aPNBTd6FaiczxTKto5sdWwiBxOoyqMfVYhO+oJh/rZpM3HhwMvdw
+F/gEHl1uLxHM7clSds+krdDCxRytIwOhm4PJke6oeVFTsuL8hSi9GIFgFRnx9nNg
+ByaoIHNnLiryU8RHGygjXHHL2xFSKH2uWJPBHE/zulaFosmNFp775lYpsD3RG89n
+bJ9LBnw8EDkrInJ6t3xlVBEFJnNaihZMn1kMdjAxjvOCUyHsprAIbiF5tKUUmdCI
+0LXFbQEIgUIKcWhowwCtuBcPJiJTbfYlQjjrwO6qb6pq3YAo523NRBWm1dSxHkRj
+wRs/fWmuu/Olxo34mFzz1gKf/br3d1DBTg7cvLbQP4Zea+PSJKUrjG2kPIHe6RY6
+D8hDL8PfJ16wNv9LllCRyJJIZ3or6L3tsn4x1QA=
 -----END CERTIFICATE-----`
 	newAgentKey = `-----BEGIN RSA PRIVATE KEY-----
-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
+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
 -----END RSA PRIVATE KEY-----`
 	newServerCert = `-----BEGIN CERTIFICATE-----
-MIIELzCCAhegAwIBAgIQMX+sGacHctEjGOAst7x4KTANBgkqhkiG9w0BAQsFADAT
-MREwDwYDVQQDEwhjb25zdWxDQTAeFw0xNjAzMjIyMjEwMjhaFw0xODAzMjIyMjEw
-MjhaMCExHzAdBgNVBAMTFnNlcnZlci5kYzEuY2YuaW50ZXJuYWwwggEiMA0GCSqG
-SIb3DQEBAQUAA4IBDwAwggEKAoIBAQCkiQDMqSxTs7oVxR/rLFfzMczFiSWeEH02
-3L4+jA2vrQGuv/SOLID3rd4e2UdvwWVWzuQHUVqOUP4e0s4caDxIisobYFWwZEJc
-Eex/aiC0RcyMYMlqT7Zi8RqID/eK/OJgFIYSjK57aedl8A3J3MqSrcoZBiiCiHCo
-JEPdnzgKVLIjVJgV3xpjOS90qMlyxepfbCg0vZasDwl6v6vCvY3yjviMCn3qBQAe
-vmlDppvzhVXhD7mVr8BBVlNXHYxr6xpYWwwaiXKDyD0Rf42ItLJQ/r68FE+aco9f
-5d8BZxGOKz7CblA6wz7lU4TZd9dygGhlEU6Hz7a8kwDU6wHODsFnAgMBAAGjcTBv
-MA4GA1UdDwEB/wQEAwIDuDAdBgNVHSUEFjAUBggrBgEFBQcDAQYIKwYBBQUHAwIw
-HQYDVR0OBBYEFEGOH76baqgGrfIU2YjHyUfKgLgbMB8GA1UdIwQYMBaAFMCMTG07
-AEv5dpOw4je0kqyUCS2RMA0GCSqGSIb3DQEBCwUAA4ICAQA4LiztZji8ZGdiK4gk
-a3w9pjP2BHJX3gtQ4lfpWAFRMTURfy/hnKyfMCzw22cf/lHW6bfdmaTMwxJvXiTa
-5GeWj8nMLzd16662OXNTfSWQpomnr6+P9qrzq0l1xAQ++Gn2m4C8GXBfquJ51Pz6
-7l+Ams4fqdDLavW/B6ETodIgGYL8AUbvBvx+HbCTgaBY+83417yAk4JkXvZ0P1zp
-QLj0iP/sK6bkrjIkn6sgGBUTx5AjSMHGurR412/pm76cppMLQ1o55j2PwCiAmvNn
-O3xkkov3B1m9AECq7Tl3FrDlIML4rfB51n3JUcMY0TQDuLpiE+eWSK325DhO2PdE
-lkJzzr/hheX+rJbHrPdBVNie3mfR93NieCqwTCOGur6N1SkqKEnNdyXBUMVCluBZ
-ONqJmKZA6YKbCAL+89dRSiu40QXVPAL1Z4JP5kLSVD4XBNriMao7ni4VH75ZldK8
-6ES7vsLsnYZ2mIsVhyKibZJj8MqEZ5e+nbUp+/ewcEwTc8v4DXsl+/l4gDWO5BM5
-7N07V+IRF387TciNf8qg+pgQCNqX74GoUnC0Mmip0qZjss5BxlEhCsqMbpjpg573
-NSFgZ2s7WPoVLZeLIvNFdMi84uJ+twWY9lGbw2AsrGHyXoMlu5YSLNpRpkAQ+o5f
-m85mY1B5/YNeyPhiQdxdEFNBdg==
+MIIEMDCCAhigAwIBAgIRAIb6XAn6XTJPJ4arqIVGkUswDQYJKoZIhvcNAQELBQAw
+EzERMA8GA1UEAxMIY29uc3VsQ0EwHhcNMTcwMTE2MjMxMDUyWhcNMTkwMTE2MjMx
+MDUyWjAhMR8wHQYDVQQDExZzZXJ2ZXIuZGMxLmNmLmludGVybmFsMIIBIjANBgkq
+hkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA0XRZI3u7vNwoPrZwiJerfTVKUC1Jz4dX
+52rW+9ivChhL/whs5lzBOhSeISUcKfpIwQwLXh49A7zgetA9GM6wfFO+u+rcMUP9
+H4uaZT4mlZu/7cjXs6ZLIbIyKNLMuGVoOT8a3KNnPau3nB1sGUl8LPjyXO+scHGd
+aw1K/hIbCbceXHoNZz7DrgWQtIJByn80ePcjiMrRqovKQCQdZCU6KUafc/rvrrY9
+juWeu8MYGIvDuTGFW11M4uB2sHvDTI6fokowE/gcnq5m7+C4jCHvFKfMWG9xtOCx
+LdxsFRU0UmVP8uKCDYVuHG0GNh2xYYjifpL0GGBdbUzn2OgQkDFNcwIDAQABo3Ew
+bzAOBgNVHQ8BAf8EBAMCA7gwHQYDVR0lBBYwFAYIKwYBBQUHAwEGCCsGAQUFBwMC
+MB0GA1UdDgQWBBQP8tFaArPSNrTxWXCIhhsUUOFd4DAfBgNVHSMEGDAWgBSXeWjP
+uCwyowcia56xi9TSxbRLMzANBgkqhkiG9w0BAQsFAAOCAgEAUVl1x+hkBjo7iU96
+smYd1DW4HFP4cnLmP1awI/HwWpk7jQUlHtyARquhohKWfMYWe6b3EnjTs4Tub2hq
+4XuWRvzy0geyy3ATwwB2facZSdAMqsRFsAnjlECippeOF9HsMKoLZjYx/vuRiOCo
+mbPCO+erH6OHTysacO2EdLrGdAXLok8uwV20a4OheLBiXybVA6/fIZPHPV6+yRmQ
++M+ukYu8Bzo6pCPmuP6XDUGHWuWqUEUxT/3z0dOLDeoAdAnjPFxt4V8JVTtzUcnh
+WF6+LOVL+9ZVvKsNjL4b1SBq5dRxFvOsurOVRWHW8s5VbFFyAVvFcX17fypKvlGP
+UKtVzD4wajagoTTt3u7Iw02KwAN1Ynz7EtEytXBibmkK/E9IKfM014Tgos0f4LsB
+8uO0MNCsf0MBkCBxy2/+8G6pOsaReVm/I5RlNg1kUo0rwwseXaoMQXlZ1oOsF9f4
+fUSm1kIzz61SOrjy+yFjzfymaRwTKiCP86ojhWxDdIWs9J14BN3Hi7RNpBcVALsA
+Hg1lJM2DzWOvnmclSg4k9wsrM7wj6Fd/7T6sskUnn9NNO28tiXBGTv1YJ0DpJEuU
+pxFM82SHv8vMJLB0SLYDN5VRvqrlOoQd+GYIExpsvjrME9BRQDsuhZWGGlbqM4jF
+S+d05POWsiLcxqoPitFjYC4RDqc=
 -----END CERTIFICATE-----`
 	newServerKey = `-----BEGIN RSA PRIVATE KEY-----
-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
+MIIEowIBAAKCAQEA0XRZI3u7vNwoPrZwiJerfTVKUC1Jz4dX52rW+9ivChhL/whs
+5lzBOhSeISUcKfpIwQwLXh49A7zgetA9GM6wfFO+u+rcMUP9H4uaZT4mlZu/7cjX
+s6ZLIbIyKNLMuGVoOT8a3KNnPau3nB1sGUl8LPjyXO+scHGdaw1K/hIbCbceXHoN
+Zz7DrgWQtIJByn80ePcjiMrRqovKQCQdZCU6KUafc/rvrrY9juWeu8MYGIvDuTGF
+W11M4uB2sHvDTI6fokowE/gcnq5m7+C4jCHvFKfMWG9xtOCxLdxsFRU0UmVP8uKC
+DYVuHG0GNh2xYYjifpL0GGBdbUzn2OgQkDFNcwIDAQABAoIBAF2fchCoSBx9FAgk
+KF0F3oOTBGqeM7Xtu18XpIziKCuM/Ls8muDFaSF7Acuy+MnStB6GMbaaMY+wJ27+
+EbE7AiwwirsYmd/zkfs9vX+vrjOFcN7qvW/xzvd63Wzd/OAXg+TCzlD9QTKRxPql
+NCKBdF3t0Pe1shB42HJ3eKPkl+1Y+7pAG2nDr75dvQ7SIuRFcPSfRV8pRIJSlDV8
+kyDL0f9AG8Iutt5U6Tc9aUhLHSvJMQ8U22EwRuaa8VO3g4OwxmniVK6uElSXGzTo
+qkZWB5A6JzN58Ho6RosyILhAbBr/wffS94YZWr0U1TtT3ennhut9xCIvxjb1mIu2
+fO0DImECgYEA3+EC58DLJ3EdgJ0Fa4447tBOXC6C3MsK6CYehM7Yh0yMFkc1ZUZJ
+PVsxqFO+JWSnwyChNV6tbGsY6rq4oTf6d1aSoImBUEhR2U8rLlGMpfL3f/TeSQ/9
+bgCMKci8Mca/lgWl/3Ei7hfyD5CpMIrLEnDdKGxVjbxRGrD92nAEbckCgYEA74GI
+HwJ7JcoHOyuKu/9X5Yv+UOaNxDfK7spDUqjHffbo5WdWEwqoiOVcdpMvvSRtndfM
+v03OKlbwkXE8oRmOtA+54V0sCTmQEAfmd8xdRQWjlFTgJGU+a7sE5QhLwi3cmUOW
+P3N+/9SGRNvfNoZCnuWFsxA+iui4+EwwrVRzj1sCgYB0/XluL+I5hzO6jNNTRCve
+J/56z1dVF8loTNsv3YNrGIYv8iAl/xewt2H4q2I22iWMoxV69TG88S5BIzfuD3mU
+OSpAN/raQCB9ZZCUEMtlwNSzCfvKxE9T13dnMl2dyVU+iU8YcD+nmd3FYnv3QOAj
+j9USFaKTgXAEea7+IgE+eQKBgQCq6SVo841Lfyq/16eN1n4zyT23H39E6Yd/9Ygr
+QVPymLLDmYU721w/LGVaHFhxwcATZj6uuWgIoLfVIhhg4esKpTpBDwrwnkomlmyp
+SoW4TnjXzeWRM0pi+Dda9RuSusVz/V4Hc3TKPS9/jeNwdkiuOR26lTn8SGxOi5gk
+6GH6hwKBgDGRVkGIsOl37djhdl7P23WtpHOm+kzdLRaB3zOCTk30rSVeTZWEyqip
+Afmnv8PUlIjsPvhS191msMZO2Z3rwh8qygWkRpa67HmRhG/BhhYQ0yDGB6v66Xkx
+ZYZoj/Us3wH3CQQWzTOyw0w1CIJsYHWC9GQoq3AoJJmfRj5HdFUd
 -----END RSA PRIVATE KEY-----`
 )
 
 var _ = Describe("TLS key rotation", func() {
 	var (
-		manifest consul.ManifestV2
-		kv       consulclient.HTTPKV
-		spammer  *helpers.Spammer
+		manifest     string
+		manifestName string
+
+		kv      consulclient.HTTPKV
+		spammer *helpers.Spammer
 	)
 
 	BeforeEach(func() {
 		var err error
-		manifest, kv, err = helpers.DeployConsulWithInstanceCount("tls-key-rotation", 3, boshClient, config)
+		manifest, err = helpers.DeployConsulWithInstanceCount("tls-key-rotation", 3, config.WindowsClients, boshClient)
+		Expect(err).NotTo(HaveOccurred())
+
+		manifestName, err = ops.ManifestName(manifest)
 		Expect(err).NotTo(HaveOccurred())
 
 		Eventually(func() ([]bosh.VM, error) {
-			return helpers.DeploymentVMs(boshClient, manifest.Name)
-		}, "1m", "10s").Should(ConsistOf(helpers.GetVMsFromManifest(manifest)))
+			return helpers.DeploymentVMs(boshClient, manifestName)
+		}, "5m", "10s").Should(ConsistOf(helpers.GetVMsFromManifest(manifest)))
 
-		spammer = helpers.NewSpammer(kv, 1*time.Second, "test-consumer-0")
+		testConsumerIPs, err := helpers.GetVMIPs(boshClient, manifestName, "testconsumer")
+		Expect(err).NotTo(HaveOccurred())
+
+		kv = consulclient.NewHTTPKV(fmt.Sprintf("http://%s:6769", testConsumerIPs[0]))
+
+		spammer = helpers.NewSpammer(kv, 1*time.Second, "testconsumer")
 	})
 
 	AfterEach(func() {
 		if !CurrentGinkgoTestDescription().Failed {
-			err := boshClient.DeleteDeployment(manifest.Name)
+			err := boshClient.DeleteDeployment(manifestName)
 			Expect(err).NotTo(HaveOccurred())
 		}
 	})
@@ -181,63 +191,79 @@ var _ = Describe("TLS key rotation", func() {
 		})
 
 		By("adding a new ca cert", func() {
-			manifest.Properties.Consul.CACert = fmt.Sprintf("%s\n%s", manifest.Properties.Consul.CACert, newCACert)
+			oldCACert, err := ops.FindOp(manifest, "/instance_groups/name=consul/properties/consul/ca_cert")
+			Expect(err).NotTo(HaveOccurred())
+
+			manifest, err = ops.ApplyOp(manifest, ops.Op{
+				Type:  "replace",
+				Path:  "/instance_groups/name=consul/properties/consul/ca_cert",
+				Value: fmt.Sprintf("%s\n%s", oldCACert.(string), newCACert),
+			})
+			Expect(err).NotTo(HaveOccurred())
 		})
 
 		By("deploying with the new ca cert", func() {
-			yaml, err := manifest.ToYAML()
-			Expect(err).NotTo(HaveOccurred())
-
-			yaml, err = boshClient.ResolveManifestVersions(yaml)
-			Expect(err).NotTo(HaveOccurred())
-
-			_, err = boshClient.Deploy(yaml)
+			_, err := boshClient.Deploy([]byte(manifest))
 			Expect(err).NotTo(HaveOccurred())
 
 			Eventually(func() ([]bosh.VM, error) {
-				return helpers.DeploymentVMs(boshClient, manifest.Name)
-			}, "1m", "10s").Should(ConsistOf(helpers.GetVMsFromManifest(manifest)))
+				return helpers.DeploymentVMs(boshClient, manifestName)
+			}, "5m", "10s").Should(ConsistOf(helpers.GetVMsFromManifest(manifest)))
 		})
 
 		By("replace agent and server keys and certs", func() {
-			manifest.Properties.Consul.AgentCert = newAgentCert
-			manifest.Properties.Consul.ServerCert = newServerCert
-			manifest.Properties.Consul.AgentKey = newAgentKey
-			manifest.Properties.Consul.ServerKey = newServerKey
+			var err error
+			manifest, err = ops.ApplyOps(manifest, []ops.Op{
+				{
+					Type:  "replace",
+					Path:  "/instance_groups/name=consul/properties/consul/agent_cert",
+					Value: newAgentCert,
+				},
+				{
+					Type:  "replace",
+					Path:  "/instance_groups/name=consul/properties/consul/server_cert",
+					Value: newServerCert,
+				},
+				{
+					Type:  "replace",
+					Path:  "/instance_groups/name=consul/properties/consul/agent_key",
+					Value: newAgentKey,
+				},
+				{
+					Type:  "replace",
+					Path:  "/instance_groups/name=consul/properties/consul/server_key",
+					Value: newServerKey,
+				},
+			})
+			Expect(err).NotTo(HaveOccurred())
 		})
 
 		By("deploying with the new agent and server keys and certs", func() {
-			yaml, err := manifest.ToYAML()
-			Expect(err).NotTo(HaveOccurred())
-
-			yaml, err = boshClient.ResolveManifestVersions(yaml)
-			Expect(err).NotTo(HaveOccurred())
-
-			_, err = boshClient.Deploy(yaml)
+			_, err := boshClient.Deploy([]byte(manifest))
 			Expect(err).NotTo(HaveOccurred())
 
 			Eventually(func() ([]bosh.VM, error) {
-				return helpers.DeploymentVMs(boshClient, manifest.Name)
-			}, "1m", "10s").Should(ConsistOf(helpers.GetVMsFromManifest(manifest)))
+				return helpers.DeploymentVMs(boshClient, manifestName)
+			}, "5m", "10s").Should(ConsistOf(helpers.GetVMsFromManifest(manifest)))
 		})
 
 		By("removing the old ca cert", func() {
-			manifest.Properties.Consul.CACert = newCACert
+			var err error
+			manifest, err = ops.ApplyOp(manifest, ops.Op{
+				Type:  "replace",
+				Path:  "/instance_groups/name=consul/properties/consul/ca_cert",
+				Value: newCACert,
+			})
+			Expect(err).NotTo(HaveOccurred())
 		})
 
 		By("deploying with the old ca cert removed", func() {
-			yaml, err := manifest.ToYAML()
-			Expect(err).NotTo(HaveOccurred())
-
-			yaml, err = boshClient.ResolveManifestVersions(yaml)
-			Expect(err).NotTo(HaveOccurred())
-
-			_, err = boshClient.Deploy(yaml)
+			_, err := boshClient.Deploy([]byte(manifest))
 			Expect(err).NotTo(HaveOccurred())
 
 			Eventually(func() ([]bosh.VM, error) {
-				return helpers.DeploymentVMs(boshClient, manifest.Name)
-			}, "1m", "10s").Should(ConsistOf(helpers.GetVMsFromManifest(manifest)))
+				return helpers.DeploymentVMs(boshClient, manifestName)
+			}, "5m", "10s").Should(ConsistOf(helpers.GetVMsFromManifest(manifest)))
 		})
 
 		By("stopping the spammer", func() {

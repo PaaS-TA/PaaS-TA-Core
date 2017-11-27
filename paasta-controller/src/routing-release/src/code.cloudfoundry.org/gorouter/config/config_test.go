@@ -108,7 +108,6 @@ suspend_pruning_if_nats_unavailable: true
 		})
 
 		It("sets default logging configs", func() {
-			Expect(config.Logging.File).To(Equal(""))
 			Expect(config.Logging.Syslog).To(Equal(""))
 			Expect(config.Logging.Level).To(Equal("debug"))
 			Expect(config.Logging.LoggregatorEnabled).To(Equal(false))
@@ -118,6 +117,10 @@ suspend_pruning_if_nats_unavailable: true
 			// access entries not present in config
 			Expect(config.AccessLog.File).To(Equal(""))
 			Expect(config.AccessLog.EnableStreaming).To(BeFalse())
+		})
+
+		It("sets default sharding mode config", func() {
+			Expect(config.RoutingTableShardingMode).To(Equal("all"))
 		})
 
 		It("sets the load_balancer_healthy_threshold configuration", func() {
@@ -171,7 +174,6 @@ access_log:
 		It("sets logging config", func() {
 			var b = []byte(`
 logging:
-  file: /tmp/file
   syslog: syslog
   level: debug2
   loggregator_enabled: true
@@ -179,7 +181,6 @@ logging:
 			err := config.Initialize(b)
 			Expect(err).ToNot(HaveOccurred())
 
-			Expect(config.Logging.File).To(Equal("/tmp/file"))
 			Expect(config.Logging.Syslog).To(Equal("syslog"))
 			Expect(config.Logging.Level).To(Equal("debug2"))
 			Expect(config.Logging.LoggregatorEnabled).To(Equal(true))
@@ -196,6 +197,8 @@ access_log:
     file: "/tmp/access_log"
 ssl_port: 4443
 enable_ssl: true
+isolation_segments: [test-iso-seg-1, test-iso-seg-2]
+routing_table_sharding_mode: "segments"
 `)
 
 			err := config.Initialize(b)
@@ -210,6 +213,8 @@ enable_ssl: true
 			Expect(config.EnableSSL).To(Equal(true))
 			Expect(config.SSLPort).To(Equal(uint16(4443)))
 			Expect(config.RouteServiceRecommendHttps).To(BeFalse())
+			Expect(config.IsolationSegments).To(ConsistOf("test-iso-seg-1", "test-iso-seg-2"))
+			Expect(config.RoutingTableShardingMode).To(Equal("segments"))
 		})
 
 		It("sets the Routing Api config", func() {
@@ -386,6 +391,54 @@ enable_proxy: true
 			config.Initialize(b)
 			Expect(config.ForceForwardedProtoHttps).To(Equal(true))
 		})
+
+		It("defaults DisableKeepAlives to true", func() {
+			var b = []byte("")
+			err := config.Initialize(b)
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(config.DisableKeepAlives).To(BeTrue())
+		})
+
+		It("defaults MaxIdleConns to 100", func() {
+			var b = []byte("")
+			err := config.Initialize(b)
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(config.MaxIdleConns).To(Equal(100))
+		})
+
+		It("defaults MaxIdleConnsPerHost to 2", func() {
+			var b = []byte("")
+			err := config.Initialize(b)
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(config.MaxIdleConnsPerHost).To(Equal(2))
+		})
+
+		It("sets DisableKeepAlives", func() {
+			var b = []byte("disable_keep_alives: false")
+			err := config.Initialize(b)
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(config.DisableKeepAlives).To(BeFalse())
+		})
+
+		It("sets MaxIdleConns", func() {
+			var b = []byte("max_idle_conns: 200")
+			err := config.Initialize(b)
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(config.MaxIdleConns).To(Equal(200))
+		})
+
+		It("sets MaxIdleConnsPerHost", func() {
+			var b = []byte("max_idle_conns_per_host: 10")
+			err := config.Initialize(b)
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(config.MaxIdleConnsPerHost).To(Equal(10))
+		})
 	})
 
 	Describe("Process", func() {
@@ -413,6 +466,28 @@ token_fetcher_retry_interval: 10s
 			Expect(config.TokenFetcherRetryInterval).To(Equal(10 * time.Second))
 			Expect(config.NatsClientPingInterval).To(Equal(20 * time.Second))
 			Expect(config.SecureCookies).To(BeTrue())
+		})
+
+		Context("When LoadBalancerHealthyThreshold is provided", func() {
+			It("panics when an invalid duration string is given", func() {
+				var b = []byte("load_balancer_healthy_threshold: -5s")
+				err := config.Initialize(b)
+				Expect(err).ToNot(HaveOccurred())
+
+				Expect(config.Process).To(Panic())
+			})
+
+			It("fails to initialize a non time string", func() {
+				var b = []byte("load_balancer_healthy_threshold: test")
+				err := config.Initialize(b)
+				Expect(err).To(HaveOccurred())
+			})
+
+			It("process the string into a valid duration", func() {
+				var b = []byte("load_balancer_healthy_threshold: 10s")
+				err := config.Initialize(b)
+				Expect(err).ToNot(HaveOccurred())
+			})
 		})
 
 		It("converts extra headers to log into a map", func() {
@@ -616,19 +691,13 @@ cipher_suites: TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
 enable_ssl: true
 ssl_cert_path: ../test/assets/certs/server.pem
 ssl_key_path: ../test/assets/certs/server.key
-cipher_suites: TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256:TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256:TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA:TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA:TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA:TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA:TLS_RSA_WITH_AES_128_CBC_SHA:TLS_RSA_WITH_AES_256_CBC_SHA
+cipher_suites: TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256:TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
 `)
 
 				It("Construct the proper array of cipher suites", func() {
 					expectedSuites := []uint16{
 						tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
-						tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-						tls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA,
-						tls.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA,
-						tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
-						tls.TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA,
-						tls.TLS_RSA_WITH_AES_128_CBC_SHA,
-						tls.TLS_RSA_WITH_AES_256_CBC_SHA,
+						tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
 					}
 
 					err := config.Initialize(b)
@@ -661,7 +730,7 @@ cipher_suites: potato
 enable_ssl: true
 ssl_cert_path: ../test/assets/certs/server.pem
 ssl_key_path: ../test/assets/certs/server.key
-cipher_suites: TLS_RSA_WITH_RC4_128_SHA
+cipher_suites: TLS_RSA_WITH_RC4_1280_SHA
 `)
 
 				It("panics", func() {
@@ -680,6 +749,74 @@ enable_ssl: true
 ssl_cert_path: ../test/assets/certs/server.pem
 ssl_key_path: ../test/assets/certs/server.key
 `)
+
+			It("panics", func() {
+				err := config.Initialize(b)
+				Expect(err).ToNot(HaveOccurred())
+
+				Expect(config.Process).To(Panic())
+			})
+		})
+
+		Context("When given a routing_table_sharding_mode that is supported ", func() {
+			Context("sharding mode `all`", func() {
+				It("succeeds", func() {
+					var b = []byte(`routing_table_sharding_mode: all`)
+					err := config.Initialize(b)
+					Expect(err).ToNot(HaveOccurred())
+
+					Expect(config.Process).ToNot(Panic())
+				})
+			})
+			Context("sharding mode `segments`", func() {
+				var b []byte
+				BeforeEach(func() {
+					b = []byte("routing_table_sharding_mode: segments")
+				})
+
+				Context("with isolation segments provided", func() {
+					BeforeEach(func() {
+						b = append(b, []byte("\nisolation_segments: [is1, is2]")...)
+					})
+					It("succeeds", func() {
+						err := config.Initialize(b)
+						Expect(err).ToNot(HaveOccurred())
+
+						Expect(config.Process).ToNot(Panic())
+					})
+				})
+
+				Context("without isolation segments provided", func() {
+					It("fails", func() {
+						err := config.Initialize(b)
+						Expect(err).ToNot(HaveOccurred())
+
+						Expect(config.Process).To(Panic())
+					})
+				})
+			})
+			Context("sharding mode `shared-and-segments`", func() {
+				var b []byte
+				BeforeEach(func() {
+					b = []byte("routing_table_sharding_mode: shared-and-segments")
+				})
+
+				Context("with isolation segments provided", func() {
+					BeforeEach(func() {
+						b = append(b, []byte("\nisolation_segments: [is1, is2]")...)
+					})
+					It("succeeds", func() {
+						err := config.Initialize(b)
+						Expect(err).ToNot(HaveOccurred())
+
+						Expect(config.Process).ToNot(Panic())
+					})
+				})
+			})
+		})
+
+		Context("When given a routing_table_sharding_mode that is not supported ", func() {
+			var b = []byte(`routing_table_sharding_mode: foo`)
 
 			It("panics", func() {
 				err := config.Initialize(b)

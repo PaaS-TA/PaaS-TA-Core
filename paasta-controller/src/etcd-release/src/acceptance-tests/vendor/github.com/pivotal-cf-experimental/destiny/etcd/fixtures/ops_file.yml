@@ -1,0 +1,12 @@
+- type: replace
+  path: /director_uuid
+  value: some-director-uuid
+- type: replace
+  path: /name
+  value: etcd-some-random-guid
+- type: replace
+  path: /instance_groups/name=etcd/name
+  value: new_etcd
+- type: replace
+  path: /instance_groups/name=new_etcd/migrated_from?
+  value: { name: etcd }

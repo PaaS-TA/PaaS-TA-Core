@@ -1,8 +1,13 @@
 package locket_test
 
 import (
+	"net/http"
+	"net/http/httptest"
+	"net/http/httputil"
+	"net/url"
 	"time"
 
+	"code.cloudfoundry.org/cfhttp"
 	"code.cloudfoundry.org/consuladapter"
 	"code.cloudfoundry.org/locket"
 	"github.com/hashicorp/consul/api"
@@ -25,11 +30,11 @@ var _ = Describe("Presence", func() {
 
 		consulClient consuladapter.Client
 
-		presenceRunner  ifrit.Runner
-		presenceProcess ifrit.Process
-		retryInterval   time.Duration
-		logger          lager.Logger
-		clock           *fakeclock.FakeClock
+		presenceRunner             ifrit.Runner
+		presenceProcess            ifrit.Process
+		retryInterval, presenceTTL time.Duration
+		logger                     lager.Logger
+		clock                      *fakeclock.FakeClock
 	)
 
 	getPresenceValue := func() ([]byte, error) {
@@ -53,11 +58,13 @@ var _ = Describe("Presence", func() {
 
 		retryInterval = 500 * time.Millisecond
 		logger = lagertest.NewTestLogger("locket")
+
+		presenceTTL = 5 * time.Second
 	})
 
 	JustBeforeEach(func() {
 		clock = fakeclock.NewFakeClock(time.Now())
-		presenceRunner = locket.NewPresence(logger, consulClient, presenceKey, presenceValue, clock, retryInterval, 5*time.Second)
+		presenceRunner = locket.NewPresence(logger, consulClient, presenceKey, presenceValue, clock, retryInterval, presenceTTL)
 	})
 
 	AfterEach(func() {
@@ -137,6 +144,80 @@ var _ = Describe("Presence", func() {
 						Eventually(presenceProcess.Wait()).Should(Receive(BeNil()))
 						_, err := getPresenceValue()
 						Expect(err).To(Equal(consuladapter.NewKeyNotFoundError(presenceKey)))
+					})
+				})
+
+				Context("and consul goes through a period of instability", func() {
+					var serveFiveHundreds chan bool
+					var fakeConsul *httptest.Server
+
+					BeforeEach(func() {
+						serveFiveHundreds = make(chan bool, 4)
+
+						consulClusterURL, err := url.Parse(consulRunner.URL())
+						Expect(err).NotTo(HaveOccurred())
+						proxy := httputil.NewSingleHostReverseProxy(consulClusterURL)
+						fakeConsul = httptest.NewServer(
+							http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+								// We only want to return 500's on the lock monitor query which is of the form /v1/kv/some-key?consistent=
+								_, hasConsistent := r.URL.Query()["consistent"]
+								if !hasConsistent {
+									By(time.Now().String() + ": forwarding request to " + r.URL.String())
+									proxy.ServeHTTP(w, r)
+									return
+								}
+
+								if <-serveFiveHundreds {
+									By(time.Now().String() + ": returning 500 to " + r.URL.String())
+									w.WriteHeader(http.StatusInternalServerError)
+								} else {
+									By(time.Now().String() + ": forwarding request to " + r.URL.String())
+									proxy.ServeHTTP(w, r)
+								}
+							}),
+						)
+
+						fakeConsulURL, err := url.Parse(fakeConsul.URL)
+						Expect(err).NotTo(HaveOccurred())
+
+						client, err := api.NewClient(&api.Config{
+							Address:    fakeConsulURL.Host,
+							Scheme:     fakeConsulURL.Scheme,
+							HttpClient: cfhttp.NewStreamingClient(),
+						})
+						Expect(err).NotTo(HaveOccurred())
+
+						consulClient = consuladapter.NewConsulClient(client)
+						presenceTTL = 6 * time.Second
+					})
+
+					Context("for longer than the MonitorRetries * MonitorRetryTime", func() {
+						It("drops its presence", func() {
+							// Serve 500's to simulate a leader election. We know that we need
+							// to serve more than lockTTL / 2 500's to lose the lock.
+							for i := 0; i < 4; i++ {
+								Eventually(serveFiveHundreds).Should(BeSent(true))
+							}
+
+							close(serveFiveHundreds)
+
+							Eventually(logger, 7*time.Second).Should(Say("presence-lost"))
+							Consistently(presenceProcess.Wait()).ShouldNot(Receive())
+						})
+					})
+
+					Context("for less than the MonitorRetries * MonitorRetryTime", func() {
+						It("does not lose the lock", func() {
+							// Serve 500's to simulate a leader election. We know that if we
+							// serve less than lockTTL / 2 500's, we will not lose the lock.
+							for i := 0; i < 2; i++ {
+								Eventually(serveFiveHundreds).Should(BeSent(true))
+							}
+							close(serveFiveHundreds)
+
+							Consistently(logger, 7*time.Second).ShouldNot(Say("presence-lost"))
+							Consistently(presenceProcess.Wait()).ShouldNot(Receive())
+						})
 					})
 				})
 			})
@@ -250,7 +331,7 @@ var _ = Describe("Presence", func() {
 
 					otherSession.Destroy()
 
-					Eventually(presenceProcess.Ready(), 7*time.Second).Should(BeClosed())
+					Eventually(presenceProcess.Ready(), 6*time.Second).Should(BeClosed())
 					Expect(getPresenceValue()).To(Equal(presenceValue))
 				})
 			})

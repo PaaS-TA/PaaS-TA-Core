@@ -14,13 +14,16 @@ package org.cloudfoundry.identity.uaa.oauth;
 
 import org.cloudfoundry.identity.uaa.oauth.client.ClientConstants;
 import org.cloudfoundry.identity.uaa.oauth.token.TokenConstants;
+import org.cloudfoundry.identity.uaa.provider.IdentityProvider;
+import org.cloudfoundry.identity.uaa.provider.IdentityProviderProvisioning;
 import org.cloudfoundry.identity.uaa.security.DefaultSecurityContextAccessor;
 import org.cloudfoundry.identity.uaa.security.SecurityContextAccessor;
 import org.cloudfoundry.identity.uaa.user.UaaUser;
 import org.cloudfoundry.identity.uaa.user.UaaUserDatabase;
 import org.cloudfoundry.identity.uaa.util.UaaStringUtils;
-import org.cloudfoundry.identity.uaa.provider.IdentityProvider;
-import org.cloudfoundry.identity.uaa.provider.IdentityProviderProvisioning;
+import org.cloudfoundry.identity.uaa.util.UaaTokenUtils;
+import org.cloudfoundry.identity.uaa.zone.ClientServicesExtension;
+import org.cloudfoundry.identity.uaa.zone.IdentityZoneHolder;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.AuthorityUtils;
@@ -30,7 +33,6 @@ import org.springframework.security.oauth2.common.exceptions.UnauthorizedClientE
 import org.springframework.security.oauth2.common.util.OAuth2Utils;
 import org.springframework.security.oauth2.provider.AuthorizationRequest;
 import org.springframework.security.oauth2.provider.ClientDetails;
-import org.springframework.security.oauth2.provider.ClientDetailsService;
 import org.springframework.security.oauth2.provider.OAuth2Request;
 import org.springframework.security.oauth2.provider.OAuth2RequestFactory;
 import org.springframework.security.oauth2.provider.TokenRequest;
@@ -48,7 +50,10 @@ import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
 
+import static java.util.Collections.emptySet;
 import static java.util.Collections.unmodifiableMap;
+import static java.util.Optional.ofNullable;
+import static org.cloudfoundry.identity.uaa.oauth.client.ClientConstants.REQUIRED_USER_GROUPS;
 import static org.springframework.security.oauth2.common.util.OAuth2Utils.GRANT_TYPE;
 
 /**
@@ -56,20 +61,17 @@ import static org.springframework.security.oauth2.common.util.OAuth2Utils.GRANT_
  * rules to an authorization request,
  * validating it and setting the default values for requested scopes and resource ids.
  *
- * @author Dave Syer
  *
  */
 public class UaaAuthorizationRequestManager implements OAuth2RequestFactory {
 
-    private final ClientDetailsService clientDetailsService;
+    private final ClientServicesExtension clientDetailsService;
 
     private Map<String, String> scopeToResource = Collections.singletonMap("openid", "openid");
 
     private String scopeSeparator = ".";
 
     private SecurityContextAccessor securityContextAccessor = new DefaultSecurityContextAccessor();
-
-    private Collection<String> defaultScopes = new HashSet<String>();
 
     public OAuth2RequestFactory getRequestFactory() {
         return requestFactory;
@@ -85,23 +87,13 @@ public class UaaAuthorizationRequestManager implements OAuth2RequestFactory {
 
     private IdentityProviderProvisioning providerProvisioning;
 
-    public UaaAuthorizationRequestManager(ClientDetailsService clientDetailsService,
+    public UaaAuthorizationRequestManager(ClientServicesExtension clientDetailsService,
                                           UaaUserDatabase userDatabase,
                                           IdentityProviderProvisioning providerProvisioning) {
         this.clientDetailsService = clientDetailsService;
         this.uaaUserDatabase = userDatabase;
         this.requestFactory = new DefaultOAuth2RequestFactory(clientDetailsService);
         this.providerProvisioning = providerProvisioning;
-    }
-
-    /**
-     * Default requested scopes that are always added to a user token (and then removed if
-     * the client doesn't have permission).
-     *
-     * @param defaultScopes the defaultScopes to set
-     */
-    public void setDefaultScopes(Collection<String> defaultScopes) {
-        this.defaultScopes = defaultScopes;
     }
 
     /**
@@ -155,7 +147,7 @@ public class UaaAuthorizationRequestManager implements OAuth2RequestFactory {
     public AuthorizationRequest createAuthorizationRequest(Map<String, String> authorizationParameters) {
 
         String clientId = authorizationParameters.get("client_id");
-        BaseClientDetails clientDetails = (BaseClientDetails)clientDetailsService.loadClientByClientId(clientId);
+        BaseClientDetails clientDetails = (BaseClientDetails)clientDetailsService.loadClientByClientId(clientId, IdentityZoneHolder.get().getId());
         validateParameters(authorizationParameters, clientDetails);
         Set<String> scopes = OAuth2Utils.parseParameterList(authorizationParameters.get(OAuth2Utils.SCOPE));
         Set<String> responseTypes = OAuth2Utils.parseParameterList(authorizationParameters.get(OAuth2Utils.RESPONSE_TYPE));
@@ -224,9 +216,7 @@ public class UaaAuthorizationRequestManager implements OAuth2RequestFactory {
             Set<String> scopes = OAuth2Utils.parseParameterList(parameters.get("scope"));
             for (String scope : scopes) {
                 if (!matches(validWildcards, scope)) {
-                    throw new InvalidScopeException("Invalid scope: " + scope
-                                    + ". Did you know that you can get default requested scopes by simply sending no value?",
-                                    validScope);
+                    throw new InvalidScopeException(scope + " is invalid. Please use a valid scope name in the request");
                 }
             }
         }
@@ -263,10 +253,12 @@ public class UaaAuthorizationRequestManager implements OAuth2RequestFactory {
      * @param authorities the users authorities
      * @return modified requested scopes adapted according to the rules specified
      */
-    private Set<String> checkUserScopes(Set<String> requestedScopes, Collection<? extends GrantedAuthority> authorities,
-                    ClientDetails clientDetails) {
+    private Set<String> checkUserScopes(Set<String> requestedScopes,
+                                        Collection<? extends GrantedAuthority> authorities,
+                                        ClientDetails clientDetails) {
         Set<String> allowed = new LinkedHashSet<>(AuthorityUtils.authorityListToSet(authorities));
         // Add in all default requestedScopes
+        Collection<String> defaultScopes = IdentityZoneHolder.get().getConfig().getUserConfig().getDefaultGroups();
         allowed.addAll(defaultScopes);
 
         // Find intersection of user authorities, default requestedScopes and client requestedScopes:
@@ -274,10 +266,12 @@ public class UaaAuthorizationRequestManager implements OAuth2RequestFactory {
 
         // Check that a token with empty scope is not going to be granted
         if (result.isEmpty() && !clientDetails.getScope().isEmpty()) {
-            throw new InvalidScopeException(
-                "Invalid scope (empty) - this user is not allowed any of the requested scopes: " + requestedScopes
-                + " (either you requested a scope that was not allowed or client '"
-                + clientDetails.getClientId() + "' is not allowed to act on behalf of this user)", allowed);
+            throw new InvalidScopeException(requestedScopes + " is invalid. This user is not allowed any of the requested scopes");
+        }
+
+        Collection<String> requiredUserGroups = ofNullable((Collection<String>) clientDetails.getAdditionalInformation().get(REQUIRED_USER_GROUPS)).orElse(emptySet());
+        if (!UaaTokenUtils.hasRequiredUserAuthorities(requiredUserGroups, authorities)) {
+            throw new InvalidScopeException("User does not meet the client's required group criteria.");
         }
 
         return result;
@@ -355,7 +349,7 @@ public class UaaAuthorizationRequestManager implements OAuth2RequestFactory {
             clientId = authenticatedClient.getClientId();
         } else {
             if (TokenConstants.GRANT_TYPE_USER_TOKEN.equals(grantType)) {
-                targetClient = clientDetailsService.loadClientByClientId(clientId);
+                targetClient = clientDetailsService.loadClientByClientId(clientId, IdentityZoneHolder.get().getId());
                 requestParameters.put(TokenConstants.USER_TOKEN_REQUESTING_CLIENT_ID, authenticatedClient.getClientId());
             } else if (!clientId.equals(authenticatedClient.getClientId())) {
                 // otherwise, make sure that they match

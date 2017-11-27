@@ -62,8 +62,12 @@ module VCAP::Services::ServiceBrokers
           name:        catalog_plan.name,
           description: catalog_plan.description,
           free:        catalog_plan.free,
+          bindable:    catalog_plan.bindable,
           active:      true,
-          extra:       catalog_plan.metadata ? catalog_plan.metadata.to_json : nil
+          extra:       catalog_plan.metadata.try(:to_json),
+          create_instance_schema: catalog_plan.schemas.create_instance.try(:to_json),
+          update_instance_schema: catalog_plan.schemas.update_instance.try(:to_json),
+          create_binding_schema: catalog_plan.schemas.create_binding.try(:to_json)
         })
         @services_event_repository.with_service_plan_event(plan) do
           plan.save(changed: true)
@@ -80,7 +84,7 @@ module VCAP::Services::ServiceBrokers
     end
 
     def deactivate_services(catalog)
-      services_in_db_not_in_catalog = catalog.service_broker.services_dataset.where('unique_id NOT in ?', catalog.services.map(&:broker_provided_id))
+      services_in_db_not_in_catalog = catalog.service_broker.services_dataset.where(Sequel.lit('unique_id NOT in ?', catalog.services.map(&:broker_provided_id)))
       services_in_db_not_in_catalog.each do |service|
         service.update(active: false)
       end
@@ -113,7 +117,7 @@ module VCAP::Services::ServiceBrokers
     end
 
     def delete_services(catalog)
-      services_in_db_not_in_catalog = catalog.service_broker.services_dataset.where('unique_id NOT in ?', catalog.services.map(&:broker_provided_id))
+      services_in_db_not_in_catalog = catalog.service_broker.services_dataset.where(Sequel.lit('unique_id NOT in ?', catalog.services.map(&:broker_provided_id)))
       services_in_db_not_in_catalog.each do |service|
         if service.service_plans.count < 1
           service.destroy

@@ -7,7 +7,6 @@ import (
 	"github.com/cloudfoundry-incubator/consul-release/src/confab/config"
 	"github.com/cloudfoundry-incubator/consul-release/src/confab/fakes"
 	"github.com/cloudfoundry-incubator/consul-release/src/confab/utils"
-	consulagent "github.com/hashicorp/consul/command/agent"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -22,9 +21,6 @@ var _ = Describe("Server", func() {
 
 		cfg          config.Config
 		configWriter *fakes.ConfigWriter
-
-		rpcClient   *consulagent.RPCClient
-		rpcEndpoint string
 	)
 
 	BeforeEach(func() {
@@ -38,12 +34,7 @@ var _ = Describe("Server", func() {
 		configWriter = &fakes.ConfigWriter{}
 		bootstrapChecker = &fakes.BootstrapChecker{}
 
-		rpcClient = &consulagent.RPCClient{}
-		rpcClientConstructor := func(endpoint string) (*consulagent.RPCClient, error) {
-			rpcEndpoint = endpoint
-			return rpcClient, nil
-		}
-		server = chaperon.NewServer(controller, configWriter, rpcClientConstructor, bootstrapChecker)
+		server = chaperon.NewServer(controller, configWriter, bootstrapChecker)
 
 		timeout = &fakes.Timeout{}
 	})
@@ -66,14 +57,6 @@ var _ = Describe("Server", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(controller.BootAgentCall.CallCount).To(Equal(1))
 			Expect(controller.BootAgentCall.Receives.Timeout).To(Equal(timeout))
-		})
-
-		It("sets up an RPC client", func() {
-			err := server.Start(cfg, timeout)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(controller.ConfigureServerCall.CallCount).To(Equal(1))
-			Expect(controller.ConfigureServerCall.Receives.RPCClient).To(Equal(rpcClient))
-			Expect(rpcEndpoint).To(Equal("localhost:8400"))
 		})
 
 		It("configures the server", func() {
@@ -100,8 +83,6 @@ var _ = Describe("Server", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(controller.StopAgentCall.CallCount).To(Equal(1))
-				Expect(controller.StopAgentCall.Receives.RPCClient).To(Equal(rpcClient))
-				Expect(rpcEndpoint).To(Equal("localhost:8400"))
 
 				Expect(controller.ConfigureServerCall.CallCount).To(Equal(1))
 				Expect(controller.WriteServiceDefinitionsCall.CallCount).To(Equal(1))
@@ -119,19 +100,6 @@ var _ = Describe("Server", func() {
 					err := server.Start(cfg, timeout)
 					Expect(err).To(MatchError("failed to check"))
 
-					Expect(configWriter.WriteCall.CallCount).To(Equal(1))
-					Expect(controller.WriteServiceDefinitionsCall.CallCount).To(Equal(1))
-					Expect(controller.BootAgentCall.CallCount).To(Equal(1))
-					Expect(controller.ConfigureServerCall.CallCount).To(Equal(0))
-				})
-
-				It("returns an error when the consul agent fails to stop", func() {
-					server = chaperon.NewServer(controller, configWriter, func(string) (*consulagent.RPCClient, error) {
-						return nil, errors.New("failed to create rpc client")
-					}, bootstrapChecker)
-
-					err := server.Start(cfg, timeout)
-					Expect(err).To(MatchError(errors.New("failed to create rpc client")))
 					Expect(configWriter.WriteCall.CallCount).To(Equal(1))
 					Expect(controller.WriteServiceDefinitionsCall.CallCount).To(Equal(1))
 					Expect(controller.BootAgentCall.CallCount).To(Equal(1))
@@ -203,17 +171,6 @@ var _ = Describe("Server", func() {
 				})
 			})
 
-			Context("when constructing an RPC client fails", func() {
-				It("returns an error", func() {
-					server = chaperon.NewServer(controller, configWriter, func(string) (*consulagent.RPCClient, error) {
-						return nil, errors.New("failed to create rpc client")
-					}, bootstrapChecker)
-
-					err := server.Start(cfg, timeout)
-					Expect(err).To(MatchError(errors.New("failed to create rpc client")))
-				})
-			})
-
 			Context("when configuring the server fails", func() {
 				It("returns an error", func() {
 					controller.ConfigureServerCall.Returns.Error = errors.New("failed to configure server")
@@ -226,26 +183,9 @@ var _ = Describe("Server", func() {
 	})
 
 	Describe("Stop", func() {
-		It("sets up an RPC client", func() {
-			err := server.Stop()
-			Expect(err).NotTo(HaveOccurred())
+		It("calls stop agent", func() {
+			server.Stop()
 			Expect(controller.StopAgentCall.CallCount).To(Equal(1))
-			Expect(controller.StopAgentCall.Receives.RPCClient).To(Equal(rpcClient))
-			Expect(rpcEndpoint).To(Equal("localhost:8400"))
-		})
-
-		Context("failure cases", func() {
-			Context("when constructing an RPC client fails", func() {
-				It("returns an error", func() {
-					server = chaperon.NewServer(controller, configWriter, func(string) (*consulagent.RPCClient, error) {
-						return nil, errors.New("failed to create rpc client")
-					}, bootstrapChecker)
-
-					err := server.Stop()
-					Expect(err).To(MatchError(errors.New("failed to create rpc client")))
-					Expect(controller.StopAgentCall.CallCount).To(Equal(1))
-				})
-			})
 		})
 	})
 })

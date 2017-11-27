@@ -2,10 +2,10 @@
 
 This is a [BOSH](http://bosh.io) release for [consul](https://github.com/hashicorp/consul).
 
-* [CI](https://mega.ci.cf-app.com/pipelines/consul)
+* [CI](https://wings.concourse.ci/teams/cf-infrastructure/pipelines/consul)
 * [Roadmap](https://www.pivotaltracker.com/n/projects/1488988)
 
-###Contents
+### Contents
 
 * [Using Consul](#using-consul)
 * [Deploying](#deploying)
@@ -32,7 +32,7 @@ using DNS names. Consul transparently updates the DNS records across the cluster
 as services start and stop, or pass/fail their health checks.
 
 Additionally, Consul is able to store key-value data across its distributed
-cluster. CloudFoundry makes use of this feature by storing some simple
+cluster. Cloud Foundry makes use of this feature by storing some simple
 configuration data, making it reachable across all nodes in the cluster.
 
 CloudFoundry also makes some use of Consul's distributed locks.
@@ -163,6 +163,11 @@ properties:
       -----END RSA PRIVATE KEY-----
 ```
 
+### Rotating Certificates and Keys
+
+Reference the [Security Configuration for Consul](https://docs.cloudfoundry.org/deploying/common/consul-security.html#rotating-certs)
+in the CloudFoundry Docs for steps on rotating certificates and keys.
+
 ### Defining a Service
 
 This Consul release allows consumers to declare services provided by jobs that
@@ -212,6 +217,11 @@ defined in JSON, but translated into YAML to fit into a manifest. More
 information about service registration can be found
 [here](https://www.consul.io/docs/agent/services.html).
 
+Note: When running on Windows VMs, we use powershell. To honor the exit code of the
+health check script, we wrap the script as follows:
+`powershell -Command some_script.ps1; Exit $LASTEXITCODE`.
+Any user provided script should do the same.
+
 ### Health Checks
 
 Health checks provide another level of functionality to the service discovery
@@ -255,7 +265,20 @@ In the `check` section of that definition, we can see that it assumes a script
 called `dns_health_check` is located in the `/var/vcap/jobs/SERVICE_NAME/bin`
 directory. Not providing this script, and not explicitly defining some other
 check in your service definition will result in a failing health check for the
-service.
+service. If you wish to disable the health check for a service, you can specify
+an empty `check` section. For example:
+
+```
+jobs:
+- name: database
+  ...
+  properties:
+    consul:
+      agent:
+        services:
+          database:
+            check: {}
+```
 
 ## Known Issues
 
@@ -310,6 +333,33 @@ indeed safe to follow the above steps.
 Additional information about outage recovery can be found on the consul
 [documentation page](https://www.consul.io/docs/guides/outage.html).
 
+NOTE: The above will not work if a consul server is failing because of an issue
+with a client node. In fact if you were to perform the recovery steps outlined
+above you may fall below quorum and take down the consul servers. To know if you
+are in this situation check the `/var/vcap/sys/log/consul_agent/consul.stdout.log`.
+If you see an error similar to the below message then you do not want to follow
+the above steps:
+
+```
+2017/05/04 12:31:39 [INFO] serf: EventMemberFailed: some-node-0 10.0.0.100 {"timestamp":"1493901099.471777678","source":"confab","message":"confab.agent-client.set-keys.list-keys.request.failed","log_level":2,"data":{"error":"7/8 nodes reported success"}}
+```
+
+The important part is:
+
+```
+{"error":"7/8 nodes reported success"}
+```
+
+This indicates that the consul server attempted to set keys on a client node
+and the client node failed to set the key. In this instance the consul server
+will not continue starting to prevent partitioning a client node from the
+cluster.
+
+The resolution in this case is to find the client node that is failing to set
+keys and resolve whatever issue is occuring on that node. The most common issue
+is either the disk is full/not writeable and consul cannot write to its
+datastore or consul cannot communicate with a node on port 8301.
+
 ### Frequent Disappearance of Registered Services
 
 Many BOSH jobs that colocate the `consul_agent` process do so in order to
@@ -357,8 +407,7 @@ The acceptance tests deploy a new consul cluster and exercise a variety of featu
 The following should be installed on the local machine:
 
 - jq
-- Consul
-- Golang (>= 1.5)
+- Golang (>= 1.7)
 
 If using homebrew, these can be installed with:
 

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"strings"
 )
@@ -18,11 +19,12 @@ type Config struct {
 }
 
 type ConfigBOSH struct {
-	Target         string `json:"target"`
-	Username       string `json:"username"`
-	Password       string `json:"password"`
-	DirectorCACert string `json:"director_ca_cert"`
-	DeploymentName string `json:"deployment_name"`
+	Target             string `json:"target"`
+	Host               string `json:"host"`
+	Username           string `json:"username"`
+	Password           string `json:"password"`
+	DirectorCACert     string `json:"director_ca_cert"`
+	DeploymentVarsPath string `json:"deployment_vars_path"`
 }
 
 type ConfigAWS struct {
@@ -42,9 +44,7 @@ type ConfigRegistry struct {
 }
 
 type ConfigCF struct {
-	Domain   string `json:"domain"`
-	Username string `json:"username"`
-	Password string `json:"password"`
+	Domain string `json:"domain"`
 }
 
 func checkAbsolutePath(configValue, jsonKey string) error {
@@ -62,6 +62,11 @@ func LoadConfig(configFilePath string) (Config, error) {
 
 	if config.BOSH.Target == "" {
 		return Config{}, errors.New("missing `bosh.target` - e.g. 'lite' or '192.168.50.4'")
+	}
+
+	config.BOSH.Host, err = addBOSHHost(config.BOSH.Target)
+	if err != nil {
+		return Config{}, err
 	}
 
 	if config.BOSH.Username == "" {
@@ -83,6 +88,15 @@ func LoadConfig(configFilePath string) (Config, error) {
 	}
 
 	return config, nil
+}
+
+func addBOSHHost(target string) (string, error) {
+	u, err := url.Parse(target)
+	if err != nil {
+		return "", err
+	}
+
+	return u.Hostname(), nil
 }
 
 func loadConfigJsonFromPath(configFilePath string) (Config, error) {

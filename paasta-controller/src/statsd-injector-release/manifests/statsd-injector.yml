@@ -1,0 +1,139 @@
+name: statsd-injector
+
+stemcells:
+- alias: default
+  os: ubuntu-trusty
+  version: latest
+
+releases:
+- name: statsd-injector
+  version: latest
+- name: loggregator
+  version: latest
+- name: consul
+  version: latest
+
+instance_groups:
+- name: statsd_injector
+  azs:
+  - z1
+  instances: 1
+  persistent_disk_type: 1GB
+  vm_type: default
+  stemcell: default
+  networks:
+  - name: default
+  jobs:
+  - name: consul_agent
+    release: consul
+    properties:
+      consul:
+        agent:
+          mode: server
+          domain: cf.internal
+          servers:
+            lan: [10.244.0.34]
+        require_ssl: true
+        encrypt_keys:
+        - "((consul_encrypt_key))"
+        agent_cert: "((consul_agent.certificate))"
+        agent_key: "((consul_agent.private_key))"
+        ca_cert: "((consul_server.ca))"
+        server_cert: "((consul_server.certificate))"
+        server_key: "((consul_server.private_key))"
+  - name: metron_agent
+    release: loggregator
+    properties:
+      doppler:
+        addr: doppler.service.cf.internal
+      metron_agent:
+        deployment: statsd-injector
+      metron_endpoint:
+        shared_secret: "((dropsonde_shared_secret))"
+      loggregator:
+        tls:
+          ca_cert: "((loggregator_metron.ca))"
+          metron:
+            cert: "((loggregator_metron.certificate))"
+            key: "((loggregator_metron.private_key))"
+  - name: statsd_injector
+    release: statsd-injector
+    properties:
+      statsd_injector:
+        deployment: statsd-injector
+      loggregator:
+        tls:
+          ca_cert: "((statsd_injector.ca))"
+          statsd_injector:
+            cert: "((statsd_injector.certificate))"
+            key: "((statsd_injector.private_key))"
+
+variables:
+- name: dropsonde_shared_secret
+  type: password
+- name: loggregator_ca
+  type: certificate
+  options:
+    is_ca: true
+    common_name: loggregatorCA
+- name: loggregator_doppler
+  type: certificate
+  options:
+    ca: loggregator_ca
+    common_name: doppler
+    extended_key_usage:
+    - client_auth
+    - server_auth
+- name: loggregator_tc
+  type: certificate
+  options:
+    ca: loggregator_ca
+    common_name: trafficcontroller
+    extended_key_usage:
+    - client_auth
+    - server_auth
+- name: loggregator_metron
+  type: certificate
+  options:
+    ca: loggregator_ca
+    common_name: metron
+    extended_key_usage:
+    - client_auth
+    - server_auth
+- name: statsd_injector
+  type: certificate
+  options:
+    ca: loggregator_ca
+    common_name: statsdinjector
+    extended_key_usage:
+    - client_auth
+- name: consul_encrypt_key
+  type: password
+- name: consul_agent_ca
+  type: certificate
+  options:
+    is_ca: true
+    common_name: consulCA
+- name: consul_agent
+  type: certificate
+  options:
+    ca: consul_agent_ca
+    common_name: consul_agent
+    extended_key_usage:
+    - client_auth
+    - server_auth
+- name: consul_server
+  type: certificate
+  options:
+    ca: consul_agent_ca
+    common_name: server.dc1.cf.internal
+    extended_key_usage:
+    - client_auth
+    - server_auth
+
+update:
+  canaries: 10
+  max_in_flight: 10
+  canary_watch_time: 30000-60000
+  update_watch_time: 5000-60000
+  serial: true

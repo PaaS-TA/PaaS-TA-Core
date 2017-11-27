@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"os"
 	"os/exec"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/lager/lagertest"
 	"code.cloudfoundry.org/locket"
+	"code.cloudfoundry.org/nsync/config"
 	"github.com/gogo/protobuf/proto"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -28,14 +30,15 @@ var _ = Describe("Syncing desired state with CC", func() {
 	const interruptTimeout = 5 * time.Second
 
 	var (
-		fakeCC *ghttp.Server
+		bulkerConfigFile *os.File
+		fakeCC           *ghttp.Server
 
 		process ifrit.Process
 
-		domainTTL time.Duration
+		domainTTL config.Duration
 
 		bulkerLockName  = "nsync_bulker_lock"
-		pollingInterval time.Duration
+		pollingInterval config.Duration
 
 		logger lager.Logger
 	)
@@ -47,17 +50,7 @@ var _ = Describe("Syncing desired state with CC", func() {
 			StartCheck:    "nsync.bulker.started",
 			Command: exec.Command(
 				bulkerPath,
-				"-ccBaseURL", fakeCC.URL(),
-				"-pollingInterval", pollingInterval.String(),
-				"-domainTTL", domainTTL.String(),
-				"-bulkBatchSize", "10",
-				"-lifecycle", "buildpack/some-stack:some-health-check.tar.gz",
-				"-lifecycle", "docker:the/docker/lifecycle/path.tgz",
-				"-fileServerURL", "http://file-server.com",
-				"-lockRetryInterval", "1s",
-				"-consulCluster", consulRunner.ConsulCluster(),
-				"-bbsAddress", fakeBBS.URL(),
-				"-privilegedContainers", "false",
+				"-configPath", bulkerConfigFile.Name(),
 			),
 		})
 
@@ -69,12 +62,38 @@ var _ = Describe("Syncing desired state with CC", func() {
 	}
 
 	BeforeEach(func() {
-		logger = lagertest.NewTestLogger("test")
-
 		fakeCC = ghttp.NewServer()
 
-		pollingInterval = 500 * time.Millisecond
-		domainTTL = 1 * time.Second
+		pollingInterval = config.Duration(500 * time.Millisecond)
+		domainTTL = config.Duration(1 * time.Second)
+
+		var err error
+		bulkerConfigFile, err = ioutil.TempFile("", "bulker_config")
+		Expect(err).NotTo(HaveOccurred())
+		bulkerConfig := config.DefaultBulkerConfig()
+		bulkerConfig.CCBaseUrl = fakeCC.URL()
+		bulkerConfig.CCPollingInterval = pollingInterval
+		bulkerConfig.CCBulkBatchSize = 10
+		bulkerConfig.Lifecycles = []string{"buildpack/some-stack:some-health-check.tar.gz", "docker:the/docker/lifecycle/path.tgz"}
+		bulkerConfig.FileServerUrl = "http://file-server.com"
+		bulkerConfig.LockRetryInterval = config.Duration(1 * time.Second)
+		bulkerConfig.ConsulCluster = consulRunner.ConsulCluster()
+		bulkerConfig.BBSAddress = fakeBBS.URL()
+		bulkerConfig.DomainTTL = domainTTL
+		bulkerConfig.CCBulkBatchSize = 10
+		bulkerConfig.Lifecycles = []string{
+			"buildpack/some-stack:some-health-check.tar.gz",
+			"docker:the/docker/lifecycle/path.tgz",
+		}
+		bulkerConfig.FileServerUrl = "http://file-server.com"
+
+		bulkerJSON, err := json.Marshal(bulkerConfig)
+		Expect(err).NotTo(HaveOccurred())
+		err = ioutil.WriteFile(bulkerConfigFile.Name(), bulkerJSON, 0644)
+		Expect(err).NotTo(HaveOccurred())
+
+		// write to it
+		logger = lagertest.NewTestLogger("test")
 
 		desiredAppResponses := map[string]string{
 			"process-guid-1": `{
@@ -561,7 +580,7 @@ var _ = Describe("Syncing desired state with CC", func() {
 		var nsyncLockClaimerProcess ifrit.Process
 
 		BeforeEach(func() {
-			nsyncLockClaimer := locket.NewLock(logger, consulRunner.NewClient(), locket.LockSchemaPath(bulkerLockName), []byte("something-else"), clock.NewClock(), locket.RetryInterval, locket.LockTTL)
+			nsyncLockClaimer := locket.NewLock(logger, consulRunner.NewClient(), locket.LockSchemaPath(bulkerLockName), []byte("something-else"), clock.NewClock(), locket.RetryInterval, locket.DefaultSessionTTL)
 			nsyncLockClaimerProcess = ifrit.Invoke(nsyncLockClaimer)
 		})
 
@@ -631,7 +650,7 @@ var _ = Describe("Syncing desired state with CC", func() {
 				)
 
 				ginkgomon.Kill(nsyncLockClaimerProcess)
-				time.Sleep(pollingInterval + 10*time.Millisecond)
+				time.Sleep(time.Duration(pollingInterval) + 10*time.Millisecond)
 			})
 
 			It("is updated", func() {

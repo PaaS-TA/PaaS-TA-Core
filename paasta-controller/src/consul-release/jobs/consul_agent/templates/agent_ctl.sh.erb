@@ -24,6 +24,7 @@ function start_confab() {
     start \
     ${recursors} \
     --config-file "${JOB_DIR}/confab.json" \
+    --config-consul-link-file "${JOB_DIR}/consul_link.json" \
     1> >(tee -a ${LOG_DIR}/consul_agent.stdout.log | logger -p user.info -t vcap.consul-agent) \
     2> >(tee -a ${LOG_DIR}/consul_agent.stderr.log | logger -p user.error -t vcap.consul-agent)
 }
@@ -32,6 +33,7 @@ function stop_confab() {
   "${CONFAB_PACKAGE}/bin/confab" \
     stop \
     --config-file "${JOB_DIR}/confab.json" \
+    --config-consul-link-file "${JOB_DIR}/consul_link.json" \
     1> >(tee -a ${LOG_DIR}/consul_agent.stdout.log | logger -p user.info -t vcap.consul-agent) \
     2> >(tee -a ${LOG_DIR}/consul_agent.stderr.log | logger -p user.error -t vcap.consul-agent)
 }

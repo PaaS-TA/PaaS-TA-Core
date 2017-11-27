@@ -18,7 +18,7 @@ var pathToEtcdProxy string
 
 var _ = BeforeSuite(func() {
 	var err error
-	pathToEtcdProxy, err = gexec.Build("etcd-proxy")
+	pathToEtcdProxy, err = gexec.Build("github.com/cloudfoundry-incubator/etcd-release/src/etcd-proxy")
 	Expect(err).NotTo(HaveOccurred())
 })
 

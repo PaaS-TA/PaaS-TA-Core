@@ -7,24 +7,44 @@ templates:
   pre-start.erb: bin/pre-start
   postgres_ctl.erb: bin/postgres_ctl
   postgres_start.sh.erb: bin/postgres_start.sh
+  pgconfig.sh.erb: bin/pgconfig.sh
+  utils.sh.erb: bin/utils.sh
   postgresql.conf.erb: config/postgresql.conf
   pg_hba.conf.erb: config/pg_hba.conf
+  pg_ident.conf.erb: config/pg_ident.conf
+  server.private_key.erb: config/certificates/server.private_key
+  server.public_cert.erb: config/certificates/server.public_cert
+  server.ca_cert.erb: config/certificates/server.ca_cert
 
 packages:
   - postgres-common
   - postgres-9.4.9
+  - postgres-9.6.3
+
+provides:
+- name: postgres
+  type: database
 
 properties:
-  databases.db_scheme:
-    description: "The database scheme"
   databases.port:
     description: "The database port"
-  databases.address:
-    description: "The database address"
   databases.databases:
     description: "A list of databases and associated properties to create"
+    example: |
+      - name: sandbox
+        citext: true
+      - name: sandbox2
+        citext: false
+        run_on_every_startup: "SELECT * FROM TABLEA"
   databases.roles:
     description: "A list of database roles and associated properties to create"
+    example: |
+      - name: pgadmin
+        password: passwd
+        permissions:
+        - "CONNECTION LIMIT 33"
+      - name: bud_spencer
+        common_name: "Carlo Pedersoli"
   databases.max_connections:
     description: "Maximum number of database connections"
   databases.log_line_prefix:
@@ -35,3 +55,18 @@ properties:
     default: false
   databases.additional_config:
     description: "A map of additional key/value pairs to include as extra configuration properties"
+    example: |
+      shared_buffers: 4GB
+      checkpoint_segments: 10
+  databases.monit_timeout:
+    description: "Monit timout in seconds for the postgres job start. If not specified, no timeout statement will be added so that the global monit timeout applies."
+    default: 90
+  databases.tls.ca:
+    description: "PEM-encoded certification authority for secure TLS communication"
+    default: ''
+  databases.tls.certificate:
+    description: "PEM-encoded certificate for secure TLS communication"
+    default: ''
+  databases.tls.private_key:
+    description: "PEM-encoded key for secure TLS communication"
+    default: ''

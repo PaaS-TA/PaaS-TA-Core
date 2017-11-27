@@ -7,7 +7,6 @@ import (
 
 type Client struct {
 	controller     controller
-	newRPCClient   consulRPCClientConstructor
 	keyringRemover keyringRemover
 	configWriter   configWriter
 }
@@ -16,10 +15,9 @@ type keyringRemover interface {
 	Execute() error
 }
 
-func NewClient(controller controller, newRPCClient consulRPCClientConstructor, keyringRemover keyringRemover, configWriter configWriter) Client {
+func NewClient(controller controller, keyringRemover keyringRemover, configWriter configWriter) Client {
 	return Client{
 		controller:     controller,
-		newRPCClient:   newRPCClient,
 		keyringRemover: keyringRemover,
 		configWriter:   configWriter,
 	}
@@ -49,9 +47,6 @@ func (c Client) Start(cfg config.Config, timeout utils.Timeout) error {
 	return nil
 }
 
-func (c Client) Stop() error {
-	rpcClient, err := c.newRPCClient("localhost:8400")
-	c.controller.StopAgent(rpcClient)
-
-	return err
+func (c Client) Stop() {
+	c.controller.StopAgent()
 }

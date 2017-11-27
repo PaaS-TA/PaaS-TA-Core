@@ -1,9 +1,8 @@
 ---
 local_route: 127.0.0.1
 external_port: 8181
+tls_port: 8182
 pid_filename: /tmp/cloud_controller.pid
-message_bus_servers:
-  - nats://127.0.0.1:4222
 
 external_protocol: http
 external_domain: api2.vcap.me
@@ -25,9 +24,6 @@ system_hostnames:
 jobs:
   global:
     timeout_in_seconds: 14400
-
-app_events:
-  cutoff_age_in_days: 31
 
 app_usage_events:
   cutoff_age_in_days: 31
@@ -73,10 +69,10 @@ logging:
 
 loggregator:
   router: "127.0.0.1:3456"
-  url: "ws://loggregator.vcap.me:80"
+  internal_url: 'http://loggregator-trafficcontroller.service.cf.internal:8081'
 
 doppler:
-  enabled: false
+  url: 'wss://doppler.example.com:443'
 
 db:
   max_connections: 32
@@ -84,8 +80,10 @@ db:
 
 uaa:
   url: "http://localhost:8080/uaa"
+  internal_url: "http://localhost:6789"
   resource_id: "cloud_controller"
   symmetric_secret: "tokensecret"
+  ca_file: "spec/fixtures/certs/uaa_ca.crt"
 
 hm9000:
   url: "http://localhost:5155"
@@ -183,6 +181,7 @@ cloud_controller_username_lookup_client_secret: 'username_lookup_secret'
 
 users_can_select_backend: true
 allow_app_ssh_access: true
+default_app_ssh_access: true
 
 
 renderer:
@@ -223,11 +222,18 @@ rate_limiter:
 
 diego:
   temporary_local_staging: false
+  temporary_local_tasks: false
+  temporary_local_apps: false
+  temporary_local_sync: false
+  temporary_local_tps: false
+  temporary_cc_uploader_mtls: false
+  temporary_droplet_download_mtls: false
   nsync_url: http://nsync.service.cf.internal:8787
   stager_url: http://stager.service.cf.internal:8888
   tps_url: http://tps.service.cf.internal:1518
   file_server_url: http://file-server.service.cf.internal:8080
   cc_uploader_url: http://cc-uploader.service.cf.internal:9090
+  use_privileged_containers_for_running: false
   use_privileged_containers_for_staging: false
   lifecycle_bundles:
     "buildpack/cflinuxfs2": "buildpack_app_lifecycle/buildpack_app_lifecycle.tgz"
@@ -240,3 +246,7 @@ diego:
     key_file: /var/vcap/jobs/cloud_controller_ng/config/certs/bbs_client.key
     cert_file: /var/vcap/jobs/cloud_controller_ng/config/certs/bbs_client.crt
     ca_file: /var/vcap/jobs/cloud_controller_ng/config/certs/bbs_ca.crt
+  pid_limit: 2048
+
+directories:
+  tmpdir: /tmp

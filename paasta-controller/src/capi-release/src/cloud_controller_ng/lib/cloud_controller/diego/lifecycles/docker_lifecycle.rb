@@ -11,17 +11,10 @@ module VCAP::CloudController
       Lifecycles::DOCKER
     end
 
-    def create_lifecycle_data_model(_)
-    end
+    def create_lifecycle_data_model(_); end
 
     def staging_environment_variables
       {}
-    end
-
-    def pre_known_receipt_information
-      {
-        docker_receipt_image: @package.image
-      }
     end
 
     def valid?

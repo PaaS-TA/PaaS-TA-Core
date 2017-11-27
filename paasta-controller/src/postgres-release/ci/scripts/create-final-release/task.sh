@@ -1,14 +1,21 @@
 #!/bin/bash -exu
 
-# Cannot set -u before sourcing .bashrc because of all
-# the unbound variables in things beyond our control.
+# Cannot set -u before sourcing .bashrc because of
+# all the unbound variables in things beyond our control.
 set +u
 source ~/.bashrc
 set -u
 
+preflight_check() {
+  set +x
+  test -n "${RELEASE_NAME}"
+  set -x
+}
+
 function main() {
   local root_dir
   root_dir="${PWD}"
+  preflight_check
 
   local release_name
   release_name="${1}"
@@ -26,7 +33,7 @@ function configure_bucket() {
   release_name="${1}"
 
   set +x
-  ./postgres-release/ci/scripts/configure_final_release_bucket "${release_name}" ./oss-s3-buckets-stack ./release-repo/config
+  ./release-repo/ci/scripts/configure_final_release_bucket "${release_name}" ./oss-s3-buckets-stack ./release-repo/config
   set -x
 }
 
@@ -49,7 +56,7 @@ function create_and_commit() {
 
     local exit_status
     for i in {1..5}; do
-      bosh -n create release --with-tarball --final
+      /opt/rubies/ruby-2.2.4/bin/bosh -n create release --with-tarball --final
       exit_status="${PIPESTATUS[0]}"
 
       if [[ "${exit_status}" == "0" ]]; then
@@ -64,6 +71,10 @@ function create_and_commit() {
 
     local new_release_version
     new_release_version="$(find releases -regex ".*${release_name}-[0-9]*.yml" | egrep -o "${release_name}-[0-9]+" | egrep -o "[0-9]+" | sort -n | tail -n 1)"
+	
+    source jobs/postgres/templates/pgconfig.sh.erb
+    sed -i "/^versions:/a\ \ ${new_release_version}: \"PostgreSQL ${current_version}\"" versions.yml
+    git add versions.yml
 
     git add .final_builds releases
     git commit -m "Final release ${new_release_version}"

@@ -46,12 +46,15 @@ func NewProxy(transport http.RoundTripper, skipSslValidation bool) http.Handler 
 			forwardedURL := req.Header.Get(CF_FORWARDED_URL_HEADER)
 			sigHeader := req.Header.Get(CF_PROXY_SIGNATURE_HEADER)
 
-			body, err := ioutil.ReadAll(req.Body)
-			if err != nil {
-				log.Fatalln(err.Error())
+			var body []byte
+			var err error
+			if req.Body != nil {
+				body, err = ioutil.ReadAll(req.Body)
+				if err != nil {
+					log.Fatalln(err.Error())
+				}
+				req.Body = ioutil.NopCloser(bytes.NewBuffer(body))
 			}
-			req.Body = ioutil.NopCloser(bytes.NewBuffer(body))
-
 			logRequest(forwardedURL, sigHeader, string(body), req.Header, skipSslValidation)
 
 			err = sleep()

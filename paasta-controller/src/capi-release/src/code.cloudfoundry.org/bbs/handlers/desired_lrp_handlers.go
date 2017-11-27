@@ -4,10 +4,10 @@ import (
 	"net/http"
 
 	"code.cloudfoundry.org/auctioneer"
-	"code.cloudfoundry.org/bbs"
 	"code.cloudfoundry.org/bbs/db"
 	"code.cloudfoundry.org/bbs/events"
 	"code.cloudfoundry.org/bbs/models"
+	"code.cloudfoundry.org/bbs/serviceclient"
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/rep"
 	"code.cloudfoundry.org/workpool"
@@ -20,7 +20,7 @@ type DesiredLRPHandler struct {
 	actualHub          events.Hub
 	auctioneerClient   auctioneer.Client
 	repClientFactory   rep.ClientFactory
-	serviceClient      bbs.ServiceClient
+	serviceClient      serviceclient.ServiceClient
 	updateWorkersCount int
 	exitChan           chan<- struct{}
 }
@@ -33,7 +33,7 @@ func NewDesiredLRPHandler(
 	actualHub events.Hub,
 	auctioneerClient auctioneer.Client,
 	repClientFactory rep.ClientFactory,
-	serviceClient bbs.ServiceClient,
+	serviceClient serviceclient.ServiceClient,
 	exitChan chan<- struct{},
 ) *DesiredLRPHandler {
 	return &DesiredLRPHandler{
@@ -58,7 +58,7 @@ func (h *DesiredLRPHandler) DesiredLRPs(logger lager.Logger, w http.ResponseWrit
 
 	err = parseRequest(logger, req, request)
 	if err == nil {
-		filter := models.DesiredLRPFilter{Domain: request.Domain}
+		filter := models.DesiredLRPFilter{Domain: request.Domain, ProcessGuids: request.ProcessGuids}
 		response.DesiredLrps, err = h.desiredLRPDB.DesiredLRPs(logger, filter)
 	}
 
@@ -93,7 +93,10 @@ func (h *DesiredLRPHandler) DesiredLRPSchedulingInfos(logger lager.Logger, w htt
 
 	err = parseRequest(logger, req, request)
 	if err == nil {
-		filter := models.DesiredLRPFilter{Domain: request.Domain}
+		filter := models.DesiredLRPFilter{
+			Domain:       request.Domain,
+			ProcessGuids: request.ProcessGuids,
+		}
 		response.DesiredLrpSchedulingInfos, err = h.desiredLRPDB.DesiredLRPSchedulingInfos(logger, filter)
 	}
 
@@ -238,7 +241,7 @@ func (h *DesiredLRPHandler) startInstanceRange(logger lager.Logger, lower, upper
 	start := auctioneer.NewLRPStartRequestFromSchedulingInfo(schedulingInfo, createdIndices...)
 
 	logger.Info("start-lrp-auction-request", lager.Data{"app_guid": schedulingInfo.ProcessGuid, "indices": createdIndices})
-	err := h.auctioneerClient.RequestLRPAuctions([]*auctioneer.LRPStartRequest{&start})
+	err := h.auctioneerClient.RequestLRPAuctions(logger, []*auctioneer.LRPStartRequest{&start})
 	logger.Info("finished-lrp-auction-request", lager.Data{"app_guid": schedulingInfo.ProcessGuid, "indices": createdIndices})
 	if err != nil {
 		logger.Error("failed-to-request-auction", err)
@@ -311,7 +314,11 @@ func (h *DesiredLRPHandler) stopInstancesFrom(logger lager.Logger, processGuid s
 						logger.Error("failed-fetching-cell-presence", err)
 						continue
 					}
-					repClient := h.repClientFactory.CreateClient(cellPresence.RepAddress)
+					repClient, err := h.repClientFactory.CreateClient(cellPresence.RepAddress, cellPresence.RepUrl)
+					if err != nil {
+						logger.Error("create-rep-client-failed", err)
+						continue
+					}
 					logger.Debug("stopping-lrp-instance")
 					err = repClient.StopLRPInstance(lrp.ActualLRPKey, lrp.ActualLRPInstanceKey)
 					if err != nil {

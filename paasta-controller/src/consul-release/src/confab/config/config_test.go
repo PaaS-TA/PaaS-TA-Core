@@ -1,6 +1,8 @@
 package config_test
 
 import (
+	"path/filepath"
+
 	"github.com/cloudfoundry-incubator/consul-release/src/confab/config"
 
 	. "github.com/onsi/ginkgo"
@@ -15,7 +17,8 @@ var _ = Describe("Config", func() {
 					"node": {
 						"name": "nodename",
 						"index": 1234,
-						"external_ip": "10.0.0.1"
+						"external_ip": "10.0.0.1",
+						"zone": "z1"
 					},
 					"path": {
 						"agent_path": "/path/to/agent",
@@ -28,7 +31,7 @@ var _ = Describe("Config", func() {
 						"agent": {
 							"services": {
 								"myservice": {
-									"name" : "myservicename"	
+									"name" : "myservicename"
 								}
 							},
 							"mode": "server",
@@ -39,11 +42,15 @@ var _ = Describe("Config", func() {
 								"lan": ["server1", "server2", "server3"],
 								"wan": ["wan-server1", "wan-server2", "wan-server3"]
 							},
+							"telemetry": {
+								"statsd_address": "myhost:8125"
+							},
 							"dns_config": {
 								"allow_stale": true,
 								"max_stale": "15s",
 								"recursor_timeout": "15s"
-							}
+							},
+							"require_ssl": true
 						},
 						"encrypt_keys": ["key-1", "key-2"]
 					},
@@ -52,7 +59,7 @@ var _ = Describe("Config", func() {
 					}
 				}`)
 
-				cfg, err := config.ConfigFromJSON(json)
+				cfg, err := config.ConfigFromJSON(json, []byte("{}"))
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cfg).To(Equal(config.Config{
 					Path: config.ConfigPath{
@@ -66,6 +73,7 @@ var _ = Describe("Config", func() {
 						Name:       "nodename",
 						Index:      1234,
 						ExternalIP: "10.0.0.1",
+						Zone:       "z1",
 					},
 					Consul: config.ConfigConsul{
 						Agent: config.ConfigConsulAgent{
@@ -82,11 +90,15 @@ var _ = Describe("Config", func() {
 								LAN: []string{"server1", "server2", "server3"},
 								WAN: []string{"wan-server1", "wan-server2", "wan-server3"},
 							},
+							Telemetry: config.ConfigConsulTelemetry{
+								StatsdAddress: "myhost:8125",
+							},
 							DnsConfig: config.ConfigConsulAgentDnsConfig{
 								AllowStale:      true,
 								MaxStale:        "15s",
 								RecursorTimeout: "15s",
 							},
+							RequireSSL: true,
 						},
 						EncryptKeys: []string{"key-1", "key-2"},
 					},
@@ -100,7 +112,13 @@ var _ = Describe("Config", func() {
 		Context("when passing an empty config", func() {
 			It("returns a config with default values", func() {
 				json := []byte(`{}`)
-				cfg, err := config.ConfigFromJSON(json)
+				cfg, err := config.ConfigFromJSON(json, json)
+
+				cfg.Path.AgentPath = filepath.ToSlash(cfg.Path.AgentPath)
+				cfg.Path.ConsulConfigDir = filepath.ToSlash(cfg.Path.ConsulConfigDir)
+				cfg.Path.PIDFile = filepath.ToSlash(cfg.Path.PIDFile)
+				cfg.Path.KeyringFile = filepath.ToSlash(cfg.Path.KeyringFile)
+				cfg.Path.DataDir = filepath.ToSlash(cfg.Path.DataDir)
 
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cfg).To(Equal(config.Config{
@@ -131,20 +149,74 @@ var _ = Describe("Config", func() {
 			})
 		})
 
+		Context("when passing consul link properties", func() {
+			It("returns a config with the link properties set, preferring the link properties", func() {
+				json := []byte(`{
+					"consul": {
+						"agent": {
+							"mode": "server",
+							"datacenter": "dc1",
+							"servers": {
+								"lan": ["server1", "server2", "server3"],
+								"wan": ["wan-server1", "wan-server2", "wan-server3"]
+							},
+							"dns_config": { "allow_stale": true, "max_stale": "15s", "recursor_timeout": "15s" }
+						},
+						"encrypt_keys": ["key-1", "key-2"]
+					}
+				}`)
+				consulLinkJson := []byte(`{
+					"agent": {
+						"services": {
+							"myservice": { "name" : "mylinkservicename" }
+						},
+						"log_level": "debug",
+						"datacenter": "dc1000"
+					},
+					"encrypt_keys": ["link-key-1", "link-key-2"]
+				}`)
+
+				cfg, err := config.ConfigFromJSON(json, consulLinkJson)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cfg.Consul).To(Equal(config.ConfigConsul{
+					Agent: config.ConfigConsulAgent{
+						Mode:       "server",
+						Datacenter: "dc1000",
+						LogLevel:   "debug",
+						Servers: config.ConfigConsulAgentServers{
+							LAN: []string{"server1", "server2", "server3"},
+							WAN: []string{"wan-server1", "wan-server2", "wan-server3"},
+						},
+						DnsConfig: config.ConfigConsulAgentDnsConfig{
+							AllowStale:      true,
+							MaxStale:        "15s",
+							RecursorTimeout: "15s",
+						},
+						Services: map[string]config.ServiceDefinition{
+							"myservice": {
+								Name: "mylinkservicename",
+							},
+						},
+					},
+					EncryptKeys: []string{"link-key-1", "link-key-2"},
+				}))
+			})
+		})
+
 		Context("when passing an config that is in server mode and has no specified keyring file and data dir", func() {
 			It("returns a config with keyring file and data dir paths containing /var/vcap/store/", func() {
 				json := []byte(`{"consul": {"agent": {"mode": "server"}}}`)
-				cfg, err := config.ConfigFromJSON(json)
+				cfg, err := config.ConfigFromJSON(json, []byte("{}"))
 
 				Expect(err).NotTo(HaveOccurred())
-				Expect(cfg.Path.KeyringFile).To(Equal("/var/vcap/store/consul_agent/serf/local.keyring"))
-				Expect(cfg.Path.DataDir).To(Equal("/var/vcap/store/consul_agent"))
+				Expect(filepath.ToSlash(cfg.Path.KeyringFile)).To(Equal("/var/vcap/store/consul_agent/serf/local.keyring"))
+				Expect(filepath.ToSlash(cfg.Path.DataDir)).To(Equal("/var/vcap/store/consul_agent"))
 			})
 		})
 
 		It("returns an error on invalid json", func() {
 			json := []byte(`{%%%{{}{}{{}{}{{}}}}}}}`)
-			_, err := config.ConfigFromJSON(json)
+			_, err := config.ConfigFromJSON(json, json)
 			Expect(err).To(MatchError(ContainSubstring("invalid character")))
 		})
 	})

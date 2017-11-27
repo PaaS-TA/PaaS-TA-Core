@@ -1,4 +1,4 @@
 ---
 name: go-buildpack
 files:
-- go-buildpack/go_buildpack-cached-*.zip
+- go-buildpack/go?buildpack-v*.zip

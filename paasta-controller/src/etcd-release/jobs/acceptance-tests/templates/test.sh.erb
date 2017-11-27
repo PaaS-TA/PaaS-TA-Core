@@ -1,13 +1,13 @@
 #!/bin/bash -exu
 
 export PATH="${PATH}:/var/vcap/packages/etcd/bin"
-export GOROOT="$(readlink -nf /var/vcap/packages/golang1.7)"
-export GOPATH="/var/vcap/packages/acceptance-tests/src/github.com/cloudfoundry-incubator/etcd-release"
+export GOROOT="$(readlink -nf /var/vcap/packages/golang1.8)"
+export GOPATH="/var/vcap/packages/acceptance-tests"
 export PATH="${GOROOT}/bin:${PATH}"
-export GO15VENDOREXPERIMENT=1
 
 export EATS_CONFIG=/tmp/config.json
-export EATS_RELEASE_VERSION="<%= p('etcd.acceptance_tests.etcd_release_version') %>"
+export ETCD_RELEASE_VERSION="<%= p('etcd.acceptance_tests.etcd_release_version') %>"
+export LATEST_ETCD_RELEASE_VERSION="<%= p('etcd.acceptance_tests.latest_etcd_release_version') %>"
 
 cat > $EATS_CONFIG <<EOF
 <%= p('etcd.acceptance_tests').to_json %>
@@ -15,5 +15,9 @@ EOF
 
 chown -R vcap:vcap "/var/vcap/data/"
 pushd "/var/vcap/data/tmp" > /dev/null
-  chpst -u vcap:vcap bash -c "${GOPATH}/src/acceptance-tests/scripts/test -nodes <%= p('etcd.acceptance_tests.parallel_nodes') %>"
+<% if p('etcd.acceptance_tests.enable_turbulence_tests') %>
+  chpst -u vcap:vcap bash -c "${GOPATH}/src/github.com/cloudfoundry-incubator/etcd-release/src/acceptance-tests/scripts/test -skipPackage cf-tls-upgrade -nodes <%= p('etcd.acceptance_tests.parallel_nodes') %> turbulence"
+<% else %>
+  chpst -u vcap:vcap bash -c "${GOPATH}/src/github.com/cloudfoundry-incubator/etcd-release/src/acceptance-tests/scripts/test -skipPackage turbulence,cf-tls-upgrade -nodes <%= p('etcd.acceptance_tests.parallel_nodes') %>"
+<% end %>
 popd > /dev/null

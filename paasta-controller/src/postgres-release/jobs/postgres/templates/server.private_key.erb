@@ -1,0 +1,7 @@
+<%=
+  cert = nil
+  if p("databases.tls.private_key") != ''
+      cert = p("databases.tls.private_key")
+  end
+  cert
+%>

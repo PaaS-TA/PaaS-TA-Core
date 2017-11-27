@@ -1,49 +1,56 @@
----
 debian_nfs_server/nfs-kernel-server_1%3a1.2.0-4ubuntu4.1_amd64.deb:
-  object_id: ba69b993-ec3f-47cf-9fb1-0fcb37212959
-  sha: a44b3f8319984bace61f21bb6d15cee1419e5bf3
   size: 169618
-nginx/nginx-upload-module-2.2.tar.gz:
-  object_id: 161d5d5f-ffde-4e37-9b9f-151139fdc027
-  sha: 74ccd116525a155db76f92a1cd484d9516a70398
-  size: 28505
+  object_id: ba69b993-ec3f-47cf-9fb1-0fcb37212959
+  sha: sha256:e3bd705d7bc4baabf04467b5ff143f5994c15db0df9fa6b6eea9067c98e66017
+expat/expat-2.2.0.tar.bz2:
+  size: 414352
+  object_id: 319a0cba-01a1-477c-74ad-c36e92b85cab
+  sha: sha256:d9e50ff2d19b3538bd2127902a89987474e1a4db8e43a66a4d1a712ab9a504ff
+golang/go1.8.3.linux-amd64.tar.gz:
+  size: 90029041
+  object_id: 53346f1f-edfc-40d5-54b9-04126e05fdf3
+  sha: sha256:1862f4c3d3907e59b04a757cfda0ea7aa9ef39274af99a784f5be843c80c6772
 libmariadb/libmariadb-5.5.36.tar.xz:
-  object_id: 4827612c-e535-408b-bf60-ba5f25690fdd
-  sha: 4985fd30ffd60de12770153346b4485cd5dcb7ad
   size: 1260684
+  object_id: 4827612c-e535-408b-bf60-ba5f25690fdd
+  sha: sha256:0533f746355cd8e8450f586ebae0768176b38be37e6e9aa0809033d696e23c19
+nginx/headers-more-nginx-module-0.32.tar.gz:
+  size: 28033
+  object_id: b14a356b-97f0-4b9a-b61d-bfff1f233e94
+  sha: sha256:c6d9dab8ea1fc997031007e2e8f47cced01417e203cd88d53a9fe9f6ae138720
 nginx/newrelic_nginx_agent-1.2.1.tar.gz:
-  object_id: c63358f6-574a-4e20-9d2b-7e1450368b6d
-  sha: 98a1b10475371705932fea4769f8ac1b0451106f
   size: 5222
-ruby-2.3/bundler-1.11.2.gem:
-  object_id: f1b1e5c1-5ff5-4346-bd82-e2aa4ee2f49c
-  sha: 8eb956dec72da753d3d2a2126c78508b17af434e
-  size: 263168
-ruby-2.3/ruby-2.3.1.tar.gz:
-  object_id: 654540b3-2f41-480f-b874-d74467856f27
-  sha: c39b4001f7acb4e334cb60a0f4df72d434bef711
-  size: 17797997
-ruby-2.3/rubygems-2.6.4.tgz:
-  object_id: 2c63b010-b055-4eb4-9371-5fba9a01e9a1
-  sha: 8ef39e536af2ecd20b0e7a95765fa6a485087ac8
-  size: 478582
-nginx/nginx-1.11.1.tar.gz:
-  object_id: 53e21bda-b6b2-4d6a-9d6e-1fbfa1f63ecd
-  sha: 6b6172b26628b95c4ad0d6cb5b11eb4aa59c2a83
-  size: 913417
-nginx/headers-more-nginx-module-0.30.tar.gz:
-  object_id: c9069331-8ff2-4b2f-b663-45d7230c5a39
-  sha: a188a399f3e365a0831585a9d7aa0e6ed1a75f0d
-  size: 27793
-nginx/pcre-8.39.tar.gz:
-  object_id: 0bea0468-82a8-4349-8444-2e8674a8bdfb
-  sha: b3aec1f643d9701841e2f9d57ac121a7ff448fc8
-  size: 2062258
+  object_id: c63358f6-574a-4e20-9d2b-7e1450368b6d
+  sha: sha256:a5a7f9b3a7e20302943b1dd448d9b725cf3cb28d774d79f618aab7c4ddeea52b
+nginx/nginx-1.13.4.tar.gz:
+  size: 988415
+  object_id: 0a317bce-8e98-47df-6ad9-d70a0e8ffc54
+  sha: sha256:de21f3c49ba65c611329d8759a63d72e5fcf719bc6f2a3270e2541348ef1fbba
+nginx/nginx-dav-ext-module-0.0.3.tar.gz:
+  size: 6260
+  object_id: a6a8d9ab-90b6-4b80-7959-26a95a875ee8
+  sha: sha256:d428a0236c933779cb40ac8c91afb19d5c25a376dc3caab825bfd543e1ee530d
+nginx/nginx-upload-module-2.2.tar.gz:
+  size: 28505
+  object_id: 161d5d5f-ffde-4e37-9b9f-151139fdc027
+  sha: sha256:a6456d05ba6ddbb95338381d09138aa7faad14e87a66270a25c84030ae9e28ae
+nginx/pcre-8.40.tar.gz:
+  size: 2065161
+  object_id: 44706e8c-255c-4ff3-9737-23ab55a1a214
+  sha: sha256:1d75ce90ea3f81ee080cdc04e68c9c25a9fb984861a0618be7bbf676b18eda3e
 postgres/postgresql-9.4.9.tar.gz:
-  object_id: 412b77c8-966c-463e-84e1-e5fc47e47269
-  sha: c9d641eb69885672e5aacee413cd778d88b8420d
   size: 23300245
-golang/go1.7.3.linux-amd64.tar.gz:
-  object_id: 2af021d2-ad99-4078-91e5-e2a7af4ab8c6
-  sha: ead40e884ad4d6512bcf7b3c7420dd7fa4a96140
-  size: 82565628
+  object_id: 412b77c8-966c-463e-84e1-e5fc47e47269
+  sha: sha256:f4b95e540a4487721dcf1e8b67faecebbdebe170acde8a3dc3429692a595c894
+ruby-2.3/bundler-1.14.6.gem:
+  size: 319488
+  object_id: 2452c9ae-84f8-4d6f-5c55-d7601672091b
+  sha: sha256:f431206d5e89e803b7cf0dd232683eaec769ec168707e9b3d8297dba35137d40
+ruby-2.3/ruby-2.3.3.tar.gz:
+  size: 17813577
+  object_id: 12288fa4-f74a-4f5e-9067-f60536d4916d
+  sha: sha256:241408c8c555b258846368830a06146e4849a1d58dcaf6b14a3b6a73058115b7
+ruby-2.3/rubygems-2.6.8.tgz:
+  size: 754300
+  object_id: 5fd4a544-aaac-437b-8435-8931964852a5
+  sha: sha256:81aeb9f14e579c1753c90a8c70c76c3b2d510ee1a12e179cef8016cc9036d6ec

@@ -15,9 +15,6 @@ module VCAP::CloudController::Presenters::V3
       task.this.update(updated_at: Time.at(2))
       task.reload
     }
-    let(:scheme) { TestConfig.config[:external_protocol] }
-    let(:host) { TestConfig.config[:external_domain] }
-    let(:link_prefix) { "#{scheme}://#{host}" }
 
     describe '#to_hash' do
       let(:result) { presenter.to_hash }
@@ -26,6 +23,7 @@ module VCAP::CloudController::Presenters::V3
         links = {
           self:    { href: "#{link_prefix}/v3/tasks/#{task.guid}" },
           app:     { href: "#{link_prefix}/v3/apps/#{task.app.guid}" },
+          cancel:  { href: "#{link_prefix}/v3/tasks/#{task.guid}/actions/cancel", method: 'POST' },
           droplet: { href: "#{link_prefix}/v3/droplets/#{task.droplet.guid}" },
         }
 

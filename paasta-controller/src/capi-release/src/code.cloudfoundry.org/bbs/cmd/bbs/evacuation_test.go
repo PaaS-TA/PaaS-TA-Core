@@ -11,21 +11,20 @@ import (
 )
 
 var _ = Describe("Evacuation API", func() {
-	BeforeEach(func() {
-		bbsRunner = testrunner.New(bbsBinPath, bbsArgs)
-		bbsProcess = ginkgomon.Invoke(bbsRunner)
-	})
-
 	var actual *models.ActualLRP
 
 	BeforeEach(func() {
+		bbsRunner = testrunner.New(bbsBinPath, bbsConfig)
+		bbsProcess = ginkgomon.Invoke(bbsRunner)
+
 		actual = model_helpers.NewValidActualLRP("some-process-guid", 1)
 		actual.State = models.ActualLRPStateRunning
 		desiredLRP := model_helpers.NewValidDesiredLRP(actual.ProcessGuid)
 		desiredLRP.Instances = 2
-		err := client.DesireLRP(logger, desiredLRP)
-		Expect(err).NotTo(HaveOccurred())
-		err = client.ClaimActualLRP(logger, actual.ProcessGuid, 1, &actual.ActualLRPInstanceKey)
+
+		Expect(client.DesireLRP(logger, desiredLRP)).To(Succeed())
+		Expect(client.ClaimActualLRP(logger, actual.ProcessGuid, 1, &actual.ActualLRPInstanceKey)).To(Succeed())
+		_, err := client.ActualLRPGroupByProcessGuidAndIndex(logger, actual.ProcessGuid, int(actual.Index))
 		Expect(err).NotTo(HaveOccurred())
 	})
 

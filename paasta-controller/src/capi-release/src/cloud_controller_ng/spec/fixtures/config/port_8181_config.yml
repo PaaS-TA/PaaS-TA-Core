@@ -1,6 +1,7 @@
 ---
 local_route: 127.0.0.1
 external_port: 8181
+tls_port: 8183
 pid_filename: /tmp/cloud_controller.8181.pid
 internal_service_hostname: cc.internal.cf
 
@@ -22,9 +23,6 @@ app_domains:
 jobs:
   global:
     timeout_in_seconds: 14400
-
-app_events:
-  cutoff_age_in_days: 31
 
 app_usage_events:
   cutoff_age_in_days: 31
@@ -51,8 +49,10 @@ hm9000:
 
 uaa:
   url: "http://localhost:8080/uaa"
+  internal_url: "http://localhost:6789"
   resource_id: "cloud_controller"
   symmetric_secret: "tokensecret"
+  ca_file: "spec/fixtures/certs/uaa_ca.crt"
 
 logging:
   file: /tmp/cloud_controller.8181.log
@@ -60,6 +60,9 @@ logging:
 
 loggregator:
   router: "127.0.0.1:12345"
+
+doppler:
+  url: 'wss://doppler.the-system-domain.com:443'
 
 message_bus_servers:
   - nats://127.0.0.1:4222

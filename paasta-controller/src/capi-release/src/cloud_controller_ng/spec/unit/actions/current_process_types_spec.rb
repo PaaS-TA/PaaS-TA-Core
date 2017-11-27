@@ -3,10 +3,10 @@ require 'actions/current_process_types'
 
 module VCAP::CloudController
   RSpec.describe CurrentProcessTypes do
-    let(:user) { double(:user, guid: Sham.guid) }
     let(:droplet) { nil }
     let(:app) { AppModel.make(droplet: droplet, name: 'my_app') }
-    subject(:current_process_types) { CurrentProcessTypes.new(user.guid, Sham.email) }
+    let(:user_audit_info) { instance_double(UserAuditInfo).as_null_object }
+    subject(:current_process_types) { CurrentProcessTypes.new(user_audit_info) }
 
     describe '#process_current_droplet' do
       let(:process_types) { { web: 'thing', other: 'stuff' } }
@@ -21,7 +21,7 @@ module VCAP::CloudController
       end
 
       it 'deletes processes that are no longer mentioned' do
-        process_to_delete = App.make(type: 'bogus', app: app)
+        process_to_delete = ProcessModel.make(type: 'bogus', app: app)
 
         current_process_types.process_current_droplet(app)
 
@@ -29,7 +29,7 @@ module VCAP::CloudController
       end
 
       it 'updates existing processes' do
-        existing_process = App.make(type: 'other', command: 'old', app: app, metadata: {})
+        existing_process = ProcessModel.make(type: 'other', command: 'old', app: app, metadata: {})
         expect {
           current_process_types.process_current_droplet(app)
         }.to change { existing_process.refresh.command }.from('old').to('stuff')

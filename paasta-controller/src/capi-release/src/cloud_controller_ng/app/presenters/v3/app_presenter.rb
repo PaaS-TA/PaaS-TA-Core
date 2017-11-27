@@ -8,15 +8,13 @@ module VCAP::CloudController
           {
             guid:                    app.guid,
             name:                    app.name,
-            desired_state:           app.desired_state,
-            total_desired_instances: app.processes.map(&:instances).reduce(:+) || 0,
+            state:                   app.desired_state,
             created_at:              app.created_at,
             updated_at:              app.updated_at,
             lifecycle:               {
               type: app.lifecycle_type,
               data: app.lifecycle_data.to_hash
             },
-            environment_variables:   redact_hash(app.environment_variables || {}),
             links:                   build_links
           }
         end
@@ -31,16 +29,17 @@ module VCAP::CloudController
           url_builder = VCAP::CloudController::Presenters::ApiUrlBuilder.new
 
           links = {
-            self:           { href: url_builder.build_url(path: "/v3/apps/#{app.guid}") },
-            space:          { href: url_builder.build_url(path: "/v2/spaces/#{app.space_guid}") },
-            processes:      { href: url_builder.build_url(path: "/v3/apps/#{app.guid}/processes") },
-            route_mappings: { href: url_builder.build_url(path: "/v3/apps/#{app.guid}/route_mappings") },
-            packages:       { href: url_builder.build_url(path: "/v3/apps/#{app.guid}/packages") },
-            droplet:        { href: url_builder.build_url(path: "/v3/apps/#{app.guid}/droplets/current") },
-            droplets:       { href: url_builder.build_url(path: "/v3/apps/#{app.guid}/droplets") },
-            tasks:          { href: url_builder.build_url(path: "/v3/apps/#{app.guid}/tasks") },
-            start:          { href: url_builder.build_url(path: "/v3/apps/#{app.guid}/start"), method: 'PUT' },
-            stop:           { href: url_builder.build_url(path: "/v3/apps/#{app.guid}/stop"), method: 'PUT' },
+            self:                  { href: url_builder.build_url(path: "/v3/apps/#{app.guid}") },
+            environment_variables: { href: url_builder.build_url(path: "/v3/apps/#{app.guid}/environment_variables") },
+            space:                 { href: url_builder.build_url(path: "/v3/spaces/#{app.space_guid}") },
+            processes:             { href: url_builder.build_url(path: "/v3/apps/#{app.guid}/processes") },
+            route_mappings:        { href: url_builder.build_url(path: "/v3/apps/#{app.guid}/route_mappings") },
+            packages:              { href: url_builder.build_url(path: "/v3/apps/#{app.guid}/packages") },
+            current_droplet:       { href: url_builder.build_url(path: "/v3/apps/#{app.guid}/droplets/current") },
+            droplets:              { href: url_builder.build_url(path: "/v3/apps/#{app.guid}/droplets") },
+            tasks:                 { href: url_builder.build_url(path: "/v3/apps/#{app.guid}/tasks") },
+            start:                 { href: url_builder.build_url(path: "/v3/apps/#{app.guid}/actions/start"), method: 'POST' },
+            stop:                  { href: url_builder.build_url(path: "/v3/apps/#{app.guid}/actions/stop"), method: 'POST' },
           }
 
           links.delete_if { |_, v| v.nil? }

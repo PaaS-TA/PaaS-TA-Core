@@ -18,7 +18,7 @@ var pathToConsumer string
 
 var _ = BeforeSuite(func() {
 	var err error
-	pathToConsumer, err = gexec.Build("acceptance-tests/testing/testconsumer")
+	pathToConsumer, err = gexec.Build("github.com/cloudfoundry-incubator/etcd-release/src/acceptance-tests/testing/testconsumer")
 	Expect(err).NotTo(HaveOccurred())
 })
 

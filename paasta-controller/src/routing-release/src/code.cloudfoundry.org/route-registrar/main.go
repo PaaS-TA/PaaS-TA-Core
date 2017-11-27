@@ -9,8 +9,8 @@ import (
 	"strconv"
 	"syscall"
 
-	"code.cloudfoundry.org/cflager"
 	"code.cloudfoundry.org/lager"
+	"code.cloudfoundry.org/lager/lagerflags"
 	"code.cloudfoundry.org/route-registrar/config"
 	"code.cloudfoundry.org/route-registrar/healthchecker"
 	"code.cloudfoundry.org/route-registrar/messagebus"
@@ -23,14 +23,14 @@ func main() {
 	flags := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 
 	pidfile := flags.String("pidfile", "", "Path to pid file")
-	cflager.AddFlags(flags)
+	lagerflags.AddFlags(flags)
 
 	flags.StringVar(&configPath, "configPath", "", "path to configuration file with json encoded content")
 	flags.Set("configPath", "registrar_settings.yml")
 
 	flags.Parse(os.Args[1:])
 
-	logger, _ := cflager.New("Route Registrar")
+	logger, _ := lagerflags.New("Route Registrar")
 
 	logger.Info("Initializing")
 

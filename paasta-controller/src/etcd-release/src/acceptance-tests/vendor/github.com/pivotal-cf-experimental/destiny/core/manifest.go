@@ -25,8 +25,9 @@ type Release struct {
 
 type Stemcell struct {
 	Alias   string
-	OS      string
+	OS      string `yaml:"os,omitempty"`
 	Version string
+	Name    string
 }
 
 type ResourcePool struct {
@@ -87,7 +88,8 @@ type PropertiesTurbulenceAgent struct {
 }
 
 type ConsulTestConsumer struct {
-	NameServer string `yaml:"nameserver"`
+	NameServer string `yaml:"nameserver,omitempty"`
+	RequireSSL bool   `yaml:"require_ssl"`
 }
 
 type PropertiesTurbulenceAgentAPI struct {

@@ -5,6 +5,15 @@ module VCAP::CloudController
     it { is_expected.to have_timestamp_columns }
 
     describe '#tcp?' do
+      let(:routing_api_client) { double('routing_api_client', router_group: router_group) }
+      let(:router_group) { double('router_group', type: 'tcp', guid: 'router-group-guid') }
+      let(:dependency_double) { double('dependency_locator', routing_api_client: routing_api_client) }
+
+      before do
+        allow_any_instance_of(RouteValidator).to receive(:validate)
+        allow(CloudController::DependencyLocator).to receive(:instance).and_return(dependency_double)
+      end
+
       context 'when the route belongs to a shared domain' do
         context 'and that domain is a TCP domain' do
           let!(:tcp_domain) { SharedDomain.make(router_group_guid: 'guid') }
@@ -121,9 +130,9 @@ module VCAP::CloudController
           end
 
           it 'fails when changing the space when there are apps mapped to it' do
-            app = AppFactory.make
-            route = Route.make(space: app.space, domain: SharedDomain.make)
-            RouteMappingModel.make(app: app.app, route: route, process_type: app.type)
+            process = AppFactory.make
+            route = Route.make(space: process.space, domain: SharedDomain.make)
+            RouteMappingModel.make(app: process.app, route: route, process_type: process.type)
 
             expect { route.space = Space.make }.to raise_error(CloudController::Errors::InvalidAppRelation)
           end
@@ -146,7 +155,7 @@ module VCAP::CloudController
 
             context 'with a different organization' do
               it 'fails' do
-                expect { route.space = Space.make }.to raise_error(Route::InvalidOrganizationRelation)
+                expect { route.space = Space.make }.to raise_error(Route::InvalidOrganizationRelation, /Organization cannot use domain/)
               end
 
               it 'succeeds if the organization shares the domain' do
@@ -359,8 +368,12 @@ module VCAP::CloudController
           let(:domain) { SharedDomain.make(router_group_guid: 'tcp-router-group') }
           let(:space_quota_definition) { SpaceQuotaDefinition.make }
           let(:space) { Space.make(space_quota_definition: space_quota_definition, organization: space_quota_definition.organization) }
+          let(:routing_api_client) { double('routing_api_client', router_group: router_group) }
+          let(:router_group) { double('router_group', type: 'tcp', guid: 'router-group-guid') }
+          let(:dependency_double) { double('dependency_locator', routing_api_client: routing_api_client) }
 
           before do
+            allow(CloudController::DependencyLocator).to receive(:instance).and_return(dependency_double)
             validator = double
             allow(RouteValidator).to receive(:new).and_return(validator)
             allow(validator).to receive(:validate)
@@ -949,6 +962,18 @@ module VCAP::CloudController
             )
             expect(r.uri).to eq("www.#{domain.name}/path")
           end
+          context 'that has a port' do
+            it 'should return the fqdn with the path and port' do
+              r = Route.make(
+                host: 'www',
+                domain: domain,
+                space: space,
+                path: '/path'
+              )
+              r.port = 1041
+              expect(r.uri).to eq("www.#{domain.name}/path:1041")
+            end
+          end
         end
 
         context 'for a nil path' do
@@ -1004,11 +1029,11 @@ module VCAP::CloudController
       end
 
       describe 'all_apps_diego?' do
-        let(:diego_app) { AppFactory.make(diego: true) }
-        let(:route) { Route.make(space: diego_app.space, domain: SharedDomain.make) }
+        let(:diego_process) { AppFactory.make(diego: true) }
+        let(:route) { Route.make(space: diego_process.space, domain: SharedDomain.make) }
 
         before do
-          RouteMappingModel.make(app: diego_app.app, route: route, process_type: diego_app.type)
+          RouteMappingModel.make(app: diego_process.app, route: route, process_type: diego_process.type)
           route.reload
         end
 
@@ -1017,10 +1042,10 @@ module VCAP::CloudController
         end
 
         context 'when some apps are not using diego' do
-          let(:non_diego_app) { AppFactory.make(diego: false, space: diego_app.space) }
+          let(:non_diego_process) { AppFactory.make(diego: false, space: diego_process.space) }
 
           before do
-            RouteMappingModel.make(app: non_diego_app.app, route: route, process_type: non_diego_app.type)
+            RouteMappingModel.make(app: non_diego_process.app, route: route, process_type: non_diego_process.type)
           end
 
           it 'returns false' do
@@ -1053,20 +1078,26 @@ module VCAP::CloudController
 
     describe '#destroy' do
       it 'marks the apps routes as changed and sends an update to the dea' do
+        fake_route_handler_app1 = instance_double(ProcessRouteHandler)
+        fake_route_handler_app2 = instance_double(ProcessRouteHandler)
+
         space = Space.make
-        app1   = AppFactory.make(space: space, state: 'STARTED')
-        app2   = AppFactory.make(space: space, state: 'STARTED')
+        process1   = AppFactory.make(space: space, state: 'STARTED', diego: false)
+        process2   = AppFactory.make(space: space, state: 'STARTED', diego: false)
 
         route = Route.make(space: space)
-        RouteMappingModel.make(app: app1.app, route: route, process_type: app1.type)
-        RouteMappingModel.make(app: app2.app, route: route, process_type: app2.type)
+        RouteMappingModel.make(app: process1.app, route: route, process_type: process1.type)
+        RouteMappingModel.make(app: process2.app, route: route, process_type: process2.type)
         route.reload
 
-        app1   = route.apps[0]
-        app2   = route.apps[1]
+        process1   = route.apps[0]
+        process2   = route.apps[1]
 
-        expect(Dea::Client).to receive(:update_uris).with(app1)
-        expect(Dea::Client).to receive(:update_uris).with(app2)
+        allow(ProcessRouteHandler).to receive(:new).with(process1).and_return(fake_route_handler_app1)
+        allow(ProcessRouteHandler).to receive(:new).with(process2).and_return(fake_route_handler_app2)
+
+        expect(fake_route_handler_app1).to receive(:notify_backend_of_route_update)
+        expect(fake_route_handler_app2).to receive(:notify_backend_of_route_update)
 
         route.destroy
       end
@@ -1074,10 +1105,10 @@ module VCAP::CloudController
       context 'with route bindings' do
         let(:route_binding) { RouteBinding.make }
         let(:route) { route_binding.route }
-        let(:app) { AppFactory.make(space: route.space, diego: true) }
+        let(:process) { AppFactory.make(space: route.space, diego: true) }
 
         before do
-          RouteMappingModel.make(app: app.app, route: route, process_type: app.type)
+          RouteMappingModel.make(app: process.app, route: route, process_type: process.type)
           stub_unbind(route_binding)
         end
 
@@ -1086,7 +1117,7 @@ module VCAP::CloudController
 
           route.destroy
           expect(RouteBinding.find(guid: route_binding_guid)).to be_nil
-          expect(app.reload.routes).to be_empty
+          expect(process.reload.routes).to be_empty
         end
 
         context 'when deleting the route binding errors' do
@@ -1101,7 +1132,7 @@ module VCAP::CloudController
               route.destroy
             }.to raise_error VCAP::Services::ServiceBrokers::V2::Errors::ServiceBrokerBadResponse
             expect(RouteBinding.find(guid: route_binding_guid)).to eq route_binding
-            expect(app.reload.routes[0]).to eq route
+            expect(process.reload.routes[0]).to eq route
           end
         end
       end

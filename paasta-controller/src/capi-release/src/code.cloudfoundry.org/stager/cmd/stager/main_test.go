@@ -15,6 +15,7 @@ import (
 	"code.cloudfoundry.org/runtimeschema/cc_messages/flags"
 	"code.cloudfoundry.org/stager"
 	"code.cloudfoundry.org/stager/cmd/stager/testrunner"
+	"code.cloudfoundry.org/stager/config"
 	"code.cloudfoundry.org/stager/diego_errors"
 	"github.com/gogo/protobuf/proto"
 	"github.com/hashicorp/consul/api"
@@ -28,8 +29,9 @@ import (
 
 var _ = Describe("Stager", func() {
 	var (
-		fakeBBS *ghttp.Server
-		fakeCC  *ghttp.Server
+		stagerConfig config.StagerConfig
+		fakeBBS      *ghttp.Server
+		fakeCC       *ghttp.Server
 
 		requestGenerator *rata.RequestGenerator
 		httpClient       *http.Client
@@ -47,15 +49,16 @@ var _ = Describe("Stager", func() {
 		fakeBBS = ghttp.NewServer()
 		fakeCC = ghttp.NewServer()
 
-		runner = testrunner.New(testrunner.Config{
-			StagerBin:          stagerPath,
-			ListenAddress:      listenAddress,
-			TaskCallbackURL:    stagerURL,
-			BBSURL:             fakeBBS.URL(),
-			CCBaseURL:          fakeCC.URL(),
-			DockerStagingStack: "docker-staging-stack",
-			ConsulCluster:      consulRunner.URL(),
-		})
+		stagerConfig = config.StagerConfig{
+			ListenAddress:          listenAddress,
+			StagingTaskCallbackURL: stagerURL,
+			BBSAddress:             fakeBBS.URL(),
+			CCBaseUrl:              fakeCC.URL(),
+			DockerStagingStack:     "docker-staging-stack",
+			ConsulCluster:          consulRunner.URL(),
+		}
+
+		runner = testrunner.New(stagerConfig)
 
 		requestGenerator = rata.NewRequestGenerator(stagerURL, stager.Routes)
 		httpClient = http.DefaultClient
@@ -67,10 +70,11 @@ var _ = Describe("Stager", func() {
 
 	Context("when started", func() {
 		BeforeEach(func() {
-			runner.Start(
-				"-lifecycle", "buildpack/linux:lifecycle.zip",
-				"-lifecycle", "docker:docker/lifecycle.tgz",
-			)
+			runner.Config.Lifecycles = []string{
+				"buildpack/linux:lifecycle.zip",
+				"docker:docker/lifecycle.tgz",
+			}
+			runner.Start(stagerPath)
 			Eventually(runner.Session()).Should(gbytes.Say("Listening for staging requests!"))
 		})
 
@@ -429,7 +433,9 @@ var _ = Describe("Stager", func() {
 
 	Context("when started with -insecureDockerRegistry", func() {
 		BeforeEach(func() {
-			runner.Start("-lifecycle", "linux:lifecycle.zip", "-insecureDockerRegistry", "http://b.c", "-insecureDockerRegistry", "http://a.b")
+			runner.Config.Lifecycles = []string{"linux:lifecycle.zip"}
+			runner.Config.InsecureDockerRegistries = []string{"http://b.c", "http://a.b"}
+			runner.Start(stagerPath)
 			Eventually(runner.Session()).Should(gbytes.Say("Listening for staging requests!"))
 		})
 
@@ -440,7 +446,8 @@ var _ = Describe("Stager", func() {
 
 	Describe("service registration", func() {
 		BeforeEach(func() {
-			runner.Start("-lifecycle", "linux:lifecycle.zip")
+			runner.Config.Lifecycles = []string{"linux:lifecycle.zip"}
+			runner.Start(stagerPath)
 			Eventually(runner.Session()).Should(gbytes.Say("Listening for staging requests!"))
 		})
 
@@ -480,7 +487,8 @@ var _ = Describe("Stager", func() {
 		Context("when started with an invalid -consulCluster arg", func() {
 			BeforeEach(func() {
 				runner.Config.ConsulCluster = "://noscheme:8500"
-				runner.Start("-lifecycle", "linux:lifecycle.zip")
+				runner.Config.Lifecycles = []string{"linux:lifecycle.zip"}
+				runner.Start(stagerPath)
 			})
 
 			It("logs and errors", func() {
@@ -490,36 +498,11 @@ var _ = Describe("Stager", func() {
 		})
 	})
 
-	Describe("-dockerRegistryAddress arg", func() {
-		Context("when started with a valid -dockerRegistryAddress arg", func() {
-			BeforeEach(func() {
-				runner.Start("-lifecycle", "linux:lifecycle.zip",
-					"-dockerRegistryAddress", "docker-registry.service.cf.internal:8080")
-				Eventually(runner.Session()).Should(gbytes.Say("Listening for staging requests!"))
-			})
-
-			It("starts successfully", func() {
-				Consistently(runner.Session()).ShouldNot(gexec.Exit())
-			})
-		})
-
-		Context("when started with an invalid -dockerRegistryAddress arg", func() {
-			BeforeEach(func() {
-				runner.Start("-lifecycle", "linux:lifecycle.zip",
-					"-dockerRegistryAddress", "://noscheme:8500")
-			})
-
-			It("logs and errors", func() {
-				Eventually(runner.Session().ExitCode()).ShouldNot(Equal(0))
-				Eventually(runner.Session()).Should(gbytes.Say("Error parsing Docker Registry address"))
-			})
-		})
-	})
-
 	Describe("-lifecycles arg", func() {
 		Context("when started with an invalid -lifecycles arg", func() {
 			BeforeEach(func() {
-				runner.Start("-lifecycle", "invalid form")
+				runner.Config.Lifecycles = []string{"invalid form"}
+				runner.Start(stagerPath)
 			})
 
 			It("logs and errors", func() {
@@ -532,7 +515,8 @@ var _ = Describe("Stager", func() {
 	Describe("-stagingTaskCallbackURL arg", func() {
 		Context("when started with an invalid -stagingTaskCallbackURL arg", func() {
 			BeforeEach(func() {
-				runner.Start("-stagingTaskCallbackURL", `://localhost:8080`)
+				runner.Config.StagingTaskCallbackURL = "://localhost:8080"
+				runner.Start(stagerPath)
 			})
 
 			It("logs and errors", func() {
@@ -546,7 +530,7 @@ var _ = Describe("Stager", func() {
 		Context("when started with an invalid -listenAddress arg with no :", func() {
 			BeforeEach(func() {
 				runner.Config.ListenAddress = "portless"
-				runner.Start()
+				runner.Start(stagerPath)
 			})
 
 			It("logs and errors", func() {
@@ -558,7 +542,7 @@ var _ = Describe("Stager", func() {
 		Context("when started with an invalid -listenAddress arg with invalid port", func() {
 			BeforeEach(func() {
 				runner.Config.ListenAddress = "127.0.0.1:onehundred"
-				runner.Start()
+				runner.Start(stagerPath)
 			})
 
 			It("logs and errors", func() {

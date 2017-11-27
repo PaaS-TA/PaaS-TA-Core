@@ -76,6 +76,24 @@ module VCAP::CloudController::Diego
         expect(constructed_envs).to include({ 'PUPPIES' => 'frolicking' })
       end
 
+      context 'when the task is for a buildpack app' do
+        let(:app) { VCAP::CloudController::AppModel.make(:buildpack) }
+
+        it 'sets the LANG environment variable' do
+          constructed_envs = TaskEnvironment.new(app, task, space).build
+          expect(constructed_envs).to include('LANG' => 'en_US.UTF-8')
+        end
+      end
+
+      context 'when the task is for a docker app' do
+        let(:app) { VCAP::CloudController::AppModel.make(:docker) }
+
+        it 'does not set the LANG environment variable' do
+          constructed_envs = TaskEnvironment.new(app, task, space).build
+          expect(constructed_envs).not_to have_key('LANG')
+        end
+      end
+
       context 'when the app has a route associated with it' do
         let(:expected_vcap_application) do
           {
@@ -107,6 +125,29 @@ module VCAP::CloudController::Diego
 
         it 'includes the uris as part of vcap application' do
           expect(TaskEnvironment.new(app, task, space).build).to include({ 'VCAP_APPLICATION' => expected_vcap_application })
+        end
+      end
+
+      context 'when the app has a database_uri' do
+        before do
+          allow(app).to receive(:database_uri).and_return('fake-database-uri')
+        end
+
+        it 'includes DATABASE_URL' do
+          constructed_envs = TaskEnvironment.new(app, task, space).build
+          expect(constructed_envs).to include({ 'DATABASE_URL' => 'fake-database-uri' })
+        end
+      end
+
+      context 'when the app does not have a database_uri' do
+        let(:app_env_vars) { { 'DATABASE_URL' => 'cool-db' } }
+        before do
+          allow(app).to receive(:database_uri).and_return(nil)
+        end
+
+        it 'uses the DATABASE_URL from the apps environment variable' do
+          constructed_envs = TaskEnvironment.new(app, task, space).build
+          expect(constructed_envs).to include({ 'DATABASE_URL' => 'cool-db' })
         end
       end
     end

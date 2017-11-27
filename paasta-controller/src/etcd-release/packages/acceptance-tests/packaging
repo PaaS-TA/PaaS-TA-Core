@@ -1,13 +1,17 @@
 #!/bin/bash -exu
 
 mkdir -p "${BOSH_INSTALL_TARGET}/src/github.com/cloudfoundry-incubator/etcd-release/src/acceptance-tests/"
-cp -R ${PWD}/acceptance-tests/* "${BOSH_INSTALL_TARGET}/src/github.com/cloudfoundry-incubator/etcd-release/src/acceptance-tests/"
+cp -R ${PWD}/acceptance-tests/* \
+"${BOSH_INSTALL_TARGET}/src/github.com/cloudfoundry-incubator/etcd-release/src/acceptance-tests/"
 
-mkdir -p "${BOSH_INSTALL_TARGET}/src/github.com/cloudfoundry-incubator/etcd-release/src/github.com/coreos/go-etcd"
-cp -R ${PWD}/github.com/* \
-"${BOSH_INSTALL_TARGET}/src/github.com/cloudfoundry-incubator/etcd-release/src/github.com"
+export GOROOT="$(readlink -nf /var/vcap/packages/golang1.8)"
+export GOPATH="${BOSH_INSTALL_TARGET}"
+export PATH="${GOROOT}/bin:${PATH}"
 
-mkdir -p "${BOSH_INSTALL_TARGET}/src/github.com/cloudfoundry-incubator/etcd-release/src/gopkg.in"
-cp -R ${PWD}/gopkg.in/yaml.v2 \
-"${BOSH_INSTALL_TARGET}/src/github.com/cloudfoundry-incubator/etcd-release/src/gopkg.in"
+go install "github.com/cloudfoundry-incubator/etcd-release/src/acceptance-tests/testing/testconsumer"
+go install "github.com/cloudfoundry-incubator/etcd-release/src/acceptance-tests/testing/iptables_agent"
+go install "github.com/cloudfoundry-incubator/etcd-release/src/acceptance-tests/testing/monit_agent"
 
+chown vcap:vcap "${BOSH_INSTALL_TARGET}/bin/testconsumer"
+chown vcap:vcap "${BOSH_INSTALL_TARGET}/bin/iptables_agent"
+chown vcap:vcap "${BOSH_INSTALL_TARGET}/bin/monit_agent"

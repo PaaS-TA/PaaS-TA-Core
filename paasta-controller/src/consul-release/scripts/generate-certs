@@ -23,8 +23,15 @@ mv -f ${depot_path}/$server_cn.csr ${depot_path}/server.csr
 mv -f ${depot_path}/$server_cn.crt ${depot_path}/server.crt
 
 # Agent certificate to distribute to jobs that access consul
-certstrap --depot-path ${depot_path} request-cert --passphrase '' --common-name 'consul agent'
+certstrap --depot-path ${depot_path} request-cert --passphrase '' --common-name 'consul agent' --ip '127.0.0.1'
 certstrap --depot-path ${depot_path} sign consul_agent --CA server-ca
 mv -f ${depot_path}/consul_agent.key ${depot_path}/agent.key
 mv -f ${depot_path}/consul_agent.csr ${depot_path}/agent.csr
 mv -f ${depot_path}/consul_agent.crt ${depot_path}/agent.crt
+
+# Client certificate to distribute to jobs that access the consul agent API
+certstrap --depot-path ${depot_path} request-cert --passphrase '' --common-name 'consul agent api'
+certstrap --depot-path ${depot_path} sign consul_agent_api --CA server-ca
+mv -f ${depot_path}/consul_agent_api.key ${depot_path}/agent_api.key
+mv -f ${depot_path}/consul_agent_api.csr ${depot_path}/agent_api.csr
+mv -f ${depot_path}/consul_agent_api.crt ${depot_path}/agent_api.crt

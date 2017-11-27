@@ -52,16 +52,12 @@ module CloudController
         end
       end
 
-      def unauthorized_perma_droplet_download_url(app)
-        return nil unless app.droplet_hash
-
-        no_auth_uri("/internal/v2/droplets/#{app.guid}/#{app.droplet_hash}/download")
-      end
-
       def_delegators :@upload_url_generator,
         :droplet_upload_url,
         :package_droplet_upload_url,
-        :buildpack_cache_upload_url
+        :buildpack_cache_upload_url,
+        :http_droplet_upload_url,
+        :http_buildpack_cache_upload_url
     end
   end
 end

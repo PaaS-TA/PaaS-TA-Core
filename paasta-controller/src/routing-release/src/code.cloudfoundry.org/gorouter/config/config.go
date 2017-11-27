@@ -16,16 +16,22 @@ import (
 
 const LOAD_BALANCE_RR string = "round-robin"
 const LOAD_BALANCE_LC string = "least-connection"
+const SHARD_ALL string = "all"
+const SHARD_SEGMENTS string = "segments"
+const SHARD_SHARED_AND_SEGMENTS string = "shared-and-segments"
 
 var LoadBalancingStrategies = []string{LOAD_BALANCE_RR, LOAD_BALANCE_LC}
+var AllowedShardingModes = []string{SHARD_ALL, SHARD_SEGMENTS, SHARD_SHARED_AND_SEGMENTS}
 
 type StatusConfig struct {
+	Host string `yaml:"host"`
 	Port uint16 `yaml:"port"`
 	User string `yaml:"user"`
 	Pass string `yaml:"pass"`
 }
 
 var defaultStatusConfig = StatusConfig{
+	Host: "0.0.0.0",
 	Port: 8082,
 	User: "",
 	Pass: "",
@@ -61,7 +67,6 @@ type OAuthConfig struct {
 }
 
 type LoggingConfig struct {
-	File               string `yaml:"file"`
 	Syslog             string `yaml:"syslog"`
 	Level              string `yaml:"level"`
 	LoggregatorEnabled bool   `yaml:"loggregator_enabled"`
@@ -104,8 +109,10 @@ type Config struct {
 	SSLCertPath              string        `yaml:"ssl_cert_path"`
 	SSLKeyPath               string        `yaml:"ssl_key_path"`
 	SSLCertificate           tls.Certificate
-	SkipSSLValidation        bool `yaml:"skip_ssl_validation"`
-	ForceForwardedProtoHttps bool `yaml:"force_forwarded_proto_https"`
+	SkipSSLValidation        bool     `yaml:"skip_ssl_validation"`
+	ForceForwardedProtoHttps bool     `yaml:"force_forwarded_proto_https"`
+	IsolationSegments        []string `yaml:"isolation_segments"`
+	RoutingTableShardingMode string   `yaml:"routing_table_sharding_mode"`
 
 	CipherString string `yaml:"cipher_suites"`
 	CipherSuites []uint16
@@ -120,11 +127,10 @@ type Config struct {
 	EndpointTimeout                 time.Duration `yaml:"endpoint_timeout"`
 	RouteServiceTimeout             time.Duration `yaml:"route_services_timeout"`
 
-	DrainWait     time.Duration `yaml:"drain_wait,omitempty"`
-	DrainTimeout  time.Duration `yaml:"drain_timeout,omitempty"`
-	SecureCookies bool          `yaml:"secure_cookies"`
-
-	HealthCheckUserAgent string `yaml:"healthcheck_user_agent,omitempty"`
+	DrainWait            time.Duration `yaml:"drain_wait,omitempty"`
+	DrainTimeout         time.Duration `yaml:"drain_timeout,omitempty"`
+	SecureCookies        bool          `yaml:"secure_cookies"`
+	HealthCheckUserAgent string        `yaml:"healthcheck_user_agent,omitempty"`
 
 	OAuth                      OAuthConfig      `yaml:"oauth"`
 	RoutingApi                 RoutingApiConfig `yaml:"routing_api"`
@@ -144,6 +150,10 @@ type Config struct {
 
 	PidFile     string `yaml:"pid_file"`
 	LoadBalance string `yaml:"balancing_algorithm"`
+
+	DisableKeepAlives   bool `yaml:"disable_keep_alives"`
+	MaxIdleConns        int  `yaml:"max_idle_conns"`
+	MaxIdleConnsPerHost int  `yaml:"max_idle_conns_per_host"`
 }
 
 var defaultConfig = Config{
@@ -172,6 +182,12 @@ var defaultConfig = Config{
 
 	HealthCheckUserAgent: "HTTP-Monitor/1.1",
 	LoadBalance:          LOAD_BALANCE_RR,
+
+	RoutingTableShardingMode: "all",
+
+	DisableKeepAlives:   true,
+	MaxIdleConns:        100,
+	MaxIdleConnsPerHost: 2,
 }
 
 func DefaultConfig() *Config {
@@ -234,19 +250,47 @@ func (c *Config) Process() {
 		errMsg := fmt.Sprintf("Invalid load balancing algorithm %s. Allowed values are %s", c.LoadBalance, LoadBalancingStrategies)
 		panic(errMsg)
 	}
+	if c.LoadBalancerHealthyThreshold < 0 {
+		errMsg := fmt.Sprintf("Invalid load balancer healthy threshold: %s", c.LoadBalancerHealthyThreshold)
+		panic(errMsg)
+	}
+
+	validShardMode := false
+	for _, sm := range AllowedShardingModes {
+		if c.RoutingTableShardingMode == sm {
+			validShardMode = true
+			break
+		}
+	}
+	if !validShardMode {
+		errMsg := fmt.Sprintf("Invalid sharding mode: %s. Allowed values are %s", c.RoutingTableShardingMode, AllowedShardingModes)
+		panic(errMsg)
+	}
+
+	if c.RoutingTableShardingMode == SHARD_SEGMENTS && len(c.IsolationSegments) == 0 {
+		panic("Expected isolation segments; routing table sharding mode set to segments and none provided.")
+	}
 }
 
 func (c *Config) processCipherSuites() []uint16 {
 	cipherMap := map[string]uint16{
+		"TLS_RSA_WITH_RC4_128_SHA":                0x0005,
+		"TLS_RSA_WITH_3DES_EDE_CBC_SHA":           0x000a,
 		"TLS_RSA_WITH_AES_128_CBC_SHA":            0x002f,
 		"TLS_RSA_WITH_AES_256_CBC_SHA":            0x0035,
+		"TLS_RSA_WITH_AES_128_GCM_SHA256":         0x009c,
+		"TLS_RSA_WITH_AES_256_GCM_SHA384":         0x009d,
+		"TLS_ECDHE_ECDSA_WITH_RC4_128_SHA":        0xc007,
 		"TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA":    0xc009,
 		"TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA":    0xc00a,
+		"TLS_ECDHE_RSA_WITH_RC4_128_SHA":          0xc011,
+		"TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA":     0xc012,
 		"TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA":      0xc013,
 		"TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA":      0xc014,
 		"TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256":   0xc02f,
 		"TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256": 0xc02b,
-	}
+		"TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384":   0xc030,
+		"TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384": 0xc02c}
 
 	var ciphers []string
 
@@ -269,7 +313,7 @@ func convertCipherStringToInt(cipherStrs []string, cipherMap map[string]uint16) 
 			for key, _ := range cipherMap {
 				supportedCipherSuites = append(supportedCipherSuites, key)
 			}
-			errMsg := fmt.Sprintf("invalid cipher string configuration: %s, please choose from %v", cipher, supportedCipherSuites)
+			errMsg := fmt.Sprintf("Invalid cipher string configuration: %s, please choose from %v", cipher, supportedCipherSuites)
 			panic(errMsg)
 		}
 	}

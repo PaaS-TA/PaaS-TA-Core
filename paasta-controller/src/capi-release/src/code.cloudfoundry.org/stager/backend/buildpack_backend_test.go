@@ -244,6 +244,7 @@ var _ = Describe("TraditionalBackend", func() {
 		Expect(taskDef.LogSource).To(Equal(backend.TaskLogSource))
 		Expect(taskDef.ResultFile).To(Equal("/tmp/result.json"))
 		Expect(taskDef.Privileged).To(BeFalse())
+		Expect(taskDef.PlacementTags).To(BeEmpty())
 
 		var annotation cc_messages.StagingTaskAnnotation
 		err = json.Unmarshal([]byte(taskDef.Annotation), &annotation)
@@ -281,6 +282,18 @@ var _ = Describe("TraditionalBackend", func() {
 		Expect(taskDef.CpuWeight).To(Equal(backend.StagingTaskCpuWeight))
 		Expect(taskDef.EgressRules).To(ConsistOf(egressRules))
 		Expect(taskDef.LegacyDownloadUser).To(Equal("vcap"))
+	})
+
+	Context("with a specified isolation segment", func() {
+		JustBeforeEach(func() {
+			stagingRequest.IsolationSegment = "foo"
+		})
+
+		It("includes the correct isolation segment in the placement tags", func() {
+			taskDef, _, _, err := traditional.BuildRecipe(stagingGuid, stagingRequest)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(taskDef.PlacementTags).To(ContainElement("foo"))
+		})
 	})
 
 	Context("with a specified buildpack", func() {

@@ -4,6 +4,12 @@ module VCAP::CloudController
   module Presenters
     module V3
       class PackagePresenter < BasePresenter
+        REDACTED_MESSAGE = '***'.freeze
+
+        def initialize(resource, show_secrets: false, censored_message: REDACTED_MESSAGE)
+          super
+        end
+
         def to_hash
           {
             guid:       package.guid,
@@ -22,8 +28,6 @@ module VCAP::CloudController
           @resource
         end
 
-        DEFAULT_HASHING_ALGORITHM = 'sha1'.freeze
-
         def build_data
           package.docker? ? docker_data : buildpack_data
         end
@@ -31,23 +35,22 @@ module VCAP::CloudController
         def docker_data
           {
             image: package.image,
+            username: package.docker_username,
+            password: package.docker_username && REDACTED_MESSAGE,
           }
         end
 
         def buildpack_data
           {
             error: package.error,
-            hash:  {
-              type:  DEFAULT_HASHING_ALGORITHM,
-              value: package.package_hash
-            },
+            checksum:  package.checksum_info,
           }
         end
 
         def build_links
           url_builder = VCAP::CloudController::Presenters::ApiUrlBuilder.new
 
-          upload_link = nil
+          upload_link   = nil
           download_link = nil
           if package.type == 'bits'
             upload_link   = { href: url_builder.build_url(path: "/v3/packages/#{package.guid}/upload"), method: 'POST' }
@@ -55,11 +58,10 @@ module VCAP::CloudController
           end
 
           links = {
-            self: { href: url_builder.build_url(path: "/v3/packages/#{package.guid}") },
-            upload: upload_link,
+            self:     { href: url_builder.build_url(path: "/v3/packages/#{package.guid}") },
+            upload:   upload_link,
             download: download_link,
-            stage: { href: url_builder.build_url(path: "/v3/packages/#{package.guid}/droplets"), method: 'POST' },
-            app: { href: url_builder.build_url(path: "/v3/apps/#{package.app_guid}") },
+            app:      { href: url_builder.build_url(path: "/v3/apps/#{package.app_guid}") },
           }
 
           links.delete_if { |_, v| v.nil? }

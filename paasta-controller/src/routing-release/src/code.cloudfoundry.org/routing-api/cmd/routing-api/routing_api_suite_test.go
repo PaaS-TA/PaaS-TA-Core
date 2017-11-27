@@ -2,7 +2,11 @@ package main_test
 
 import (
 	"crypto/tls"
+	"errors"
 	"fmt"
+	"io/ioutil"
+	"log"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -11,7 +15,10 @@ import (
 	"strings"
 	"text/template"
 
+	"google.golang.org/grpc/grpclog"
+
 	"code.cloudfoundry.org/consuladapter/consulrunner"
+	"code.cloudfoundry.org/gorouter/config"
 	"code.cloudfoundry.org/routing-api"
 	"code.cloudfoundry.org/routing-api/cmd/routing-api/testrunner"
 	"github.com/jinzhu/gorm"
@@ -29,10 +36,13 @@ var (
 	etcdUrl  string
 
 	client                 routing_api.Client
+	locketBinPath          string
 	routingAPIBinPath      string
 	routingAPIAddress      string
+	routingAPIConfig       config.Config
 	routingAPIArgs         testrunner.Args
 	routingAPIArgsNoSQL    testrunner.Args
+	routingAPIArgsOnlySQL  testrunner.Args
 	routingAPIPort         uint16
 	routingAPIIP           string
 	routingAPISystemDomain string
@@ -58,11 +68,20 @@ var _ = SynchronizedBeforeSuite(
 	func() []byte {
 		routingAPIBin, err := gexec.Build("code.cloudfoundry.org/routing-api/cmd/routing-api", "-race")
 		Expect(err).NotTo(HaveOccurred())
-		return []byte(routingAPIBin)
+
+		locketPath, err := gexec.Build("code.cloudfoundry.org/locket/cmd/locket", "-race")
+		Expect(err).NotTo(HaveOccurred())
+
+		return []byte(strings.Join([]string{routingAPIBin, locketPath}, ","))
 	},
-	func(routingAPIBin []byte) {
+	func(binPaths []byte) {
+		grpclog.SetLogger(log.New(ioutil.Discard, "", 0))
+
 		var err error
-		routingAPIBinPath = string(routingAPIBin)
+		path := string(binPaths)
+		routingAPIBinPath = strings.Split(path, ",")[0]
+		locketBinPath = strings.Split(path, ",")[1]
+
 		SetDefaultEventuallyTimeout(15 * time.Second)
 		etcdPort = 4001 + GinkgoParallelNode()
 
@@ -88,10 +107,9 @@ var _ = SynchronizedAfterSuite(func() {
 
 	teardownConsul()
 	oauthServer.Close()
-},
-	func() {
-		gexec.CleanupBuildArtifacts()
-	})
+}, func() {
+	gexec.CleanupBuildArtifacts()
+})
 
 var _ = BeforeEach(func() {
 	client = routingApiClient()
@@ -104,20 +122,27 @@ var _ = BeforeEach(func() {
 	routingAPIArgs = testrunner.Args{
 		Port:       routingAPIPort,
 		IP:         routingAPIIP,
-		ConfigPath: createConfig(true),
+		ConfigPath: createConfig(true, true),
 		DevMode:    true,
 	}
 
 	routingAPIArgsNoSQL = testrunner.Args{
 		Port:       routingAPIPort,
 		IP:         routingAPIIP,
-		ConfigPath: createConfig(false),
+		ConfigPath: createConfig(false, true),
+		DevMode:    true,
+	}
+
+	routingAPIArgsOnlySQL = testrunner.Args{
+		Port:       routingAPIPort,
+		IP:         routingAPIIP,
+		ConfigPath: createConfig(true, false),
 		DevMode:    true,
 	}
 })
 
 func routingApiClient() routing_api.Client {
-	routingAPIPort = uint16(6900 + GinkgoParallelNode())
+	routingAPIPort = uint16(testPort())
 	routingAPIIP = "127.0.0.1"
 	routingAPISystemDomain = "example.com"
 	routingAPIAddress = fmt.Sprintf("%s:%d", routingAPIIP, routingAPIPort)
@@ -149,7 +174,11 @@ func setupOauthServer() {
 }
 
 func setupConsul() {
-	consulRunner = consulrunner.NewClusterRunner(9001+GinkgoParallelNode()*consulrunner.PortOffsetLength, 1, "http")
+	consulRunner = consulrunner.NewClusterRunner(consulrunner.ClusterRunnerConfig{
+		StartingPort: 9001 + GinkgoParallelNode()*consulrunner.PortOffsetLength,
+		NumNodes:     1,
+		Scheme:       "http",
+	})
 	consulRunner.Start()
 	consulRunner.WaitUntilReady()
 }
@@ -159,20 +188,42 @@ func teardownConsul() {
 }
 
 func resetConsul() {
-	_ = consulRunner.Reset()
-	// TODO: https://www.pivotaltracker.com/story/show/133202225
-	//	Expect(err).ToNot(HaveOccurred())
+	err := consulRunner.Reset()
+	Expect(err).ToNot(HaveOccurred())
 }
 
-func createConfig(useSQL bool) string {
-	type customConfig struct {
-		EtcdPort  int
-		Port      int
-		UAAPort   string
-		CACerts   string
-		Schema    string
-		ConsulUrl string
+func createConfigWithRg() string {
+	caCertsPath, err := filepath.Abs(filepath.Join("..", "..", "fixtures", "uaa-certs", "uaa-ca.pem"))
+	Expect(err).NotTo(HaveOccurred())
+
+	actualConfig := customConfig{
+		Port:      8125 + GinkgoParallelNode(),
+		UAAPort:   oauthServerPort,
+		CACerts:   caCertsPath,
+		EtcdPort:  etcdPort,
+		Schema:    sqlDBName,
+		ConsulUrl: consulRunner.URL(),
 	}
+	var templatePath string
+	templatePath, err = filepath.Abs(filepath.Join("..", "..", "example_config", "example_template_rg.yml"))
+	Expect(err).NotTo(HaveOccurred())
+
+	var configFilePath string
+	configFilePath = fmt.Sprintf("/tmp/example_rg_%d.yml", GinkgoParallelNode())
+
+	return writeConfigFile(templatePath, configFilePath, actualConfig)
+}
+
+type customConfig struct {
+	EtcdPort  int
+	Port      int
+	UAAPort   string
+	CACerts   string
+	Schema    string
+	ConsulUrl string
+}
+
+func createConfig(useSQL bool, useETCD bool) string {
 	caCertsPath, err := filepath.Abs(filepath.Join("..", "..", "fixtures", "uaa-certs", "uaa-ca.pem"))
 	Expect(err).NotTo(HaveOccurred())
 
@@ -186,37 +237,70 @@ func createConfig(useSQL bool) string {
 	}
 
 	var templatePath string
-	if useSQL {
+	if useSQL && useETCD {
 		templatePath, err = filepath.Abs(filepath.Join("..", "..", "example_config", "example_template_sql.yml"))
-	} else {
+	} else if useSQL {
+		templatePath, err = filepath.Abs(filepath.Join("..", "..", "example_config", "example_template_sql_only.yml"))
+	} else if useETCD {
 		templatePath, err = filepath.Abs(filepath.Join("..", "..", "example_config", "example_template.yml"))
+	} else {
+		err = errors.New("Invalid database selection")
 	}
-	Expect(err).NotTo(HaveOccurred())
-
-	tmpl, err := template.ParseFiles(templatePath)
 	Expect(err).NotTo(HaveOccurred())
 
 	var configFilePath string
-	if useSQL {
+	if useSQL && useETCD {
 		configFilePath = fmt.Sprintf("/tmp/example_sql_%d.yml", GinkgoParallelNode())
+	} else if useSQL {
+		configFilePath = fmt.Sprintf("/tmp/example_sql_only_%d.yml", GinkgoParallelNode())
 	} else {
 		configFilePath = fmt.Sprintf("/tmp/example_%d.yml", GinkgoParallelNode())
 	}
+	return writeConfigFile(templatePath, configFilePath, actualConfig)
+}
+
+func writeConfigFile(templatePath, configFilePath string, actualConfig customConfig) string {
+	tmpl, err := template.ParseFiles(templatePath)
+	Expect(err).NotTo(HaveOccurred())
+
 	configFile, err := os.Create(configFilePath)
 	Expect(err).NotTo(HaveOccurred())
 
 	err = tmpl.Execute(configFile, actualConfig)
 	defer func() {
-		err := configFile.Close()
-		Expect(err).ToNot(HaveOccurred())
+		closeErr := configFile.Close()
+		Expect(closeErr).ToNot(HaveOccurred())
 	}()
 	Expect(err).NotTo(HaveOccurred())
 
 	return configFilePath
 }
-
 func getServerPort(url string) string {
 	endpoints := strings.Split(url, ":")
 	Expect(endpoints).To(HaveLen(3))
 	return endpoints[2]
+}
+
+func testPort() int {
+	add, err := net.ResolveTCPAddr("tcp", ":0")
+	Expect(err).NotTo(HaveOccurred())
+	l, err := net.ListenTCP("tcp", add)
+	Expect(err).NotTo(HaveOccurred())
+
+	defer func() {
+		err = l.Close()
+		Expect(err).NotTo(HaveOccurred())
+	}()
+
+	return l.Addr().(*net.TCPAddr).Port
+}
+
+func validatePort(port uint16) {
+	Eventually(func() error {
+		l, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
+		if l != nil {
+			_ = l.Close()
+		}
+		return err
+	}, "60s", "1s").Should(BeNil())
 }

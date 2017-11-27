@@ -1,4 +1,5 @@
 # encoding: utf-8
+
 require 'spec_helper'
 
 module VCAP::CloudController
@@ -48,7 +49,7 @@ module VCAP::CloudController
 
       it 'changes the droplet state to STAGED' do
         droplet_model.mark_as_staged
-        expect(droplet_model.state).to be DropletModel::STAGED_STATE
+        expect(droplet_model.state).to eq(DropletModel::STAGED_STATE)
       end
     end
 
@@ -87,7 +88,12 @@ module VCAP::CloudController
 
     describe '#lifecycle_data' do
       let(:droplet_model) { DropletModel.make }
-      let!(:lifecycle_data) { BuildpackLifecycleDataModel.make(droplet: droplet_model) }
+      let!(:lifecycle_data) do
+        BuildpackLifecycleDataModel.make(
+          droplet: droplet_model,
+          buildpacks: ['http://some-buildpack.com', 'http://another-buildpack.net']
+        )
+      end
 
       before do
         droplet_model.buildpack_lifecycle_data = lifecycle_data
@@ -99,7 +105,7 @@ module VCAP::CloudController
       end
 
       it 'is a persistable hash' do
-        expect(droplet_model.reload.lifecycle_data.buildpack).to eq(lifecycle_data.buildpack)
+        expect(droplet_model.reload.lifecycle_data.buildpacks).to eq(lifecycle_data.buildpacks)
         expect(droplet_model.reload.lifecycle_data.stack).to eq(lifecycle_data.stack)
       end
 
@@ -108,6 +114,15 @@ module VCAP::CloudController
         droplet_model.save
 
         expect(droplet_model.lifecycle_data).to be_a(DockerLifecycleDataModel)
+      end
+
+      context 'buildpack dependencies' do
+        it 'deletes the dependent buildpack_lifecycle_data_models when a build is deleted' do
+          expect {
+            droplet_model.destroy
+          }.to change { BuildpackLifecycleDataModel.count }.by(-1).
+            and change { BuildpackLifecycleBuildpackModel.count }.by(-2)
+        end
       end
     end
 
@@ -215,180 +230,24 @@ module VCAP::CloudController
       end
     end
 
-    describe 'usage events' do
-      it 'ensures we have coverage for all states' do
-        expect(DropletModel::DROPLET_STATES.count).to eq(6), 'After adding a new state, tests for app usage event coverage should be added.'
+    describe '#droplet_checksum' do
+      let!(:droplet_model_with_both) { DropletModel.make(sha256_checksum: 'foo', droplet_hash: 'bar') }
+      let!(:droplet_model_with_only_sha1) { DropletModel.make(sha256_checksum: nil, droplet_hash: 'baz') }
+
+      it 'returns the sha256_checksum when present' do
+        expect(droplet_model_with_both.checksum).to eq('foo')
       end
 
-      context 'when creating a droplet' do
-        it 'creates a STAGING_STARTED app usage event' do
-          expect {
-            DropletModel.make
-          }.to change { AppUsageEvent.count }.by(1)
-
-          expect(AppUsageEvent.last.state).to eq('STAGING_STARTED')
-        end
-
-        context 'when state is COPYING' do
-          it 'does not record an event' do
-            expect {
-              DropletModel.new(state: DropletModel::COPYING_STATE).save
-            }.not_to change { AppUsageEvent.count }.from(0)
-          end
-        end
-
-        context 'when state is PROCESSING_UPLOAD' do
-          it 'does not record an event' do
-            expect {
-              DropletModel.new(state: DropletModel::PROCESSING_UPLOAD_STATE).save
-            }.not_to change { AppUsageEvent.count }.from(0)
-          end
-        end
+      it 'returns the sha1 checksum when there is no sha256' do
+        expect(droplet_model_with_only_sha1.checksum).to eq('baz')
       end
+    end
 
-      context 'when updating a droplet' do
-        let!(:droplet) { DropletModel.make(state: initial_state) }
-
-        context 'when state is FAILED' do
-          context 'changing from a different state' do
-            let(:initial_state) { DropletModel::STAGING_STATE }
-
-            it 'records a STAGING_STOPPED event ' do
-              expect {
-                droplet.state = DropletModel::FAILED_STATE
-                droplet.save
-              }.to change { AppUsageEvent.count }.by(1)
-
-              expect(AppUsageEvent.last.state).to eq('STAGING_STOPPED')
-            end
-          end
-
-          context 'not changing state' do
-            let(:initial_state) { DropletModel::FAILED_STATE }
-
-            it 'records no usage event' do
-              expect {
-                droplet.staging_memory_in_mb = 555
-                droplet.save
-              }.not_to change { AppUsageEvent.count }
-            end
-          end
-        end
-
-        context 'when state is STAGED' do
-          context 'changing from a different state' do
-            let(:initial_state) { DropletModel::STAGING_STATE }
-
-            it 'records a STAGING_STOPPED event ' do
-              expect {
-                droplet.state = DropletModel::STAGED_STATE
-                droplet.save
-              }.to change { AppUsageEvent.count }.by(1)
-
-              expect(AppUsageEvent.last.state).to eq('STAGING_STOPPED')
-            end
-
-            context 'but the initial state is PROCESSING_UPLOAD' do
-              let(:initial_state) { DropletModel::PROCESSING_UPLOAD_STATE }
-
-              it 'records no STAGING_STOPPED event ' do
-                expect {
-                  droplet.state = DropletModel::STAGED_STATE
-                  droplet.save
-                }.not_to change { AppUsageEvent.count }
-              end
-            end
-          end
-
-          context 'not changing state' do
-            let(:initial_state) { DropletModel::STAGED_STATE }
-
-            it 'records no usage event' do
-              expect {
-                droplet.staging_memory_in_mb = 555
-                droplet.save
-              }.not_to change { AppUsageEvent.count }
-            end
-          end
-        end
-
-        context 'when state is EXPIRED' do
-          let(:initial_state) { DropletModel::STAGED_STATE }
-
-          it 'records no usage event' do
-            expect {
-              droplet.state = DropletModel::EXPIRED_STATE
-              droplet.save
-            }.not_to change { AppUsageEvent.count }
-          end
-        end
-      end
-
-      context 'when deleting a droplet' do
-        let!(:droplet) { DropletModel.make(state: state) }
-
-        context 'when state is COPYING' do
-          let(:state) { DropletModel::COPYING_STATE }
-
-          it 'records no usage event' do
-            expect {
-              droplet.destroy
-            }.not_to change { AppUsageEvent.count }
-          end
-        end
-
-        context 'when state is STAGING' do
-          let(:state) { DropletModel::STAGING_STATE }
-
-          it 'records a STAGING_STOPPED event ' do
-            expect {
-              droplet.destroy
-            }.to change { AppUsageEvent.count }.by(1)
-
-            expect(AppUsageEvent.last.state).to eq('STAGING_STOPPED')
-          end
-        end
-
-        context 'when state is FAILED' do
-          let(:state) { DropletModel::FAILED_STATE }
-
-          it 'records no usage event' do
-            expect {
-              droplet.destroy
-            }.not_to change { AppUsageEvent.count }
-          end
-        end
-
-        context 'when state is STAGED' do
-          let(:state) { DropletModel::STAGED_STATE }
-
-          it 'records no usage event' do
-            expect {
-              droplet.destroy
-            }.not_to change { AppUsageEvent.count }
-          end
-        end
-
-        context 'when state is EXPIRED' do
-          let(:state) { DropletModel::EXPIRED_STATE }
-
-          it 'records no usage event' do
-            expect {
-              droplet.destroy
-            }.not_to change { AppUsageEvent.count }
-          end
-        end
-
-        context 'when state is PROCESSING_UPLOAD' do
-          let(:state) { DropletModel::PROCESSING_UPLOAD_STATE }
-
-          it 'records no usage event' do
-            expect {
-              droplet.destroy
-            }.not_to change { AppUsageEvent.count }
-          end
-        end
-      end
+    describe '#buildpack_receipt_stack_name' do
+      it_should_be_removed(
+        by: '2017/11/20',
+        explanation: "It's been six months since we stopped using #buildpack_receipt_stack_name... drop the column",
+      )
     end
   end
 end

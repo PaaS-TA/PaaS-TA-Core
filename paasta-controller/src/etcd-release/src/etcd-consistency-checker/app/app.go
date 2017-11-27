@@ -27,6 +27,23 @@ type App struct {
 	logger  *log.Logger
 }
 
+type members struct {
+	Members []member `json:"members"`
+}
+
+type member struct {
+	ClientURLs []string `json:"clientURLs"`
+	ID         string   `json:"id"`
+}
+
+type self struct {
+	LeaderInfo leader `json:"leaderInfo"`
+}
+
+type leader struct {
+	Leader string `json:"leader"`
+}
+
 func New(config Config, sleeper func(time.Duration)) App {
 	return App{
 		config:  config,
@@ -46,26 +63,37 @@ func (a App) Run() error {
 	}
 
 	for {
-		leaders := []string{}
+		leaders := map[string]string{}
 		for _, member := range a.config.ClusterMembers {
-			isLeader, err := leaderInfo(httpClient, member)
+			leader, err := leaderFromSelf(httpClient, member)
 			if err != nil {
 				a.logger.Printf("[ERR] %s\n", err)
 				return err
 			}
 
-			if isLeader {
-				leaders = append(leaders, member)
+			leaderURL, err := getNodeURL(httpClient, member, leader)
+			if err != nil {
+				a.logger.Printf("[ERR] %s\n", err)
+				return err
+			}
+
+			if leader != "" {
+				leaders[leader] = leaderURL
 			}
 		}
 
-		if len(leaders) > 1 {
-			err := fmt.Errorf("more than one leader exists: %v", leaders)
+		var leaderURLs []string
+		for _, leaderURL := range leaders {
+			leaderURLs = append(leaderURLs, leaderURL)
+		}
+
+		if len(leaderURLs) > 1 {
+			err := fmt.Errorf("more than one leader exists: %v", leaderURLs)
 			a.logger.Printf("[ERR] %s\n", err)
 			return err
 		}
 
-		fmt.Printf("[INFO] the leader is %v\n", leaders)
+		fmt.Printf("[INFO] the leader is %v\n", leaderURLs)
 		a.sleeper(1 * time.Second)
 	}
 
@@ -102,19 +130,19 @@ func newHttpClient(ca, cert, key string) (*http.Client, error) {
 	return client, nil
 }
 
-func leaderInfo(client *http.Client, url string) (bool, error) {
-	resp, err := client.Get(fmt.Sprintf("%s/v2/stats/leader", url))
+func leaderFromSelf(client *http.Client, url string) (string, error) {
+	resp, err := client.Get(fmt.Sprintf("%s/v2/stats/self", url))
 	if err != nil {
 		switch {
 		case strings.Contains(err.Error(), "no route to host"):
 			// not tested
-			return false, nil
+			return "", nil
 		case strings.Contains(err.Error(), "no such host"):
-			return false, nil
+			return "", nil
 		case strings.Contains(err.Error(), "connection refused"):
-			return false, nil
+			return "", nil
 		default:
-			return false, err
+			return "", err
 		}
 	}
 	defer resp.Body.Close()
@@ -122,34 +150,57 @@ func leaderInfo(client *http.Client, url string) (bool, error) {
 	buf, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		// not tested
-		return false, err
+		return "", err
 	}
 
 	switch resp.StatusCode {
 	case http.StatusOK:
-		var leader leader
-		if err := json.Unmarshal(buf, &leader); err != nil {
-			return false, err
+		var self self
+		if err := json.Unmarshal(buf, &self); err != nil {
+			return "", err
 		}
-		return true, nil
-	case http.StatusForbidden:
-		var message message
-		if err := json.Unmarshal(buf, &message); err != nil {
-			return false, err
+		return self.LeaderInfo.Leader, nil
+	}
+
+	return "", fmt.Errorf("unexpected status code %d - %s", resp.StatusCode, string(buf))
+}
+
+func getNodeURL(client *http.Client, url, leaderID string) (string, error) {
+	resp, err := client.Get(fmt.Sprintf("%s/v2/members", url))
+	if err != nil {
+		switch {
+		case strings.Contains(err.Error(), "no route to host"):
+			// not tested
+			return "", nil
+		case strings.Contains(err.Error(), "no such host"):
+			return "", nil
+		case strings.Contains(err.Error(), "connection refused"):
+			return "", nil
+		default:
+			return "", err
+		}
+	}
+	defer resp.Body.Close()
+
+	buf, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		// not tested
+		return "", err
+	}
+
+	switch resp.StatusCode {
+	case http.StatusOK:
+		var members members
+		if err := json.Unmarshal(buf, &members); err != nil {
+			return "", err
 		}
 
-		if message.Message == "not current leader" {
-			return false, nil
+		for _, member := range members.Members {
+			if member.ID == leaderID {
+				return member.ClientURLs[0], nil
+			}
 		}
 	}
 
-	return false, fmt.Errorf("unexpected status code %d - %s", resp.StatusCode, string(buf))
-}
-
-type message struct {
-	Message string `json:"message"`
-}
-
-type leader struct {
-	Leader string `json:"leader"`
+	return "", fmt.Errorf("unexpected status code %d - %s", resp.StatusCode, string(buf))
 }

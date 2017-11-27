@@ -5,7 +5,6 @@ package server
 import (
 	"crypto/tls"
 	"crypto/x509"
-	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -20,64 +19,79 @@ import (
 
 // For multiple accounts/users.
 type User struct {
-	Username string `json:"user"`
-	Password string `json:"password"`
+	Username    string       `json:"user"`
+	Password    string       `json:"password"`
+	Permissions *Permissions `json:"permissions"`
+}
+
+// Authorization are the allowed subjects on a per
+// publish or subscribe basis.
+type Permissions struct {
+	Publish   []string `json:"publish"`
+	Subscribe []string `json:"subscribe"`
+}
+
+// Options for clusters.
+type ClusterOpts struct {
+	Host        string      `json:"addr"`
+	Port        int         `json:"cluster_port"`
+	Username    string      `json:"-"`
+	Password    string      `json:"-"`
+	AuthTimeout float64     `json:"auth_timeout"`
+	TLSTimeout  float64     `json:"-"`
+	TLSConfig   *tls.Config `json:"-"`
+	ListenStr   string      `json:"-"`
+	NoAdvertise bool        `json:"-"`
 }
 
 // Options block for gnatsd server.
 type Options struct {
-	Host               string        `json:"addr"`
-	Port               int           `json:"port"`
-	Trace              bool          `json:"-"`
-	Debug              bool          `json:"-"`
-	NoLog              bool          `json:"-"`
-	NoSigs             bool          `json:"-"`
-	Logtime            bool          `json:"-"`
-	MaxConn            int           `json:"max_connections"`
-	Users              []User        `json:"-"`
-	Username           string        `json:"-"`
-	Password           string        `json:"-"`
-	Authorization      string        `json:"-"`
-	PingInterval       time.Duration `json:"ping_interval"`
-	MaxPingsOut        int           `json:"ping_max"`
-	HTTPHost           string        `json:"http_host"`
-	HTTPPort           int           `json:"http_port"`
-	HTTPSPort          int           `json:"https_port"`
-	AuthTimeout        float64       `json:"auth_timeout"`
-	MaxControlLine     int           `json:"max_control_line"`
-	MaxPayload         int           `json:"max_payload"`
-	MaxPending         int           `json:"max_pending_size"`
-	ClusterHost        string        `json:"addr"`
-	ClusterPort        int           `json:"cluster_port"`
-	ClusterUsername    string        `json:"-"`
-	ClusterPassword    string        `json:"-"`
-	ClusterAuthTimeout float64       `json:"auth_timeout"`
-	ClusterTLSTimeout  float64       `json:"-"`
-	ClusterTLSConfig   *tls.Config   `json:"-"`
-	ClusterListenStr   string        `json:"-"`
-	ProfPort           int           `json:"-"`
-	PidFile            string        `json:"-"`
-	LogFile            string        `json:"-"`
-	Syslog             bool          `json:"-"`
-	RemoteSyslog       string        `json:"-"`
-	Routes             []*url.URL    `json:"-"`
-	RoutesStr          string        `json:"-"`
-	TLSTimeout         float64       `json:"tls_timeout"`
-	TLS                bool          `json:"-"`
-	TLSVerify          bool          `json:"-"`
-	TLSCert            string        `json:"-"`
-	TLSKey             string        `json:"-"`
-	TLSCaCert          string        `json:"-"`
-	TLSConfig          *tls.Config   `json:"-"`
+	Host           string        `json:"addr"`
+	Port           int           `json:"port"`
+	Trace          bool          `json:"-"`
+	Debug          bool          `json:"-"`
+	NoLog          bool          `json:"-"`
+	NoSigs         bool          `json:"-"`
+	Logtime        bool          `json:"-"`
+	MaxConn        int           `json:"max_connections"`
+	Users          []*User       `json:"-"`
+	Username       string        `json:"-"`
+	Password       string        `json:"-"`
+	Authorization  string        `json:"-"`
+	PingInterval   time.Duration `json:"ping_interval"`
+	MaxPingsOut    int           `json:"ping_max"`
+	HTTPHost       string        `json:"http_host"`
+	HTTPPort       int           `json:"http_port"`
+	HTTPSPort      int           `json:"https_port"`
+	AuthTimeout    float64       `json:"auth_timeout"`
+	MaxControlLine int           `json:"max_control_line"`
+	MaxPayload     int           `json:"max_payload"`
+	Cluster        ClusterOpts   `json:"cluster"`
+	ProfPort       int           `json:"-"`
+	PidFile        string        `json:"-"`
+	LogFile        string        `json:"-"`
+	Syslog         bool          `json:"-"`
+	RemoteSyslog   string        `json:"-"`
+	Routes         []*url.URL    `json:"-"`
+	RoutesStr      string        `json:"-"`
+	TLSTimeout     float64       `json:"tls_timeout"`
+	TLS            bool          `json:"-"`
+	TLSVerify      bool          `json:"-"`
+	TLSCert        string        `json:"-"`
+	TLSKey         string        `json:"-"`
+	TLSCaCert      string        `json:"-"`
+	TLSConfig      *tls.Config   `json:"-"`
 }
 
+// Configuration file authorization section.
 type authorization struct {
 	// Singles
 	user string
 	pass string
 	// Multiple Users
-	users   []User
-	timeout float64
+	users              []*User
+	timeout            float64
+	defaultPermissions *Permissions
 }
 
 // TLSConfigOpts holds the parsed tls config information,
@@ -120,12 +134,7 @@ func ProcessConfigFile(configFile string) (*Options, error) {
 		return opts, nil
 	}
 
-	data, err := ioutil.ReadFile(configFile)
-	if err != nil {
-		return nil, fmt.Errorf("error opening config file: %v", err)
-	}
-
-	m, err := conf.Parse(string(data))
+	m, err := conf.ParseFile(configFile)
 	if err != nil {
 		return nil, err
 	}
@@ -202,10 +211,12 @@ func ProcessConfigFile(configFile string) (*Options, error) {
 			opts.MaxControlLine = int(v.(int64))
 		case "max_payload":
 			opts.MaxPayload = int(v.(int64))
-		case "max_pending_size", "max_pending":
-			opts.MaxPending = int(v.(int64))
 		case "max_connections", "max_conn":
 			opts.MaxConn = int(v.(int64))
+		case "ping_interval":
+			opts.PingInterval = time.Duration(int(v.(int64))) * time.Second
+		case "ping_max":
+			opts.MaxPingsOut = int(v.(int64))
 		case "tls":
 			tlsm := v.(map[string]interface{})
 			tc, err := parseTLS(tlsm)
@@ -257,12 +268,12 @@ func parseCluster(cm map[string]interface{}, opts *Options) error {
 			if err != nil {
 				return err
 			}
-			opts.ClusterHost = hp.host
-			opts.ClusterPort = hp.port
+			opts.Cluster.Host = hp.host
+			opts.Cluster.Port = hp.port
 		case "port":
-			opts.ClusterPort = int(mv.(int64))
+			opts.Cluster.Port = int(mv.(int64))
 		case "host", "net":
-			opts.ClusterHost = mv.(string)
+			opts.Cluster.Host = mv.(string)
 		case "authorization":
 			am := mv.(map[string]interface{})
 			auth, err := parseAuthorization(am)
@@ -272,9 +283,9 @@ func parseCluster(cm map[string]interface{}, opts *Options) error {
 			if auth.users != nil {
 				return fmt.Errorf("Cluster authorization does not allow multiple users")
 			}
-			opts.ClusterUsername = auth.user
-			opts.ClusterPassword = auth.pass
-			opts.ClusterAuthTimeout = auth.timeout
+			opts.Cluster.Username = auth.user
+			opts.Cluster.Password = auth.pass
+			opts.Cluster.AuthTimeout = auth.timeout
 		case "routes":
 			ra := mv.([]interface{})
 			opts.Routes = make([]*url.URL, 0, len(ra))
@@ -292,15 +303,17 @@ func parseCluster(cm map[string]interface{}, opts *Options) error {
 			if err != nil {
 				return err
 			}
-			if opts.ClusterTLSConfig, err = GenTLSConfig(tc); err != nil {
+			if opts.Cluster.TLSConfig, err = GenTLSConfig(tc); err != nil {
 				return err
 			}
 			// For clusters, we will force strict verification. We also act
 			// as both client and server, so will mirror the rootCA to the
 			// clientCA pool.
-			opts.ClusterTLSConfig.ClientAuth = tls.RequireAndVerifyClientCert
-			opts.ClusterTLSConfig.ClientCAs = opts.ClusterTLSConfig.RootCAs
-			opts.ClusterTLSTimeout = tc.Timeout
+			opts.Cluster.TLSConfig.ClientAuth = tls.RequireAndVerifyClientCert
+			opts.Cluster.TLSConfig.RootCAs = opts.Cluster.TLSConfig.ClientCAs
+			opts.Cluster.TLSTimeout = tc.Timeout
+		case "no_advertise":
+			opts.Cluster.NoAdvertise = mv.(bool)
 		}
 	}
 	return nil
@@ -325,15 +338,132 @@ func parseAuthorization(am map[string]interface{}) (*authorization, error) {
 			}
 			auth.timeout = at
 		case "users":
-			b, _ := json.Marshal(mv)
-			users := []User{}
-			if err := json.Unmarshal(b, &users); err != nil {
-				return nil, fmt.Errorf("Could not parse user array properly, %v", err)
+			users, err := parseUsers(mv)
+			if err != nil {
+				return nil, err
 			}
 			auth.users = users
+		case "default_permission", "default_permissions":
+			pm, ok := mv.(map[string]interface{})
+			if !ok {
+				return nil, fmt.Errorf("Expected default permissions to be a map/struct, got %+v", mv)
+			}
+			permissions, err := parseUserPermissions(pm)
+			if err != nil {
+				return nil, err
+			}
+			auth.defaultPermissions = permissions
 		}
+
+		// Now check for permission defaults with multiple users, etc.
+		if auth.users != nil && auth.defaultPermissions != nil {
+			for _, user := range auth.users {
+				if user.Permissions == nil {
+					user.Permissions = auth.defaultPermissions
+				}
+			}
+		}
+
 	}
 	return auth, nil
+}
+
+// Helper function to parse multiple users array with optional permissions.
+func parseUsers(mv interface{}) ([]*User, error) {
+	// Make sure we have an array
+	uv, ok := mv.([]interface{})
+	if !ok {
+		return nil, fmt.Errorf("Expected users field to be an array, got %v", mv)
+	}
+	users := []*User{}
+	for _, u := range uv {
+		// Check its a map/struct
+		um, ok := u.(map[string]interface{})
+		if !ok {
+			return nil, fmt.Errorf("Expected user entry to be a map/struct, got %v", u)
+		}
+		user := &User{}
+		for k, v := range um {
+			switch strings.ToLower(k) {
+			case "user", "username":
+				user.Username = v.(string)
+			case "pass", "password":
+				user.Password = v.(string)
+			case "permission", "permissions", "authroization":
+				pm, ok := v.(map[string]interface{})
+				if !ok {
+					return nil, fmt.Errorf("Expected user permissions to be a map/struct, got %+v", v)
+				}
+				permissions, err := parseUserPermissions(pm)
+				if err != nil {
+					return nil, err
+				}
+				user.Permissions = permissions
+			}
+		}
+		// Check to make sure we have at least username and password
+		if user.Username == "" || user.Password == "" {
+			return nil, fmt.Errorf("User entry requires a user and a password")
+		}
+		users = append(users, user)
+	}
+	return users, nil
+}
+
+// Helper function to parse user/account permissions
+func parseUserPermissions(pm map[string]interface{}) (*Permissions, error) {
+	p := &Permissions{}
+	for k, v := range pm {
+		switch strings.ToLower(k) {
+		case "pub", "publish":
+			subjects, err := parseSubjects(v)
+			if err != nil {
+				return nil, err
+			}
+			p.Publish = subjects
+		case "sub", "subscribe":
+			subjects, err := parseSubjects(v)
+			if err != nil {
+				return nil, err
+			}
+			p.Subscribe = subjects
+		default:
+			return nil, fmt.Errorf("Unknown field %s parsing permissions", k)
+		}
+	}
+	return p, nil
+}
+
+// Helper function to parse subject singeltons and/or arrays
+func parseSubjects(v interface{}) ([]string, error) {
+	var subjects []string
+	switch v.(type) {
+	case string:
+		subjects = append(subjects, v.(string))
+	case []string:
+		subjects = v.([]string)
+	case []interface{}:
+		for _, i := range v.([]interface{}) {
+			subject, ok := i.(string)
+			if !ok {
+				return nil, fmt.Errorf("Subject in permissions array cannot be cast to string")
+			}
+			subjects = append(subjects, subject)
+		}
+	default:
+		return nil, fmt.Errorf("Expected subject permissions to be a subject, or array of subjects, got %T", v)
+	}
+	return checkSubjectArray(subjects)
+}
+
+// Helper function to validate subjects, etc for account permissioning.
+func checkSubjectArray(sa []string) ([]string, error) {
+	for _, s := range sa {
+		if !IsValidSubject(s) {
+			return nil, fmt.Errorf("Subject %q is not a valid subject", s)
+		}
+	}
+	return sa, nil
 }
 
 // PrintTLSHelpAndDie prints TLS usage and exits.
@@ -444,7 +574,7 @@ func GenTLSConfig(tc *TLSConfigOpts) (*tls.Config, error) {
 
 	// Require client certificates as needed
 	if tc.Verify {
-		config.ClientAuth = tls.RequireAnyClientCert
+		config.ClientAuth = tls.RequireAndVerifyClientCert
 	}
 	// Add in CAs if applicable.
 	if tc.CaFile != "" {
@@ -457,7 +587,7 @@ func GenTLSConfig(tc *TLSConfigOpts) (*tls.Config, error) {
 		if !ok {
 			return nil, fmt.Errorf("failed to parse root ca certificate")
 		}
-		config.RootCAs = pool
+		config.ClientCAs = pool
 	}
 
 	return &config, nil
@@ -510,6 +640,12 @@ func MergeOptions(fileOpts, flagOpts *Options) *Options {
 	}
 	if flagOpts.ProfPort != 0 {
 		opts.ProfPort = flagOpts.ProfPort
+	}
+	if flagOpts.Cluster.ListenStr != "" {
+		opts.Cluster.ListenStr = flagOpts.Cluster.ListenStr
+	}
+	if flagOpts.Cluster.NoAdvertise {
+		opts.Cluster.NoAdvertise = true
 	}
 	if flagOpts.RoutesStr != "" {
 		mergeRoutes(&opts, flagOpts)
@@ -623,6 +759,10 @@ func processOptions(opts *Options) {
 	if opts.Host == "" {
 		opts.Host = DEFAULT_HOST
 	}
+	if opts.HTTPHost == "" {
+		// Default to same bind from server if left undefined
+		opts.HTTPHost = opts.Host
+	}
 	if opts.Port == 0 {
 		opts.Port = DEFAULT_PORT
 	} else if opts.Port == RANDOM_PORT {
@@ -644,22 +784,19 @@ func processOptions(opts *Options) {
 	if opts.AuthTimeout == 0 {
 		opts.AuthTimeout = float64(AUTH_TIMEOUT) / float64(time.Second)
 	}
-	if opts.ClusterHost == "" {
-		opts.ClusterHost = DEFAULT_HOST
+	if opts.Cluster.Host == "" {
+		opts.Cluster.Host = DEFAULT_HOST
 	}
-	if opts.ClusterTLSTimeout == 0 {
-		opts.ClusterTLSTimeout = float64(TLS_TIMEOUT) / float64(time.Second)
+	if opts.Cluster.TLSTimeout == 0 {
+		opts.Cluster.TLSTimeout = float64(TLS_TIMEOUT) / float64(time.Second)
 	}
-	if opts.ClusterAuthTimeout == 0 {
-		opts.ClusterAuthTimeout = float64(AUTH_TIMEOUT) / float64(time.Second)
+	if opts.Cluster.AuthTimeout == 0 {
+		opts.Cluster.AuthTimeout = float64(AUTH_TIMEOUT) / float64(time.Second)
 	}
 	if opts.MaxControlLine == 0 {
 		opts.MaxControlLine = MAX_CONTROL_LINE_SIZE
 	}
 	if opts.MaxPayload == 0 {
 		opts.MaxPayload = MAX_PAYLOAD_SIZE
-	}
-	if opts.MaxPending == 0 {
-		opts.MaxPending = MAX_PENDING_SIZE
 	}
 }

@@ -3,11 +3,7 @@ CF Smoke Tests
 
 Smoke tests are a suite of basic core functionality tests for Cloud Foundry.
 They are suitable as an initial test against a new or updated deployment to
-reveal fundamental problems with the system. They are also safe to run
-periodically against a production environment as they place minimal load on a
-system and can be configured to require access only by a regular user. In
-particular, Cloud Foundry operators can use these tests as a monitoring tool
-against their running deployment.
+reveal fundamental problems with the system.
 
 They are not intended to test more sophisticated functionality of Cloud Foundry
 or to test administrator operations. The [CF Acceptance
@@ -51,26 +47,32 @@ contains the application domain
 Below is an example `integration_config.json`:
 ```json
 {
-  "suite_name"           : "CF_SMOKE_TESTS",
-  "api"                  : "api.bosh-lite.com",
-  "apps_domain"          : "bosh-lite.com",
-  "user"                 : "admin",
-  "password"             : "admin",
-  "org"                  : "CF-SMOKE-ORG",
-  "space"                : "CF-SMOKE-SPACE",
-  "cleanup"              : true,
-  "use_existing_org"     : false,
-  "use_existing_space"   : false,
-  "logging_app"          : "",
-  "runtime_app"          : "",
-  "enable_windows_tests" : false,
-  "backend"              : "diego"
+  "suite_name"                      : "CF_SMOKE_TESTS",
+  "api"                             : "api.bosh-lite.com",
+  "apps_domain"                     : "bosh-lite.com",
+  "user"                            : "non-admin",
+  "password"                        : "super-secure",
+  "org"                             : "CF-SMOKE-ORG",
+  "space"                           : "CF-SMOKE-SPACE",
+  "cleanup"                         : true,
+  "use_existing_org"                : true,
+  "use_existing_space"              : true,
+  "logging_app"                     : "",
+  "runtime_app"                     : "",
+  "enable_windows_tests"            : false,
+  "enable_etcd_cluster_check_tests" : false,
+  "etcd_ip_address"                 : "",
+  "backend"                         : "diego",
+  "isolation_segment_name"          : "is1",
+  "isolation_segment_domain"        :"iso-seg.bosh-lite.com",
+  "enable_isolation_segment_tests"  : true
 }
 ```
+**NOTE** Unless you supply an admin user, you _must_ use an existing space and org
 
-If you are running the tests with version newer than 6.0.2-0bba99f of the Go
-CLI against bosh-lite or any other environment using self-signed certificates,
-add
+
+If you are running the tests against bosh-lite or any other environment using
+self-signed certificates, add
 
 ```
   "skip_ssl_validation": true
@@ -95,6 +97,9 @@ If you like to a specific backend, add (allowed diego, dea or empty (default))
   "backend" : "diego"
 ```
 
+If you like to validate the security of your etcd cluster, set `enable_etcd_cluster_check_tests` to true and provide the `etcd_ip_address` to be the least restrictive IP that your etcd cluster has (private if that is the only IP etcd has, public otherwise)
+
+If you like to run isolation segment test, set `enable_isolation_segment_tests` to true and provide values for `isolation_segment_name`, `isolation_segment_domain` and set `backend` to `diego`. Test setup assumes that isolation segment API resource with `isolation_segment_name` already exists. For more details on how to setup routing isolation segments, read this [document](https://docs.cloudfoundry.org/adminguide/routing-is.html)
 
 ### Test Execution
 
@@ -145,10 +150,6 @@ junit-Applications-1.xml
 
 ### Dependency Management
 
-Smoke Tests use [gvt](https://github.com/FiloSottile/gvt) to manage `go` dependencies.
+Smoke Tests use [dep](https://github.com/golang/dep) to manage `go` dependencies.
 
 All `go` packages required to run smoke tests are vendored into the `vendor/` directory.
-
-When making changes to the test suite that bring in additional `go` packages,
-you should use the workflow described in the
-[gvt documentation](https://github.com/FiloSottile/gvt#basic-usage).

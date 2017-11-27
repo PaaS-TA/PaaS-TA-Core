@@ -8,9 +8,15 @@ templates:
   cloud_controller_clock_ctl.erb: bin/cloud_controller_clock_ctl
   newrelic.yml.erb: config/newrelic.yml
   stacks.yml.erb: config/stacks.yml
+  drain.sh: bin/drain
   ruby_version.sh.erb: bin/ruby_version.sh
   console.erb: bin/console
   pre-start.sh.erb: bin/pre-start
+  mutual_tls_ca.crt.erb: config/certs/mutual_tls_ca.crt
+  mutual_tls.crt.erb: config/certs/mutual_tls.crt
+  mutual_tls.key.erb: config/certs/mutual_tls.key
+  uaa_ca.crt.erb: config/certs/uaa_ca.crt
+  db_ca.crt.erb: config/certs/db_ca.crt
 
 packages:
   - capi_utils
@@ -20,6 +26,11 @@ packages:
   - libpq
   - libmariadb
   - ruby-2.3
+
+consumes:
+- name: database
+  type: database
+  optional: true
 
 properties:
   ssl.skip_cert_verify:
@@ -32,22 +43,13 @@ properties:
     description: "Domain reserved for CF operator, base URL where the login, uaa, and other non-user apps listen"
   system_domain_organization:
     description: "An organization that will be created as part of the seeding process. When the system_domain is not shared with (in the list of) app_domains, this is required as the system_domain will be created as a PrivateDomain in this organization."
-    default: ""
+    default: "system"
   app_domains:
     description: "Array of domains for user apps (example: 'user.app.space.foo', a user app called 'neat' will listen at 'http://neat.user.app.space.foo')"
     example:  |
       - name: example.com
       - name: tcp.example.com
         router_group_name: default-tcp
-
-  nats.user:
-    description: "Username for cc client to connect to NATS"
-  nats.password:
-    description: "Password for cc client to connect to NATS"
-  nats.port:
-    description: "IP port of Cloud Foundry NATS server"
-  nats.machines:
-    description: "IP of each NATS cluster member."
 
   request_timeout_in_seconds:
     description: "Timeout for requests in seconds."
@@ -72,6 +74,9 @@ properties:
   cc.external_port:
     description: "External Cloud Controller port"
     default: 9022
+  cc.tls_port:
+    description: "External Cloud Controller port"
+    default: 9023
   cc.internal_service_hostname:
     description: "Internal hostname used to resolve the address of the Cloud Controller"
     default: "cloud-controller-ng.service.cf.internal"
@@ -80,8 +85,6 @@ properties:
     description: "The longest any job can take before it is cancelled unless overriden per job"
     default: 14400 # 4 hours
   cc.jobs.app_bits_packer.timeout_in_seconds:
-    description: "The longest this job can take before it is cancelled"
-  cc.jobs.app_events_cleanup.timeout_in_seconds:
     description: "The longest this job can take before it is cancelled"
   cc.jobs.app_usage_events_cleanup.timeout_in_seconds:
     description: "The longest this job can take before it is cancelled"
@@ -93,6 +96,9 @@ properties:
     description: "The longest this job can take before it is cancelled"
   cc.jobs.droplet_upload.timeout_in_seconds:
     description: "The longest this job can take before it is cancelled"
+  cc.jobs.diego_sync.timeout_in_seconds:
+    description: "The longest the diego sync job can take before another is enqueued"
+    default: 600
 
   cc.app_events.cutoff_age_in_days:
     description: "How old an app event should stay in cloud controller database before being cleaned up"
@@ -114,8 +120,16 @@ properties:
     default: 31
 
   cc.pending_droplets.frequency_in_seconds:
-    description: "How often the droplet pending cleanup job runs"
+    description: "How often the pending droplets cleanup job runs"
     default: 300
+
+  cc.pending_builds.frequency_in_seconds:
+    description: "How often the pending builds cleanup job runs"
+    default: 300
+
+  cc.diego_sync.frequency_in_seconds:
+    description: "How often to synchronize CC's database with Diego's"
+    default: 30
 
   cc.external_protocol:
     default: "https"
@@ -373,11 +387,27 @@ properties:
   ccdb.pool_timeout:
     default: 10
     description: "The timeout for Sequel pooled connections"
+  ccdb.ca_cert:
+    default: ~
+    description: "The ca cert to use when communicating with the database over SSL"
+  ccdb.ssl_verify_hostname:
+    default: false
+    description: "Verify that the database SSL certificate matches the host to which the connection is attempted"
 
   uaa.cc.token_secret:
     description: "Symmetric secret used to decode uaa tokens. Used for testing."
+  uaa.ca_cert:
+    description: "The certificate authority being used by UAA"
   uaa.url:
     description: "URL of the UAA server"
+  uaa.ssl.port:
+    description: "The port used by UAA for ssl connections"
+    default: 8443
+  uaa.port:
+    description: "The port used by UAA for non-ssl connections"
+  cc.uaa.internal_url:
+    description: "The internal url used by UAA"
+    default: "uaa.service.cf.internal"
   login.protocol:
     description: "http or https"
     default: "https"
@@ -389,9 +419,6 @@ properties:
     description: "Port of the hm9000 Api Server"
     default: 5155
 
-  uaa.jwt.verification_key:
-    default: ""
-    description: "ssl cert defined in the manifest by the UAA, required by the cc to communicate with UAA"
   login.enabled:
     default: true
     description: "whether use login as the authorization endpoint or not"
@@ -403,11 +430,11 @@ properties:
     description: "The port used to emit messages to the Metron agent"
     default: 3457
 
-  logger_endpoint.use_ssl:
-    description: "Whether to use ssl for logger endpoint listed at /v2/info"
+  doppler.use_ssl:
+    description: "Whether to use ssl for the doppler_logging_endpoint listed at /v2/info"
     default: true
-  logger_endpoint.port:
-    description: "Port for logger endpoint listed at /v2/info"
+  doppler.port:
+    description: "Port for doppler_logging_endpoint listed at /v2/info"
     default: 443
 
   cc.db_encryption_key:
@@ -426,9 +453,6 @@ properties:
   cc.users_can_select_backend:
     default: true
     description: "Allow non-admin users to switch their apps between DEA and Diego backends"
-  cc.default_to_diego_backend:
-    default: false
-    description: "Use Diego backend by default for new apps"
   cc.allow_app_ssh_access:
     default: true
     description: "Allow users to change the value of the app-level allow_ssh attribute"
@@ -507,6 +531,9 @@ properties:
     description: "Used to grant scope for SSO clients for service brokers"
     default: "openid,cloud_controller_service_permissions.read"
 
+  uaa.clients.cc_routing.secret:
+    description: "Used for fetching routing information from the Routing API"
+
   cc.install_buildpacks:
       description: "Set of buildpacks to install during deploy"
 
@@ -548,3 +575,79 @@ properties:
   cc.bits_service.private_endpoint:
     description: "Private url for the bits-service service"
     default: ""
+  cc.bits_service.username:
+    description: "Username for the bits-service"
+    default: ""
+  cc.bits_service.password:
+    description: "Password for the bits-service"
+    default: ""
+
+  cc.diego.bbs.url:
+    description: "URL of the BBS Server"
+    default: https://bbs.service.cf.internal:8889
+
+  cc.mutual_tls.ca_cert:
+    description: "PEM-encoded CA certificate for secure, mutually authenticated TLS communication"
+  cc.mutual_tls.public_cert:
+    description: "PEM-encoded certificate for secure, mutually authenticated TLS communication"
+  cc.mutual_tls.private_key:
+    description: "PEM-encoded key for secure, mutually authenticated TLS communication"
+
+  cc.diego.nsync_url:
+    default: http://nsync.service.cf.internal:8787
+    description: "URL of the Diego nsync service"
+  cc.diego.stager_url:
+    default: http://stager.service.cf.internal:8888
+    description: "URL of the Diego stager service"
+  cc.diego.tps_url:
+    default: http://tps.service.cf.internal:1518
+    description: "URL of the Diego tps service"
+  cc.diego.file_server_url:
+    description: "URL of file server"
+    default: http://file-server.service.cf.internal:8080
+  cc.diego.cc_uploader_url:
+    description: "URL of cc uploader"
+    default: http://cc-uploader.service.cf.internal:9090
+  cc.diego.use_privileged_containers_for_running:
+    description: "Whether or not to use privileged containers for running buildpack apps and tasks."
+    default: false
+  cc.diego.use_privileged_containers_for_staging:
+    description: "Whether or not to use privileged containers for staging tasks."
+    default: false
+  cc.diego.lifecycle_bundles:
+    description: "List of lifecycle bundles arguments for different stacks"
+    default:
+      "buildpack/cflinuxfs2": "buildpack_app_lifecycle/buildpack_app_lifecycle.tgz"
+      "buildpack/windows2012R2": "windows_app_lifecycle/windows_app_lifecycle.tgz"
+      "docker": "docker_app_lifecycle/docker_app_lifecycle.tgz"
+
+  cc.diego.temporary_local_staging:
+    description: "Temporary flag to enable staging directly to the bbs from cc"
+    default: false
+  cc.diego.temporary_local_tasks:
+    description: "Temporary flag to run tasks directly to the bbs from cc"
+    default: false
+  cc.diego.temporary_local_apps:
+    description: "Temporary flag to manage app state directly to the bbs from cc"
+    default: false
+  cc.diego.temporary_local_sync:
+    description: "Temporary flag to manage app state directly to the bbs from cc"
+    default: false
+  cc.diego.temporary_local_tps:
+    description: "Temporary flag to manage app state directly to the bbs from cc"
+    default: false
+  cc.diego.temporary_cc_uploader_mtls:
+    description: "Temporary flag to ensure droplet upload callback endpoints require mTLS"
+    default: false
+  cc.diego.temporary_droplet_download_mtls:
+    description: "Temporary flag to enable mTLS droplet download to the bbs from cc"
+    default: false
+  cc.diego.temporary_oci_buildpack_mode:
+    description: "Temporary flag to enable OCI buildpack flow. Valid values: 'oci-phase-1'"
+  cc.diego.pid_limit:
+    description: "Maximum pid limit for containerized work running user-provided code"
+    default: 1024
+
+  routing_api.enabled:
+    description: "Whether to expose the routing_endpoint listed at /v2/info. Enable this after deploying the Routing API"
+    default: false

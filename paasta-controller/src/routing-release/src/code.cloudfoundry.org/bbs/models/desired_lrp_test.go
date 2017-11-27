@@ -111,7 +111,7 @@ var _ = Describe("DesiredLRP", func() {
                 },
                 {
                   "name": "CF_STACK",
-                  "value": "cflinuxfs2"
+									"value": "cflinuxfs2"
                 },
                 {
                   "name": "PORT",
@@ -246,12 +246,17 @@ var _ = Describe("DesiredLRP", func() {
       "epoch": "some-guid",
       "index": 0
     },
+		"placement_tags": ["red-tag", "blue-tag"],
     "trusted_system_certificates_path": "/etc/cf-system-certificates",
     "network": {
 			"properties": {
 				"key": "value",
 				"another_key": "another_value"
 			}
+		},
+		"max_pids": 256,
+		"certificate_properties": {
+			"organizational_unit": ["stuff"]
 		}
   }`
 
@@ -411,15 +416,15 @@ var _ = Describe("DesiredLRP", func() {
 			})
 
 			It("converts TimeoutMs to Timeout in Nanoseconds", func() {
-				desiredLRP.VersionDownTo(format.V1)
-				Expect(desiredLRP.GetSetup().GetTimeoutAction().DeprecatedTimeoutNs).To(BeEquivalentTo(10 * time.Millisecond))
-				Expect(desiredLRP.GetAction().GetTimeoutAction().DeprecatedTimeoutNs).To(BeEquivalentTo(20 * time.Millisecond))
-				Expect(desiredLRP.GetMonitor().GetTimeoutAction().DeprecatedTimeoutNs).To(BeEquivalentTo(30 * time.Millisecond))
+				convertedLRP := desiredLRP.VersionDownTo(format.V1)
+				Expect(convertedLRP.GetSetup().GetTimeoutAction().DeprecatedTimeoutNs).To(BeEquivalentTo(10 * time.Millisecond))
+				Expect(convertedLRP.GetAction().GetTimeoutAction().DeprecatedTimeoutNs).To(BeEquivalentTo(20 * time.Millisecond))
+				Expect(convertedLRP.GetMonitor().GetTimeoutAction().DeprecatedTimeoutNs).To(BeEquivalentTo(30 * time.Millisecond))
 			})
 
 			It("converts StartTimeoutMs to StartTimeout in seconds", func() {
-				desiredLRP.VersionDownTo(format.V1)
-				Expect(desiredLRP.GetDeprecatedStartTimeoutS()).To(BeEquivalentTo(10))
+				convertedLRP := desiredLRP.VersionDownTo(format.V1)
+				Expect(convertedLRP.GetDeprecatedStartTimeoutS()).To(BeEquivalentTo(10))
 			})
 		})
 
@@ -501,14 +506,14 @@ var _ = Describe("DesiredLRP", func() {
 			})
 
 			It("converts TimeoutMs to Timeout in Nanoseconds", func() {
-				desiredLRP.VersionDownTo(format.V1)
-				Expect(desiredLRP.GetAction().GetTimeoutAction().DeprecatedTimeoutNs).To(BeEquivalentTo(20 * time.Millisecond))
-				Expect(desiredLRP.GetMonitor().GetTimeoutAction().DeprecatedTimeoutNs).To(BeEquivalentTo(30 * time.Millisecond))
+				convertedLRP := desiredLRP.VersionDownTo(format.V1)
+				Expect(convertedLRP.GetAction().GetTimeoutAction().DeprecatedTimeoutNs).To(BeEquivalentTo(20 * time.Millisecond))
+				Expect(convertedLRP.GetMonitor().GetTimeoutAction().DeprecatedTimeoutNs).To(BeEquivalentTo(30 * time.Millisecond))
 			})
 
 			It("converts StartTimeoutMs to StartTimeout in seconds", func() {
-				desiredLRP.VersionDownTo(format.V1)
-				Expect(desiredLRP.GetDeprecatedStartTimeoutS()).To(BeEquivalentTo(10))
+				convertedLRP := desiredLRP.VersionDownTo(format.V1)
+				Expect(convertedLRP.GetDeprecatedStartTimeoutS()).To(BeEquivalentTo(10))
 			})
 
 			Context("when there is an existing setup action", func() {
@@ -665,6 +670,21 @@ var _ = Describe("DesiredLRP", func() {
 			assertDesiredLRPValidationFailsWithMessage(desiredLRP, "cpu_weight")
 		})
 
+		It("requires a valid MemoryMb", func() {
+			desiredLRP.MemoryMb = -1
+			assertDesiredLRPValidationFailsWithMessage(desiredLRP, "memory_mb")
+		})
+
+		It("requires a valid DiskMb", func() {
+			desiredLRP.DiskMb = -1
+			assertDesiredLRPValidationFailsWithMessage(desiredLRP, "disk_mb")
+		})
+
+		It("requires a valid MaxPids", func() {
+			desiredLRP.MaxPids = -1
+			assertDesiredLRPValidationFailsWithMessage(desiredLRP, "max_pids")
+		})
+
 		It("limits the annotation length", func() {
 			desiredLRP.Annotation = randStringBytes(50000)
 			assertDesiredLRPValidationFailsWithMessage(desiredLRP, "annotation")
@@ -733,6 +753,32 @@ var _ = Describe("DesiredLRP", func() {
 				}
 				desiredLRP.LegacyDownloadUser = "user"
 				assertDesiredLRPValidationFailsWithMessage(desiredLRP, "value")
+			})
+		})
+
+		Context("when image credentials are specified", func() {
+			It("is valid when both credentials are supplied", func() {
+				desiredLRP.ImageUsername = "something"
+				desiredLRP.ImagePassword = "something"
+				Expect(desiredLRP.Validate()).To(Succeed())
+			})
+
+			It("is valid when no credentials are supplied", func() {
+				desiredLRP.ImageUsername = ""
+				desiredLRP.ImagePassword = ""
+				Expect(desiredLRP.Validate()).To(Succeed())
+			})
+
+			It("is invalid when providing just a username", func() {
+				desiredLRP.ImageUsername = "something"
+				desiredLRP.ImagePassword = ""
+				assertDesiredLRPValidationFailsWithMessage(desiredLRP, "image_password")
+			})
+
+			It("is invalid when providing just a password", func() {
+				desiredLRP.ImageUsername = ""
+				desiredLRP.ImagePassword = "something"
+				assertDesiredLRPValidationFailsWithMessage(desiredLRP, "image_username")
 			})
 		})
 	})
@@ -836,6 +882,7 @@ var _ = Describe("DesiredLRPResource", func() {
 	const rootFs = "preloaded://linux64"
 	const memoryMb = 256
 	const diskMb = 256
+	const maxPids = 256
 
 	DescribeTable("Validation",
 		func(key models.DesiredLRPResource, expectedErr string) {
@@ -847,10 +894,11 @@ var _ = Describe("DesiredLRPResource", func() {
 				Expect(err.Error()).To(ContainSubstring(expectedErr))
 			}
 		},
-		Entry("valid resource", models.NewDesiredLRPResource(memoryMb, diskMb, rootFs), ""),
-		Entry("invalid rootFs", models.NewDesiredLRPResource(memoryMb, diskMb, "BAD URL"), "rootfs"),
-		Entry("invalid memoryMb", models.NewDesiredLRPResource(-1, diskMb, rootFs), "memory_mb"),
-		Entry("invalid diskMb", models.NewDesiredLRPResource(memoryMb, -1, rootFs), "disk_mb"),
+		Entry("valid resource", models.NewDesiredLRPResource(memoryMb, diskMb, maxPids, rootFs), ""),
+		Entry("invalid rootFs", models.NewDesiredLRPResource(memoryMb, diskMb, maxPids, "BAD URL"), "rootfs"),
+		Entry("invalid memoryMb", models.NewDesiredLRPResource(-1, diskMb, maxPids, rootFs), "memory_mb"),
+		Entry("invalid diskMb", models.NewDesiredLRPResource(memoryMb, -1, maxPids, rootFs), "disk_mb"),
+		Entry("invalid maxPids", models.NewDesiredLRPResource(memoryMb, diskMb, -1, rootFs), "max_pids"),
 	)
 })
 
@@ -863,8 +911,9 @@ var _ = Describe("DesiredLRPSchedulingInfo", func() {
 		routes      = models.Routes{
 			"router": &rawMessage,
 		}
-		largeRoute  = json.RawMessage([]byte(largeString))
-		largeRoutes = models.Routes{
+		largeRoutingString = randStringBytes(129 * 1024)
+		largeRoute         = json.RawMessage([]byte(largeRoutingString))
+		largeRoutes        = models.Routes{
 			"router": &largeRoute,
 		}
 		tag = models.ModificationTag{}
@@ -880,12 +929,12 @@ var _ = Describe("DesiredLRPSchedulingInfo", func() {
 				Expect(err.Error()).To(ContainSubstring(expectedErr))
 			}
 		},
-		Entry("valid scheduling info", models.NewDesiredLRPSchedulingInfo(newValidLRPKey(), annotation, instances, newValidResource(), routes, tag, nil), ""),
-		Entry("invalid annotation", models.NewDesiredLRPSchedulingInfo(newValidLRPKey(), largeString, instances, newValidResource(), routes, tag, nil), "annotation"),
-		Entry("invalid instances", models.NewDesiredLRPSchedulingInfo(newValidLRPKey(), annotation, -2, newValidResource(), routes, tag, nil), "instances"),
-		Entry("invalid key", models.NewDesiredLRPSchedulingInfo(models.DesiredLRPKey{}, annotation, instances, newValidResource(), routes, tag, nil), "process_guid"),
-		Entry("invalid resource", models.NewDesiredLRPSchedulingInfo(newValidLRPKey(), annotation, instances, models.DesiredLRPResource{}, routes, tag, nil), "rootfs"),
-		Entry("invalid routes", models.NewDesiredLRPSchedulingInfo(newValidLRPKey(), annotation, instances, newValidResource(), largeRoutes, tag, nil), "routes"),
+		Entry("valid scheduling info", models.NewDesiredLRPSchedulingInfo(newValidLRPKey(), annotation, instances, newValidResource(), routes, tag, nil, nil), ""),
+		Entry("invalid annotation", models.NewDesiredLRPSchedulingInfo(newValidLRPKey(), largeString, instances, newValidResource(), routes, tag, nil, nil), "annotation"),
+		Entry("invalid instances", models.NewDesiredLRPSchedulingInfo(newValidLRPKey(), annotation, -2, newValidResource(), routes, tag, nil, nil), "instances"),
+		Entry("invalid key", models.NewDesiredLRPSchedulingInfo(models.DesiredLRPKey{}, annotation, instances, newValidResource(), routes, tag, nil, nil), "process_guid"),
+		Entry("invalid resource", models.NewDesiredLRPSchedulingInfo(newValidLRPKey(), annotation, instances, models.DesiredLRPResource{}, routes, tag, nil, nil), "rootfs"),
+		Entry("invalid routes", models.NewDesiredLRPSchedulingInfo(newValidLRPKey(), annotation, instances, newValidResource(), largeRoutes, tag, nil, nil), "routes"),
 	)
 })
 
@@ -912,15 +961,18 @@ var _ = Describe("DesiredLRPRunInfo", func() {
 				Expect(err.Error()).To(ContainSubstring(expectedErr))
 			}
 		},
-		Entry("valid run info", models.NewDesiredLRPRunInfo(newValidLRPKey(), createdAt, envVars, nil, action, action, action, startTimeoutMs, privileged, cpuWeight, ports, egressRules, logSource, metricsGuid, "legacy-jim", trustedSystemCertificatesPath, []*models.VolumeMount{}, nil), ""),
-		Entry("invalid key", models.NewDesiredLRPRunInfo(models.DesiredLRPKey{}, createdAt, envVars, nil, action, action, action, startTimeoutMs, privileged, cpuWeight, ports, egressRules, logSource, metricsGuid, "legacy-jim", trustedSystemCertificatesPath, []*models.VolumeMount{}, nil), "process_guid"),
-		Entry("invalid env vars", models.NewDesiredLRPRunInfo(newValidLRPKey(), createdAt, append(envVars, models.EnvironmentVariable{}), nil, action, action, action, startTimeoutMs, privileged, cpuWeight, ports, egressRules, logSource, metricsGuid, "legacy-jim", trustedSystemCertificatesPath, []*models.VolumeMount{}, nil), "name"),
-		Entry("invalid setup action", models.NewDesiredLRPRunInfo(newValidLRPKey(), createdAt, envVars, nil, &models.Action{}, action, action, startTimeoutMs, privileged, cpuWeight, ports, egressRules, logSource, metricsGuid, "legacy-jim", trustedSystemCertificatesPath, []*models.VolumeMount{}, nil), "inner-action"),
-		Entry("invalid run action", models.NewDesiredLRPRunInfo(newValidLRPKey(), createdAt, envVars, nil, action, &models.Action{}, action, startTimeoutMs, privileged, cpuWeight, ports, egressRules, logSource, metricsGuid, "legacy-jim", trustedSystemCertificatesPath, []*models.VolumeMount{}, nil), "inner-action"),
-		Entry("invalid monitor action", models.NewDesiredLRPRunInfo(newValidLRPKey(), createdAt, envVars, nil, action, action, &models.Action{}, startTimeoutMs, privileged, cpuWeight, ports, egressRules, logSource, metricsGuid, "legacy-jim", trustedSystemCertificatesPath, []*models.VolumeMount{}, nil), "inner-action"),
-		Entry("invalid cpu weight", models.NewDesiredLRPRunInfo(newValidLRPKey(), createdAt, envVars, nil, action, action, action, startTimeoutMs, privileged, 150, ports, egressRules, logSource, metricsGuid, "legacy-jim", trustedSystemCertificatesPath, []*models.VolumeMount{}, nil), "cpu_weight"),
-		Entry("invalid legacy download user", models.NewDesiredLRPRunInfo(newValidLRPKey(), createdAt, envVars, []*models.CachedDependency{{To: "here", From: "there"}}, action, action, action, startTimeoutMs, privileged, cpuWeight, ports, egressRules, logSource, metricsGuid, "", trustedSystemCertificatesPath, []*models.VolumeMount{}, nil), "legacy_download_user"),
-		Entry("invalid cached dependency", models.NewDesiredLRPRunInfo(newValidLRPKey(), createdAt, envVars, []*models.CachedDependency{{To: "here"}}, action, action, action, startTimeoutMs, privileged, cpuWeight, ports, egressRules, logSource, metricsGuid, "user", trustedSystemCertificatesPath, []*models.VolumeMount{}, nil), "cached_dependency"),
+		Entry("valid run info", models.NewDesiredLRPRunInfo(newValidLRPKey(), createdAt, envVars, nil, action, action, action, startTimeoutMs, privileged, cpuWeight, ports, egressRules, logSource, metricsGuid, "legacy-jim", trustedSystemCertificatesPath, []*models.VolumeMount{}, nil, nil, "", ""), ""),
+		Entry("invalid key", models.NewDesiredLRPRunInfo(models.DesiredLRPKey{}, createdAt, envVars, nil, action, action, action, startTimeoutMs, privileged, cpuWeight, ports, egressRules, logSource, metricsGuid, "legacy-jim", trustedSystemCertificatesPath, []*models.VolumeMount{}, nil, nil, "", ""), "process_guid"),
+		Entry("invalid env vars", models.NewDesiredLRPRunInfo(newValidLRPKey(), createdAt, append(envVars, models.EnvironmentVariable{}), nil, action, action, action, startTimeoutMs, privileged, cpuWeight, ports, egressRules, logSource, metricsGuid, "legacy-jim", trustedSystemCertificatesPath, []*models.VolumeMount{}, nil, nil, "", ""), "name"),
+		Entry("invalid setup action", models.NewDesiredLRPRunInfo(newValidLRPKey(), createdAt, envVars, nil, &models.Action{}, action, action, startTimeoutMs, privileged, cpuWeight, ports, egressRules, logSource, metricsGuid, "legacy-jim", trustedSystemCertificatesPath, []*models.VolumeMount{}, nil, nil, "", ""), "inner-action"),
+		Entry("invalid run action", models.NewDesiredLRPRunInfo(newValidLRPKey(), createdAt, envVars, nil, action, &models.Action{}, action, startTimeoutMs, privileged, cpuWeight, ports, egressRules, logSource, metricsGuid, "legacy-jim", trustedSystemCertificatesPath, []*models.VolumeMount{}, nil, nil, "", ""), "inner-action"),
+		Entry("invalid monitor action", models.NewDesiredLRPRunInfo(newValidLRPKey(), createdAt, envVars, nil, action, action, &models.Action{}, startTimeoutMs, privileged, cpuWeight, ports, egressRules, logSource, metricsGuid, "legacy-jim", trustedSystemCertificatesPath, []*models.VolumeMount{}, nil, nil, "", ""), "inner-action"),
+		Entry("invalid cpu weight", models.NewDesiredLRPRunInfo(newValidLRPKey(), createdAt, envVars, nil, action, action, action, startTimeoutMs, privileged, 150, ports, egressRules, logSource, metricsGuid, "legacy-jim", trustedSystemCertificatesPath, []*models.VolumeMount{}, nil, nil, "", ""), "cpu_weight"),
+		Entry("invalid legacy download user", models.NewDesiredLRPRunInfo(newValidLRPKey(), createdAt, envVars, []*models.CachedDependency{{To: "here", From: "there"}}, action, action, action, startTimeoutMs, privileged, cpuWeight, ports, egressRules, logSource, metricsGuid, "", trustedSystemCertificatesPath, []*models.VolumeMount{}, nil, nil, "", ""), "legacy_download_user"),
+		Entry("invalid cached dependency", models.NewDesiredLRPRunInfo(newValidLRPKey(), createdAt, envVars, []*models.CachedDependency{{To: "here"}}, action, action, action, startTimeoutMs, privileged, cpuWeight, ports, egressRules, logSource, metricsGuid, "user", trustedSystemCertificatesPath, []*models.VolumeMount{}, nil, nil, "", ""), "cached_dependency"),
+		Entry("invalid volume mount", models.NewDesiredLRPRunInfo(newValidLRPKey(), createdAt, envVars, nil, action, action, action, startTimeoutMs, privileged, cpuWeight, ports, egressRules, logSource, metricsGuid, "user", trustedSystemCertificatesPath, []*models.VolumeMount{{DeprecatedConfig: []byte(`lol`)}}, nil, nil, "", ""), "volume_mount"),
+		Entry("invalid image username", models.NewDesiredLRPRunInfo(newValidLRPKey(), createdAt, envVars, nil, action, action, action, startTimeoutMs, privileged, cpuWeight, ports, egressRules, logSource, metricsGuid, "user", trustedSystemCertificatesPath, []*models.VolumeMount{}, nil, nil, "", "password"), "image_username"),
+		Entry("invalid image password", models.NewDesiredLRPRunInfo(newValidLRPKey(), createdAt, envVars, nil, action, action, action, startTimeoutMs, privileged, cpuWeight, ports, egressRules, logSource, metricsGuid, "user", trustedSystemCertificatesPath, []*models.VolumeMount{}, nil, nil, "username", ""), "image_password"),
 	)
 })
 
@@ -929,5 +981,5 @@ func newValidLRPKey() models.DesiredLRPKey {
 }
 
 func newValidResource() models.DesiredLRPResource {
-	return models.NewDesiredLRPResource(256, 256, "preloaded://linux64")
+	return models.NewDesiredLRPResource(256, 256, 256, "preloaded://linux64")
 }

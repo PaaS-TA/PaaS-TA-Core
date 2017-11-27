@@ -1,5 +1,4 @@
 <%=
-
   def discover_external_ip
     networks = spec.networks.marshal_dump
 
@@ -23,6 +22,7 @@
       name: name,
       index: spec.index,
       external_ip: discover_external_ip,
+      zone: spec.az,
     },
     consul: p('consul'),
   }.to_json

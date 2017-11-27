@@ -13,6 +13,23 @@ import (
 	"time"
 )
 
+// Type of client connection.
+const (
+	// CLIENT is an end user.
+	CLIENT = iota
+	// ROUTER is another router in the cluster.
+	ROUTER
+)
+
+const (
+	// Original Client protocol from 2009.
+	// http://nats.io/documentation/internals/nats-protocol/
+	ClientProtoZero = iota
+	// This signals a client can receive more then the original INFO block.
+	// This can be used to update clients on other cluster members, etc.
+	ClientProtoInfo
+)
+
 func init() {
 	rand.Seed(time.Now().UnixNano())
 }
@@ -30,13 +47,41 @@ const (
 	maxBufSize   = 65536
 )
 
-// Type of client
+// Represent client booleans with a bitmask
+type clientFlag byte
+
+// Some client state represented as flags
 const (
-	// CLIENT is an end user.
-	CLIENT = iota
-	// ROUTER is another router in the cluster.
-	ROUTER
+	connectReceived clientFlag = 1 << iota // The CONNECT proto has been received
+	firstPongSent                          // The first PONG has been sent
+	infoUpdated                            // The server's Info object has changed before first PONG was sent
 )
+
+// set the flag (would be equivalent to set the boolean to true)
+func (cf *clientFlag) set(c clientFlag) {
+	*cf |= c
+}
+
+// isSet returns true if the flag is set, false otherwise
+func (cf clientFlag) isSet(c clientFlag) bool {
+	return cf&c != 0
+}
+
+// setIfNotSet will set the flag `c` only if that flag was not already
+// set and return true to indicate that the flag has been set. Returns
+// false otherwise.
+func (cf *clientFlag) setIfNotSet(c clientFlag) bool {
+	if *cf&c == 0 {
+		*cf |= c
+		return true
+	}
+	return false
+}
+
+// clear unset the flag (would be equivalent to set the boolean to false)
+func (cf *clientFlag) clear(c clientFlag) {
+	*cf &= ^c
+}
 
 type client struct {
 	// Here first because of use of atomics, and memory alignment.
@@ -53,6 +98,7 @@ type client struct {
 	bw    *bufio.Writer
 	srv   *Server
 	subs  map[string]*subscription
+	perms *permissions
 	cache readCache
 	pcd   map[*client]struct{}
 	atmr  *time.Timer
@@ -66,7 +112,21 @@ type client struct {
 	route *route
 	debug bool
 	trace bool
+
+	flags clientFlag // Compact booleans into a single field. Size will be increased when needed.
 }
+
+type permissions struct {
+	sub    *Sublist
+	pub    *Sublist
+	pcache map[string]bool
+}
+
+const (
+	maxResultCacheSize = 512
+	maxPermCacheSize   = 32
+	pruneSize          = 16
+)
 
 // Used in readloop to cache hot subject lookups and group statistics.
 type readCache struct {
@@ -105,6 +165,7 @@ type clientOpts struct {
 	Name          string `json:"name"`
 	Lang          string `json:"lang"`
 	Version       string `json:"version"`
+	Protocol      int    `json:"protocol"`
 }
 
 var defaultOpts = clientOpts{Verbose: true, Pedantic: true}
@@ -143,6 +204,37 @@ func (c *client) initClient() {
 		c.ncs = fmt.Sprintf("%s - cid:%d", conn, c.cid)
 	case ROUTER:
 		c.ncs = fmt.Sprintf("%s - rid:%d", conn, c.cid)
+	}
+}
+
+// RegisterUser allows auth to call back into a new client
+// with the authenticated user. This is used to map any permissions
+// into the client.
+func (c *client) RegisterUser(user *User) {
+	if user.Permissions == nil {
+		return
+	}
+
+	// Process Permissions and map into client connection structures.
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	// Pre-allocate all to simplify checks later.
+	c.perms = &permissions{}
+	c.perms.sub = NewSublist()
+	c.perms.pub = NewSublist()
+	c.perms.pcache = make(map[string]bool)
+
+	// Loop over publish permissions
+	for _, pubSubject := range user.Permissions.Publish {
+		sub := &subscription{subject: []byte(pubSubject)}
+		c.perms.pub.Insert(sub)
+	}
+
+	// Loop over subscribe permissions
+	for _, subSubject := range user.Permissions.Subscribe {
+		sub := &subscription{subject: []byte(subSubject)}
+		c.perms.sub.Insert(sub)
 	}
 }
 
@@ -327,18 +419,44 @@ func (c *client) processConnect(arg []byte) error {
 	typ := c.typ
 	r := c.route
 	srv := c.srv
-	c.mu.Unlock()
-
+	// Moved unmarshalling of clients' Options under the lock.
+	// The client has already been added to the server map, so it is possible
+	// that other routines lookup the client, and access its options under
+	// the client's lock, so unmarshalling the options outside of the lock
+	// would cause data RACEs.
 	if err := json.Unmarshal(arg, &c.opts); err != nil {
+		c.mu.Unlock()
 		return err
 	}
+	// Indicate that the CONNECT protocol has been received, and that the
+	// server now knows which protocol this client supports.
+	c.flags.set(connectReceived)
+	// Capture these under lock
+	proto := c.opts.Protocol
+	verbose := c.opts.Verbose
+	c.mu.Unlock()
 
 	if srv != nil {
+		// As soon as c.opts is unmarshalled and if the proto is at
+		// least ClientProtoInfo, we need to increment the following counter.
+		// This is decremented when client is removed from the server's
+		// clients map.
+		if proto >= ClientProtoInfo {
+			srv.mu.Lock()
+			srv.cproto++
+			srv.mu.Unlock()
+		}
+
 		// Check for Auth
 		if ok := srv.checkAuth(c); !ok {
 			c.authViolation()
 			return ErrAuthorization
 		}
+	}
+
+	// Check client protocol request if it exists.
+	if typ == CLIENT && (proto < ClientProtoZero || proto > ClientProtoInfo) {
+		return ErrBadClientProtocol
 	}
 
 	// Grab connection name of remote route.
@@ -348,7 +466,7 @@ func (c *client) processConnect(arg []byte) error {
 		c.mu.Unlock()
 	}
 
-	if c.opts.Verbose {
+	if verbose {
 		c.sendOK()
 	}
 	return nil
@@ -361,8 +479,20 @@ func (c *client) authTimeout() {
 }
 
 func (c *client) authViolation() {
-	c.Errorf(ErrAuthorization.Error())
+	if c.srv != nil && c.srv.opts.Users != nil {
+		c.Errorf("%s - User %q",
+			ErrAuthorization.Error(),
+			c.opts.Username)
+	} else {
+		c.Errorf(ErrAuthorization.Error())
+	}
 	c.sendErr("Authorization Violation")
+	c.closeConnection()
+}
+
+func (c *client) maxConnExceeded() {
+	c.Errorf(ErrTooManyConnections.Error())
+	c.sendErr(ErrTooManyConnections.Error())
 	c.closeConnection()
 }
 
@@ -399,12 +529,15 @@ func (c *client) sendInfo(info []byte) {
 
 func (c *client) sendErr(err string) {
 	c.mu.Lock()
+	c.traceOutOp("-ERR", []byte(err))
 	c.sendProto([]byte(fmt.Sprintf("-ERR '%s'\r\n", err)), true)
 	c.mu.Unlock()
 }
 
 func (c *client) sendOK() {
 	c.mu.Lock()
+	c.traceOutOp("OK", nil)
+	// Can not autoflush this one, needs to be async.
 	c.sendProto([]byte("+OK\r\n"), false)
 	c.pcd[c] = needFlush
 	c.mu.Unlock()
@@ -423,7 +556,33 @@ func (c *client) processPing() {
 		c.clearConnection()
 		c.Debugf("Error on Flush, error %s", err.Error())
 	}
+	srv := c.srv
+	sendUpdateINFO := false
+	// Check if this is the first PONG, if so...
+	if c.flags.setIfNotSet(firstPongSent) {
+		// Check if server should send an async INFO protocol to the client
+		if c.opts.Protocol >= ClientProtoInfo &&
+			srv != nil && c.flags.isSet(infoUpdated) {
+			sendUpdateINFO = true
+		}
+		// We can now clear the flag
+		c.flags.clear(infoUpdated)
+	}
 	c.mu.Unlock()
+
+	// Some clients send an initial PING as part of the synchronous connect process.
+	// They can't be receiving anything until the first PONG is received.
+	// So we delay the possible updated INFO after this point.
+	if sendUpdateINFO {
+		srv.mu.Lock()
+		// Use the cached protocol
+		proto := srv.infoJSON
+		srv.mu.Unlock()
+
+		c.mu.Lock()
+		c.sendInfo(proto)
+		c.mu.Unlock()
+	}
 }
 
 func (c *client) processPong() {
@@ -591,6 +750,17 @@ func (c *client) processSub(argo []byte) (err error) {
 		return nil
 	}
 
+	// Check permissions if applicable.
+	if c.perms != nil {
+		r := c.perms.sub.Match(string(sub.subject))
+		if len(r.psubs) == 0 {
+			c.mu.Unlock()
+			c.sendErr(fmt.Sprintf("Permissions Violation for Subscription to %q", sub.subject))
+			c.Errorf("Subscription Violation - User %q, Subject %q", c.opts.Username, sub.subject)
+			return nil
+		}
+	}
+
 	// We can have two SUB protocols coming from a route due to some
 	// race conditions. We should make sure that we process only one.
 	sid := string(sub.sid)
@@ -718,10 +888,12 @@ func (c *client) deliverMsg(sub *subscription, mh, msg []byte) {
 		// unsubscribe and drop message on the floor.
 		if sub.nm == sub.max {
 			c.Debugf("Auto-unsubscribe limit of %d reached for sid '%s'\n", sub.max, string(sub.sid))
-			defer client.unsubscribe(sub)
+			// Due to defer, reverse the code order so that execution
+			// is consistent with other cases where we unsubscribe.
 			if shouldForward {
 				defer client.srv.broadcastUnSubscribe(sub)
 			}
+			defer client.unsubscribe(sub)
 		} else if sub.nm > sub.max {
 			c.Debugf("Auto-unsubscribe limit [%d] exceeded\n", sub.max)
 			client.mu.Unlock()
@@ -814,9 +986,57 @@ func (c *client) processMsg(msg []byte) {
 	if c.trace {
 		c.traceMsg(msg)
 	}
+
+	// defintely
+
+	// Disallow publish to _SYS.>, these are reserved for internals.
+	if c.pa.subject[0] == '_' && len(c.pa.subject) > 4 &&
+		c.pa.subject[1] == 'S' && c.pa.subject[2] == 'Y' &&
+		c.pa.subject[3] == 'S' && c.pa.subject[4] == '.' {
+		c.pubPermissionViolation(c.pa.subject)
+		return
+	}
+
+	// Check if published subject is allowed if we have permissions in place.
+	if c.perms != nil {
+		allowed, ok := c.perms.pcache[string(c.pa.subject)]
+		if ok && !allowed {
+			c.pubPermissionViolation(c.pa.subject)
+			return
+		}
+		if !ok {
+			r := c.perms.pub.Match(string(c.pa.subject))
+			notAllowed := len(r.psubs) == 0
+			if notAllowed {
+				c.pubPermissionViolation(c.pa.subject)
+				c.perms.pcache[string(c.pa.subject)] = false
+			} else {
+				c.perms.pcache[string(c.pa.subject)] = true
+			}
+			// Prune if needed.
+			if len(c.perms.pcache) > maxPermCacheSize {
+				// Prune the permissions cache. Keeps us from unbounded growth.
+				r := 0
+				for subject := range c.perms.pcache {
+					delete(c.cache.results, subject)
+					r++
+					if r > pruneSize {
+						break
+					}
+				}
+			}
+			// Return here to allow the pruning code to run if needed.
+			if notAllowed {
+				return
+			}
+		}
+	}
+
 	if c.opts.Verbose {
 		c.sendOK()
 	}
+
+	// Mostly under testing scenarios.
 	if srv == nil {
 		return
 	}
@@ -838,6 +1058,17 @@ func (c *client) processMsg(msg []byte) {
 		subject := string(c.pa.subject)
 		r = srv.sl.Match(subject)
 		c.cache.results[subject] = r
+		if len(c.cache.results) > maxResultCacheSize {
+			// Prune the results cache. Keeps us from unbounded growth.
+			r := 0
+			for subject := range c.cache.results {
+				delete(c.cache.results, subject)
+				r++
+				if r > pruneSize {
+					break
+				}
+			}
+		}
 	}
 
 	// Check for no interest, short circuit if so.
@@ -932,6 +1163,11 @@ func (c *client) processMsg(msg []byte) {
 	}
 }
 
+func (c *client) pubPermissionViolation(subject []byte) {
+	c.sendErr(fmt.Sprintf("Permissions Violation for Publish to %q", subject))
+	c.Errorf("Publish Violation - User %q, Subject %q", c.opts.Username, subject)
+}
+
 func (c *client) processPingTimer() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -1013,7 +1249,9 @@ func (c *client) clearConnection() {
 	// Need to set a deadline otherwise the server could block there
 	// if the peer is not reading from socket.
 	c.nc.SetWriteDeadline(time.Now().Add(DEFAULT_FLUSH_DEADLINE))
-	c.bw.Flush()
+	if c.bw != nil {
+		c.bw.Flush()
+	}
 	c.nc.Close()
 	c.nc.SetWriteDeadline(time.Time{})
 }

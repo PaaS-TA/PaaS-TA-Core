@@ -34,7 +34,7 @@ var _ = Describe("Agent", func() {
 		})
 
 		AfterEach(func() {
-			session.Kill()
+			session.Kill().Wait()
 		})
 
 		It("starts a fake consul agent", func() {
@@ -69,7 +69,7 @@ var _ = Describe("Agent", func() {
 
 			Eventually(filepath.Join(agentConfigDir, "fake-output.json")).Should(BeAnExistingFile())
 
-			session.Kill()
+			session.Kill().Wait()
 
 			startCmd = exec.Command(pathToFakeAgent,
 				"agent",

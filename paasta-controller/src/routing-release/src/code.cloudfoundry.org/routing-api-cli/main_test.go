@@ -198,28 +198,64 @@ var _ = Describe("Main", func() {
 			Expect(server.ReceivedRequests()).To(HaveLen(1))
 		})
 
-		It("Lists the routes", func() {
-			routes := []models.Route{
-				models.NewRoute("llama.example.com", 0, "", "yo", "", 5),
-				models.NewRoute("example.com", 8, "11", "yo", "", 1),
-			}
-			command := buildCommand("list", flags, []string{})
+		Describe("Listing routes", func() {
+			BeforeEach(func() {
+				os.Unsetenv("RTR_TRACE")
+			})
+			It("Lists the routes without logging uaa messages", func() {
+				routes := []models.Route{
+					models.NewRoute("llama.example.com", 0, "", "yo", "", 5),
+					models.NewRoute("example.com", 8, "11", "yo", "", 1),
+				}
+				command := buildCommand("list", flags, []string{})
 
-			server.AppendHandlers(
-				ghttp.CombineHandlers(
-					ghttp.VerifyRequest("GET", "/routing/v1/routes"),
-					ghttp.RespondWithJSONEncoded(http.StatusOK, routes),
-				),
-			)
+				server.AppendHandlers(
+					ghttp.CombineHandlers(
+						ghttp.VerifyRequest("GET", "/routing/v1/routes"),
+						ghttp.RespondWithJSONEncoded(http.StatusOK, routes),
+					),
+				)
 
-			session := routingAPICLI(command...)
+				session := routingAPICLI(command...)
 
-			expectedRoutes, err := json.Marshal(routes)
-			Expect(err).ToNot(HaveOccurred())
+				expectedRoutes, err := json.Marshal(routes)
+				Expect(err).ToNot(HaveOccurred())
 
-			Eventually(session, "2s").Should(Exit(0))
-			Expect(string(session.Out.Contents())).To(ContainSubstring(string(expectedRoutes) + "\n"))
-			Expect(server.ReceivedRequests()).To(HaveLen(1))
+				Eventually(session, "2s").Should(Exit(0))
+				Expect(string(session.Out.Contents())).ToNot(ContainSubstring("uaa-client"))
+				Expect(string(session.Out.Contents())).To(ContainSubstring(string(expectedRoutes) + "\n"))
+				Expect(server.ReceivedRequests()).To(HaveLen(1))
+			})
+
+			Context("with RTR_TRACE=true", func() {
+				BeforeEach(func() {
+					os.Setenv("RTR_TRACE", "true")
+				})
+				It("Lists the routes and logs uaa messages", func() {
+					routes := []models.Route{
+						models.NewRoute("llama.example.com", 0, "", "yo", "", 5),
+						models.NewRoute("example.com", 8, "11", "yo", "", 1),
+					}
+					command := buildCommand("list", flags, []string{})
+
+					server.AppendHandlers(
+						ghttp.CombineHandlers(
+							ghttp.VerifyRequest("GET", "/routing/v1/routes"),
+							ghttp.RespondWithJSONEncoded(http.StatusOK, routes),
+						),
+					)
+
+					session := routingAPICLI(command...)
+
+					expectedRoutes, err := json.Marshal(routes)
+					Expect(err).ToNot(HaveOccurred())
+
+					Eventually(session, "2s").Should(Exit(0))
+					Expect(string(session.Out.Contents())).To(ContainSubstring("uaa-client"))
+					Expect(string(session.Out.Contents())).To(ContainSubstring(string(expectedRoutes) + "\n"))
+					Expect(server.ReceivedRequests()).To(HaveLen(1))
+				})
+			})
 		})
 
 		Context("events", func() {

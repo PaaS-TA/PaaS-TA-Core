@@ -53,7 +53,7 @@ properties:
          password: password2
 
   blobstore.secure_link.secret:
-    description: "The secret used for signing URLs"
+    description: "The secret used for signing URLs. Must not contain $, or any other variables that are used by and cannot be escaped in the Nginx config."
 
   blobstore.max_upload_size:
     description: "Max allowed file size for upload"

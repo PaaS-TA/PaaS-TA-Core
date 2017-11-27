@@ -1,9 +1,10 @@
 package etcd_test
 
 import (
-	"acceptance-tests/testing/testconsumer/etcd"
-	"acceptance-tests/testing/testconsumer/etcd/fakes"
 	"errors"
+
+	"github.com/cloudfoundry-incubator/etcd-release/src/acceptance-tests/testing/testconsumer/etcd"
+	"github.com/cloudfoundry-incubator/etcd-release/src/acceptance-tests/testing/testconsumer/etcd/fakes"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"

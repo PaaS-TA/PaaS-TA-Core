@@ -13,12 +13,13 @@ module VCAP::CloudController
     define_schema do
       {
         :external_port => Integer,
+        :tls_port => Integer,
         :external_protocol => String,
         :internal_service_hostname => String,
         :info => {
           name: String,
           build: String,
-          version: Fixnum,
+          version: Integer,
           support_address: String,
           description: String,
           optional(:app_ssh_endpoint) => String,
@@ -29,28 +30,25 @@ module VCAP::CloudController
         :system_domain => String,
         :system_domain_organization => enum(String, NilClass),
         :app_domains => Array,
-        :app_events => {
-          cutoff_age_in_days: Fixnum
-        },
         :app_usage_events => {
-          cutoff_age_in_days: Fixnum
+          cutoff_age_in_days: Integer
         },
         :audit_events => {
-          cutoff_age_in_days: Fixnum
+          cutoff_age_in_days: Integer
         },
         :failed_jobs => {
-          cutoff_age_in_days: Fixnum
+          cutoff_age_in_days: Integer
         },
         :completed_tasks => {
-          cutoff_age_in_days: Fixnum
+          cutoff_age_in_days: Integer
         },
-        :default_app_memory => Fixnum,
-        :default_app_disk_in_mb => Fixnum,
-        optional(:maximum_app_disk_in_mb) => Fixnum,
-        :default_health_check_timeout => Fixnum,
-        :maximum_health_check_timeout => Fixnum,
+        :default_app_memory => Integer,
+        :default_app_disk_in_mb => Integer,
+        optional(:maximum_app_disk_in_mb) => Integer,
+        :default_health_check_timeout => Integer,
+        :maximum_health_check_timeout => Integer,
 
-        optional(:instance_file_descriptor_limit) => Fixnum,
+        optional(:instance_file_descriptor_limit) => Integer,
 
         optional(:bits_service) => {
           enabled: bool,
@@ -72,9 +70,11 @@ module VCAP::CloudController
         },
 
         :uaa => {
-          :url                => String,
-          :resource_id        => String,
+          :url                        => String,
+          :resource_id                => String,
           optional(:symmetric_secret) => String,
+          :internal_url               => String,
+          :ca_file                    => String,
         },
 
         :logging => {
@@ -83,7 +83,6 @@ module VCAP::CloudController
           optional(:syslog)   => String,      # Name to associate with syslog messages (should start with 'vcap.')
         },
 
-        :message_bus_servers   => [String],   # A list of NATS uris of the form nats://<user>:<pass>@<host>:<port>
         :pid_filename          => String,     # Pid filename to use
 
         optional(:directories) => {
@@ -113,10 +112,10 @@ module VCAP::CloudController
         },
 
         :staging => {
-          :timeout_in_seconds => Fixnum,
-          optional(:minimum_staging_memory_mb) => Fixnum,
-          optional(:minimum_staging_disk_mb) => Fixnum,
-          optional(:minimum_staging_file_descriptor_limit) => Fixnum,
+          :timeout_in_seconds => Integer,
+          optional(:minimum_staging_memory_mb) => Integer,
+          optional(:minimum_staging_disk_mb) => Integer,
+          optional(:minimum_staging_file_descriptor_limit) => Integer,
           :auth => {
             user: String,
             password: String,
@@ -126,17 +125,17 @@ module VCAP::CloudController
         :cc_partition => String,
 
         optional(:default_account_capacity) => {
-          memory: Fixnum,   #:default => 2048,
-          app_uris: Fixnum, #:default => 4,
-          services: Fixnum, #:default => 16,
-          apps: Fixnum, #:default => 20
+          memory: Integer,   #:default => 2048,
+          app_uris: Integer, #:default => 4,
+          services: Integer, #:default => 16,
+          apps: Integer, #:default => 20
         },
 
         optional(:admin_account_capacity) => {
-          memory: Fixnum,   #:default => 2048,
-          app_uris: Fixnum, #:default => 4,
-          services: Fixnum, #:default => 16,
-          apps: Fixnum, #:default => 20
+          memory: Integer,   #:default => 2048,
+          app_uris: Integer, #:default => 4,
+          services: Integer, #:default => 16,
+          apps: Integer, #:default => 20
         },
 
         optional(:index)       => Integer,    # Component index (cc-0, cc-1, etc)
@@ -223,9 +222,8 @@ module VCAP::CloudController
           optional(:router) => String,
         },
 
-        optional(:doppler) => {
-          enabled: bool,
-          optional(:url) => String
+        doppler: {
+          url: String
         },
 
         optional(:request_timeout_in_seconds) => Integer,
@@ -246,12 +244,10 @@ module VCAP::CloudController
         optional(:default_locale) => String,
         optional(:allowed_cors_domains) => [String],
 
-        optional(:dea_advertisement_timeout_in_seconds) => Integer,
         optional(:placement_top_stager_percentage) => Integer,
         optional(:minimum_candidate_stagers) => Integer,
 
         optional(:users_can_select_backend) => bool,
-        optional(:default_to_diego_backend) => bool,
         optional(:routing_api) => {
           url: String,
           routing_client_name: String,
@@ -282,22 +278,31 @@ module VCAP::CloudController
         :shared_isolation_segment_name => String,
 
         optional(:diego) => {
-          temporary_local_staging:               bool,
-          nsync_url:                             String,
-          stager_url:                            String,
-          tps_url:                               String,
-          file_server_url:                       String,
-          cc_uploader_url:                       String,
-          use_privileged_containers_for_staging: bool,
-          lifecycle_bundles:                     Hash,
-
           bbs: {
             url:         String,
             ca_file:     String,
             cert_file:   String,
             key_file:    String,
-          }
+          },
+          cc_uploader_url:                           String,
+          file_server_url:                           String,
+          lifecycle_bundles:                         Hash,
+          nsync_url:                                 String,
+          pid_limit:                                 Integer,
+          stager_url:                                String,
+          temporary_local_staging:                   bool,
+          temporary_local_tasks:                     bool,
+          temporary_local_apps:                      bool,
+          temporary_local_sync:                      bool,
+          temporary_local_tps:                       bool,
+          temporary_cc_uploader_mtls:                bool,
+          optional(:temporary_oci_buildpack_mode) => enum('oci-phase-1'),
+          tps_url:                                   String,
+          use_privileged_containers_for_running:     bool,
+          use_privileged_containers_for_staging:     bool,
         },
+
+        optional(:perform_blob_cleanup) => bool,
       }
     end
 
@@ -307,7 +312,7 @@ module VCAP::CloudController
         merge_defaults(config)
       end
 
-      attr_reader :config, :message_bus
+      attr_reader :config
 
       def configure_components(config)
         @config = config
@@ -330,35 +335,24 @@ module VCAP::CloudController
         run_initializers(config)
       end
 
-      def configure_components_depending_on_message_bus(message_bus)
-        @message_bus = message_bus
+      def configure_runner_components
         dependency_locator = CloudController::DependencyLocator.instance
         dependency_locator.config = @config
-        legacy_hm_client = Dea::HM9000::LegacyClient.new(@message_bus, @config)
-        hm_client = Dea::HM9000::Client.new(legacy_hm_client, @config)
-        dependency_locator.register(:health_manager_client, hm_client)
         tps_client = Diego::TPSClient.new(@config)
         dependency_locator.register(:tps_client, tps_client)
         dependency_locator.register(:upload_handler, UploadHandler.new(config))
         dependency_locator.register(:app_event_repository, Repositories::AppEventRepository.new)
 
-        blobstore_url_generator = dependency_locator.blobstore_url_generator
-        dea_pool = Dea::Pool.new(@config, message_bus)
-
-        runners = Runners.new(@config, message_bus, dea_pool)
+        runners = Runners.new(@config)
         dependency_locator.register(:runners, runners)
 
-        stagers = Stagers.new(@config, message_bus, dea_pool)
+        stagers = Stagers.new(@config)
         dependency_locator.register(:stagers, stagers)
 
-        dependency_locator.register(:instances_reporters, InstancesReporters.new(tps_client, hm_client))
+        dependency_locator.register(:instances_reporters, InstancesReporters.new)
         dependency_locator.register(:index_stopper, IndexStopper.new(runners))
 
-        Dea::Client.configure(@config, message_bus, dea_pool, blobstore_url_generator)
-
         AppObserver.configure(stagers, runners)
-
-        LegacyBulk.configure(@config, message_bus)
 
         InternalApi.configure(@config)
       end
@@ -408,8 +402,6 @@ module VCAP::CloudController
         config[:db][:database] ||= ENV['DB_CONNECTION_STRING']
         config[:default_locale] ||= 'en_US'
         config[:allowed_cors_domains] ||= []
-        config[:default_to_diego_backend] ||= false
-        config[:dea_advertisement_timeout_in_seconds] ||= 10
         config[:placement_top_stager_percentage] ||= 10
         config[:staging][:minimum_staging_memory_mb] ||= 1024
         config[:staging][:minimum_staging_disk_mb] ||= 4096
@@ -436,7 +428,16 @@ module VCAP::CloudController
       def sanitize(config)
         sanitize_grace_period(config)
         sanitize_staging_auth(config)
+        sanitize_diego_properties(config)
+
         config
+      end
+
+      def sanitize_diego_properties(config)
+        pid_limit = HashUtils.dig(config, :diego, :pid_limit)
+        if pid_limit
+          config[:diego][:pid_limit] = 0 if pid_limit < 0
+        end
       end
 
       def sanitize_grace_period(config)

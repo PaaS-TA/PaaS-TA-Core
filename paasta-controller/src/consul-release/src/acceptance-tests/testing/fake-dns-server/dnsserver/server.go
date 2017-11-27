@@ -1,28 +1,35 @@
 package dnsserver
 
 import (
-	"fmt"
 	"log"
 	"net"
-	"os"
 
 	miekgdns "github.com/miekg/dns"
 )
 
 type Server struct {
-	server  *miekgdns.Server
-	records map[string][]miekgdns.RR
+	tcpServer            *miekgdns.Server
+	udpServer            *miekgdns.Server
+	records              map[string][]miekgdns.RR
+	truncatedDomainNames map[string]bool
 }
 
 func NewServer() Server {
 	server := Server{
-		records: make(map[string][]miekgdns.RR),
+		records:              make(map[string][]miekgdns.RR),
+		truncatedDomainNames: make(map[string]bool),
 	}
 
-	server.server = &miekgdns.Server{
+	server.udpServer = &miekgdns.Server{
 		Addr:    ":53",
 		Net:     "udp",
-		Handler: miekgdns.HandlerFunc(server.handleDNSRequest),
+		Handler: miekgdns.HandlerFunc(server.handleUDPDNSRequest),
+	}
+
+	server.tcpServer = &miekgdns.Server{
+		Addr:    ":53",
+		Net:     "tcp",
+		Handler: miekgdns.HandlerFunc(server.handleTCPDNSRequest),
 	}
 
 	return server
@@ -30,21 +37,40 @@ func NewServer() Server {
 
 func (s Server) Start() {
 	go func() {
-		err := s.server.ListenAndServe()
-
+		err := s.tcpServer.ListenAndServe()
 		if err != nil {
-			fmt.Fprintln(os.Stderr, "%s\n", err.Error())
+			log.Fatal(err)
+		}
+	}()
+
+	go func() {
+		err := s.udpServer.ListenAndServe()
+		if err != nil {
+			log.Fatal(err)
 		}
 	}()
 }
 
 func (s Server) Stop() error {
-	err := s.server.Shutdown()
-	return err
+	err := s.udpServer.Shutdown()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	err = s.tcpServer.Shutdown()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return nil
 }
 
 func (Server) URL() string {
 	return "127.0.0.1:53"
+}
+
+func (s Server) SetTruncateDNS(domainName string) {
+	s.truncatedDomainNames[domainName+"."] = true
 }
 
 func (s Server) RegisterARecord(domainName string, ipAddress net.IP) {
@@ -80,7 +106,7 @@ func mustRR(s string) miekgdns.RR {
 	return r
 }
 
-func (s Server) handleDNSRequest(responseWriter miekgdns.ResponseWriter, requestMessage *miekgdns.Msg) {
+func (s Server) handleTCPDNSRequest(responseWriter miekgdns.ResponseWriter, requestMessage *miekgdns.Msg) {
 	responseMessage := new(miekgdns.Msg)
 	responseMessage.SetReply(requestMessage)
 	resourceRecords, recordExists := s.records[requestMessage.Question[0].Name]
@@ -91,6 +117,28 @@ func (s Server) handleDNSRequest(responseWriter miekgdns.ResponseWriter, request
 		for i, resourceRecord := range resourceRecords {
 			responseMessage.Answer[i] = resourceRecord
 		}
+	} else {
+		log.Printf("No record found: %s\n", requestMessage.Question[0].Name)
+	}
+
+	log.Println("Response to DNS request: ", responseMessage)
+	responseWriter.WriteMsg(responseMessage)
+}
+
+func (s Server) handleUDPDNSRequest(responseWriter miekgdns.ResponseWriter, requestMessage *miekgdns.Msg) {
+	responseMessage := new(miekgdns.Msg)
+	responseMessage.SetReply(requestMessage)
+	resourceRecords, recordExists := s.records[requestMessage.Question[0].Name]
+
+	if recordExists {
+		log.Printf("Found record: %s\n", requestMessage.Question[0].Name)
+		responseMessage.Answer = make([]miekgdns.RR, len(resourceRecords))
+		for i, resourceRecord := range resourceRecords {
+			responseMessage.Answer[i] = resourceRecord
+		}
+
+		responseMessage.MsgHdr.Truncated = s.truncatedDomainNames[requestMessage.Question[0].Name]
+
 	} else {
 		log.Printf("No record found: %s\n", requestMessage.Question[0].Name)
 	}

@@ -5,9 +5,9 @@ module VCAP::CloudController
     let(:user) { make_user }
     let(:tmpdir) { Dir.mktmpdir }
     let(:filename) { 'file.zip' }
-    let(:sha_valid_zip) { Digester.new.digest_file(valid_zip) }
-    let(:sha_valid_zip2) { Digester.new.digest_file(valid_zip2) }
-    let(:sha_valid_tar_gz) { Digester.new.digest_file(valid_tar_gz) }
+    let(:sha_valid_zip) { Digester.new(algorithm: Digest::SHA256).digest_file(valid_zip) }
+    let(:sha_valid_zip2) { Digester.new(algorithm: Digest::SHA256).digest_file(valid_zip2) }
+    let(:sha_valid_tar_gz) { Digester.new(algorithm: Digest::SHA256).digest_file(valid_tar_gz) }
     let(:valid_zip) do
       zip_name = File.join(tmpdir, filename)
       TestZip.create(zip_name, 1, 1024)
@@ -46,12 +46,14 @@ module VCAP::CloudController
 
       before { CloudController::DependencyLocator.instance.register(:upload_handler, UploadHandler.new(TestConfig.config)) }
 
-      context '/v2/buildpacks/:guid/bits' do
+      context 'PUT /v2/buildpacks/:guid/bits' do
         before do
+          TestConfig.override(directories: { tmpdir: File.dirname(valid_zip.path) })
+          @cache = Delayed::Worker.delay_jobs
           Delayed::Worker.delay_jobs = false
         end
 
-        after { Delayed::Worker.delay_jobs = true }
+        after { Delayed::Worker.delay_jobs = @cache }
 
         let(:upload_body) { { buildpack: valid_zip, buildpack_name: valid_zip.path } }
 
@@ -189,7 +191,7 @@ module VCAP::CloudController
         end
       end
 
-      context '/v2/buildpacks/:guid/download' do
+      context 'GET /v2/buildpacks/:guid/download' do
         let(:staging_user) { 'user' }
         let(:staging_password) { 'password' }
         let(:staging_config) do
@@ -201,6 +203,7 @@ module VCAP::CloudController
                 password: staging_password,
               },
             },
+            directories: { tmpdir: File.dirname(valid_zip.path) },
           }
         end
 

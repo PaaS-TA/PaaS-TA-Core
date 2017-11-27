@@ -1,19 +1,17 @@
 require 'presenters/v3/package_presenter'
 require 'presenters/v3/paginated_list_presenter'
-require 'queries/package_list_fetcher'
+require 'fetchers/package_list_fetcher'
 require 'actions/package_delete'
 require 'actions/package_upload'
 require 'actions/package_create'
 require 'actions/package_copy'
-require 'messages/package_create_message'
-require 'messages/package_upload_message'
-require 'messages/packages_list_message'
+require 'messages/packages/package_create_message'
+require 'messages/packages/package_upload_message'
+require 'messages/packages/packages_list_message'
 require 'controllers/v3/mixins/sub_resource'
 
 class PackagesController < ApplicationController
   include SubResource
-
-  before_action :check_read_permissions!, only: [:index, :show, :download]
 
   def index
     message = PackagesListMessage.from_params(subresource_query_params)
@@ -23,7 +21,7 @@ class PackagesController < ApplicationController
       app, dataset = PackageListFetcher.new.fetch_for_app(message: message)
       app_not_found! unless app && can_read?(app.space.guid, app.organization.guid)
     else
-      dataset = if roles.admin? || roles.admin_read_only?
+      dataset = if can_read_globally?
                   PackageListFetcher.new.fetch_all(message: message)
                 else
                   PackageListFetcher.new.fetch_for_spaces(message: message, space_guids: readable_space_guids)
@@ -48,11 +46,10 @@ class PackagesController < ApplicationController
 
     begin
       PackageUpload.new.upload_async(
-        message:    message,
-        package:    package,
-        config:     configuration,
-        user_guid:  current_user.guid,
-        user_email: current_user_email
+        message:         message,
+        package:         package,
+        config:          configuration,
+        user_audit_info: user_audit_info
       )
     rescue PackageUpload::InvalidPackage => e
       unprocessable!(e.message)
@@ -71,8 +68,7 @@ class PackagesController < ApplicationController
 
     VCAP::CloudController::Repositories::PackageEventRepository.record_app_package_download(
       package,
-      current_user.guid,
-      current_user_email,
+      user_audit_info
     )
 
     send_package_blob(package)
@@ -90,56 +86,54 @@ class PackagesController < ApplicationController
     package_not_found! unless package && can_read?(package.space.guid, package.space.organization.guid)
     unauthorized! unless can_write?(package.space.guid)
 
-    PackageDelete.new(current_user.guid, current_user_email).delete(package)
+    delete_action = PackageDelete.new(user_audit_info)
+    deletion_job  = VCAP::CloudController::Jobs::DeleteActionJob.new(PackageModel, package.guid, delete_action)
+    job = Jobs::Enqueuer.new(deletion_job, queue: 'cc-generic').enqueue_pollable
 
-    head :no_content
+    url_builder = VCAP::CloudController::Presenters::ApiUrlBuilder.new
+    head HTTP::ACCEPTED, 'Location' => url_builder.build_url(path: "/v3/jobs/#{job.guid}")
   end
 
   def create
-    if params[:source_package_guid]
-      create_copy
-    else
-      create_new
-    end
-  end
-
-  def create_new
-    message = PackageCreateMessage.create_from_http_request(params[:app_guid], params[:body])
-    unprocessable!(message.errors.full_messages) unless message.valid?
-
-    app = AppModel.where(guid: params[:app_guid]).eager(:space, :organization).all.first
-    app_not_found! unless app && can_read?(app.space.guid, app.organization.guid)
-    unauthorized! unless can_write?(app.space.guid)
-
-    package = PackageCreate.create(message: message, user_guid: current_user.guid, user_email: current_user_email)
+    package = params[:source_guid] ? create_copy : create_fresh
 
     render status: :created, json: Presenters::V3::PackagePresenter.new(package)
-  rescue PackageCreate::InvalidPackage => e
-    unprocessable!(e.message)
-  end
-
-  def create_copy
-    destination_app = AppModel.where(guid: params[:app_guid]).eager(:space, :organization).all.first
-    app_not_found! unless destination_app && can_read?(destination_app.space.guid, destination_app.organization.guid)
-    unauthorized! unless can_write?(destination_app.space.guid)
-
-    source_package = PackageModel.where(guid: params[:source_package_guid]).eager(:app, :space, space: :organization).all.first
-    package_not_found! unless source_package && can_read?(source_package.space.guid, source_package.space.organization.guid)
-    unauthorized! unless can_write?(source_package.space.guid)
-
-    package = PackageCopy.new.copy(
-      destination_app_guid: params[:app_guid],
-      source_package:       source_package,
-      user_guid:            current_user.guid,
-      user_email:           current_user_email
-    )
-
-    render status: :created, json: Presenters::V3::PackagePresenter.new(package)
-  rescue PackageCopy::InvalidPackage => e
+  rescue PackageCopy::InvalidPackage, PackageCreate::InvalidPackage => e
     unprocessable!(e.message)
   end
 
   private
+
+  def create_fresh
+    message = PackageCreateMessage.create_from_http_request(params[:body])
+    unprocessable!(message.errors.full_messages) unless message.valid?
+
+    app = AppModel.where(guid: message.app_guid).eager(:space, :organization).all.first
+    unprocessable_app! unless app &&
+      can_read?(app.space.guid, app.organization.guid) &&
+      can_write?(app.space.guid)
+
+    PackageCreate.create(message: message, user_audit_info: user_audit_info)
+  end
+
+  def create_copy
+    app_guid = HashUtils.dig(params, :body, :relationships, :app, :data, :guid)
+    destination_app = AppModel.where(guid: app_guid).eager(:space, :organization).all.first
+    unprocessable_app! unless destination_app &&
+      can_read?(destination_app.space.guid, destination_app.organization.guid) &&
+      can_write?(destination_app.space.guid)
+
+    source_package = PackageModel.where(guid: params[:source_guid]).eager(:app, :space, space: :organization).all.first
+    unprocessable_source_package! unless source_package &&
+      can_read?(source_package.space.guid, source_package.space.organization.guid) &&
+      can_write?(source_package.space.guid)
+
+    PackageCopy.new.copy(
+      destination_app_guid: app_guid,
+      source_package:       source_package,
+      user_audit_info:      user_audit_info
+    )
+  end
 
   def package_not_found!
     resource_not_found!(:package)
@@ -152,5 +146,13 @@ class PackagesController < ApplicationController
   def send_package_blob(package)
     package_blobstore = CloudController::DependencyLocator.instance.package_blobstore
     BlobDispatcher.new(blobstore: package_blobstore, controller: self).send_or_redirect(guid: package.guid)
+  end
+
+  def unprocessable_app!
+    unprocessable!('App is invalid. Ensure it exists and you have access to it.')
+  end
+
+  def unprocessable_source_package!
+    unprocessable!('Source package is invalid. Ensure it exists and you have access to it.')
   end
 end

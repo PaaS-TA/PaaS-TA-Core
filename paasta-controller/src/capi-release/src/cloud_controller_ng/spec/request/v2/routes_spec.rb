@@ -8,12 +8,6 @@ RSpec.describe 'Routes' do
     space.organization.add_user(user)
     space.add_developer(user)
 
-    stub_request(:post, 'http://routing-client:routing-secret@localhost:8080/uaa/oauth/token').
-      with(body: 'grant_type=client_credentials').
-      to_return(status: 200,
-                body:           '{"token_type": "monkeys", "access_token": "banana"}',
-                headers:        { 'content-type' => 'application/json' })
-
     stub_request(:get, 'http://localhost:3000/routing/v1/router_groups').
       to_return(status: 200, body: '{}', headers: {})
   end
@@ -59,7 +53,7 @@ RSpec.describe 'Routes' do
     end
 
     context 'with inline-relations-depth' do
-      let!(:process) { VCAP::CloudController::AppFactory.make(space: space) }
+      let!(:process) { VCAP::CloudController::AppFactory.make(space: space, diego: false) }
       let!(:route_mapping) { VCAP::CloudController::RouteMappingModel.make(app: process.app, process_type: process.type, route: route) }
 
       it 'includes related records' do
@@ -126,7 +120,8 @@ RSpec.describe 'Routes' do
                     'service_instances_url'        => "/v2/spaces/#{space.guid}/service_instances",
                     'app_events_url'               => "/v2/spaces/#{space.guid}/app_events",
                     'events_url'                   => "/v2/spaces/#{space.guid}/events",
-                    'security_groups_url'          => "/v2/spaces/#{space.guid}/security_groups"
+                    'security_groups_url'          => "/v2/spaces/#{space.guid}/security_groups",
+                    'staging_security_groups_url'  => "/v2/spaces/#{space.guid}/staging_security_groups"
                   }
                 },
                 'apps_url'              => "/v2/routes/#{route.guid}/apps",
@@ -155,18 +150,22 @@ RSpec.describe 'Routes' do
                       'command'                    => nil,
                       'console'                    => false,
                       'debug'                      => nil,
-                      'staging_task_id'            => process.latest_droplet.guid,
+                      'staging_task_id'            => process.latest_build.guid,
                       'package_state'              => 'STAGED',
                       'health_check_type'          => 'port',
                       'health_check_timeout'       => nil,
+                      'health_check_http_endpoint' => nil,
                       'staging_failed_reason'      => nil,
                       'staging_failed_description' => nil,
                       'diego'                      => false,
                       'docker_image'               => nil,
+                      'docker_credentials'         => {
+                        'username' => nil,
+                        'password' => nil
+                      },
                       'package_updated_at'         => iso8601,
                       'detected_start_command'     => '',
                       'enable_ssh'                 => true,
-                      'docker_credentials_json'    => { 'redacted_message' => '[PRIVATE DATA HIDDEN]' },
                       'ports'                      => nil,
                       'space_url'                  => "/v2/spaces/#{space.guid}",
                       'stack_url'                  => "/v2/stacks/#{process.stack.guid}",

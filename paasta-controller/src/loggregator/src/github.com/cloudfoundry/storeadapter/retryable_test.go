@@ -37,7 +37,8 @@ var _ = Describe("Retryable", func() {
 
 		Context("when the store adapter returns a timeout error", func() {
 			BeforeEach(func() {
-				resultIn(ErrorTimeout)
+				errorTimeout := NewError(errors.New("timeout"), ErrorTimeout)
+				resultIn(errorTimeout)
 			})
 
 			Context("as long as the backoff policy returns true", func() {
@@ -71,7 +72,11 @@ var _ = Describe("Retryable", func() {
 					Expect(retryPolicy.DelayForArgsForCall(2)).To(Equal(uint(3)))
 					Expect(sleeper.SleepArgsForCall(2)).To(Equal(1000 * time.Second))
 
-					Expect(errResult).To(Equal(ErrorTimeout))
+					if cErr, ok := errResult.(Error); ok {
+						Expect(cErr.Type()).To(Equal(ErrorTimeout))
+					} else {
+						Fail("expected the error to be a storeadapter.Error")
+					}
 				})
 			})
 		})

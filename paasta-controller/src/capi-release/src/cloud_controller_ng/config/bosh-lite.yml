@@ -1,14 +1,12 @@
 ---
 local_route: 192.168.50.1
 external_port: 9022
-internal_service_hostname: 192.168.50.1
+tls_port: 9023
+internal_service_hostname: cloud-controller-ng.service.cf.internal
 
 pid_filename: /tmp/cloud_controller.pid
 newrelic_enabled: false
 development_mode: false
-
-message_bus_servers:
-  - nats://nats:nats@10.244.0.6:4222
 
 external_protocol: https
 external_domain: api.bosh-lite.com
@@ -20,9 +18,6 @@ app_domains: [ bosh-lite.com ]
 jobs:
   global:
     timeout_in_seconds: 14400
-
-app_events:
-  cutoff_age_in_days: 31
 
 app_usage_events:
   cutoff_age_in_days: 31
@@ -82,10 +77,10 @@ logging:
 
 loggregator:
   router: 127.0.0.1:3457
-  url: wss://loggregator.bosh-lite.com:443
+  internal_url: 'http://loggregator-trafficcontroller.service.cf.internal:8081'
 
 doppler:
-  enabled: false
+  url: wss://doppler.bosh-lite.com:443
 
 db: &db
   database: postgres://ccadmin:admin@10.244.0.30:5524/ccdb
@@ -98,6 +93,7 @@ login:
 
 uaa:
   url: https://uaa.bosh-lite.com
+  internal_url: https://uaa.service.cf.internal:8443
   resource_id: cloud_controller,cloud_controller_service_permissions
   verification_key: |
       -----BEGIN PUBLIC KEY-----
@@ -106,6 +102,7 @@ uaa:
       qHxf+ZH9BL1gk9Y6kCnbM5R60gfwjyW1/dQPjOzn9N394zd2FJoFHwdq9Qs0wBug
       spULZVNRxq7veq/fzwIDAQAB
       -----END PUBLIC KEY-----
+  ca_file: "spec/fixtures/certs/uaa_ca.crt"
 
 hm9000:
   url: https://hm9000.bosh-lite.com
@@ -115,7 +112,7 @@ hm9000:
 staging:
   timeout_in_seconds: 900
   minimum_staging_memory_mb: 1024
-  minimum_staging_disk_mb: 6144
+  minimum_staging_disk_mb: 4096
   minimum_staging_file_descriptor_limit: 16384
   auth:
     user: upload-user
@@ -223,7 +220,7 @@ cloud_controller_username_lookup_client_secret: cloud-controller-username-lookup
 
 users_can_select_backend: true
 allow_app_ssh_access: true
-default_to_diego_backend: false
+default_app_ssh_access: true
 
 skip_cert_verify: true
 
@@ -253,7 +250,6 @@ default_staging_security_groups: ["public_networks","dns"]
 
 allowed_cors_domains: []
 
-dea_advertisement_timeout_in_seconds: 15
 placement_top_stager_percentage: 10
 
 system_hostnames: ["api", "uaa", "login", "doppler", "loggregator", "hm9000"]
@@ -265,12 +261,18 @@ rate_limiter:
   reset_interval_in_minutes: 60
 
 diego:
-  temporary_local_staging: false
-  nsync_url: http://10.244.16.14:8787
-  stager_url: http://10.244.16.14:8888
-  tps_url: http://10.244.16.14:1518
-  file_server_url: http://10.244.16.14:8080
-  cc_uploader_url: http://10.244.16.14:9090
+  temporary_local_staging: true
+  temporary_local_tasks: true
+  temporary_local_apps: true
+  temporary_local_sync: true
+  temporary_local_tps: true
+  temporary_cc_uploader_mtls: true
+  nsync_url: http://10.244.16.5:8787
+  stager_url: http://10.244.16.5:8888
+  tps_url: http://10.244.16.5:1518
+  file_server_url: http://file-server.service.cf.internal:8080
+  cc_uploader_url: http://cc-uploader.service.cf.internal:9090
+  use_privileged_containers_for_running: false
   use_privileged_containers_for_staging: false
   lifecycle_bundles:
     "buildpack/cflinuxfs2": "buildpack_app_lifecycle/buildpack_app_lifecycle.tgz"
@@ -280,6 +282,16 @@ diego:
   docker_staging_stack: 'cflinuxfs2'
   bbs:
     url: https://bbs.service.cf.internal:8889
-    key_file: /var/vcap/jobs/cloud_controller_ng/config/certs/bbs_client.key
-    cert_file: /var/vcap/jobs/cloud_controller_ng/config/certs/bbs_client.crt
-    ca_file: /var/vcap/jobs/cloud_controller_ng/config/certs/bbs_ca.crt
+    key_file: spec/fixtures/certs/bbs_client.key
+    cert_file: spec/fixtures/certs/bbs_client.crt
+    ca_file: spec/fixtures/certs/bbs_ca.crt
+  pid_limit: 1024
+
+shared_isolation_segment_name: shared
+
+bits_service:
+  enabled: false
+  public_endpoint: http://bits-service.bosh-lite.com
+  private_endpoint: http://bits-service.service.cf.internal
+  username: admin
+  password: admin

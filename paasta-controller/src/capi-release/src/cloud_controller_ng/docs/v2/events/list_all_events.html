@@ -89,7 +89,7 @@
                   <span class="name">q</span>
               </td>
               <td>
-                  <span class="description">Parameters used to filter the result set.<br/>Format queries as &lt;filter&gt;&lt;op&gt;&lt;value&gt;<br/> Valid ops: : &gt;= &lt;= &lt; &gt; IN<br/> Valid filters: timestamp, type, actee</span>
+                  <span class="description">Parameters used to filter the result set.<br/>Format queries as &lt;filter&gt;&lt;op&gt;&lt;value&gt;<br/> Valid ops: : &gt;= &lt;= &lt; &gt; IN<br/> Valid filters: timestamp, type, actee, space_guid, organization_guid</span>
               </td>
               <td>
                 <ul class="valid_values">
@@ -144,6 +144,24 @@
               </td>
               <td>
                 <ul class="valid_values">
+                </ul>
+              </td>
+              <td>
+                <ul class="example_values">
+                </ul>
+              </td>
+            </tr>
+            <tr class="">
+              <td class=" ">
+                  <span class="name">order-by</span>
+              </td>
+              <td>
+                  <span class="description">Attribute to order results by</span>
+              </td>
+              <td>
+                <ul class="valid_values">
+                  <li>timestamp</li>
+                  <li>id</li>
                 </ul>
               </td>
               <td>
@@ -290,6 +308,10 @@ Cookie: </pre>
                       <li>audit.app.stop</li>
                       <li>audit.app.unmap-route</li>
                       <li>audit.app.update</li>
+                      <li>audit.app.upload-bits</li>
+                      <li>audit.organization.create</li>
+                      <li>audit.organization.delete-request</li>
+                      <li>audit.organization.update</li>
                       <li>audit.route.create</li>
                       <li>audit.route.delete-request</li>
                       <li>audit.route.update</li>
@@ -322,6 +344,21 @@ Cookie: </pre>
                       <li>audit.user_provided_service_instance.create</li>
                       <li>audit.user_provided_service_instance.delete</li>
                       <li>audit.user_provided_service_instance.update</li>
+                      <li>audit.user.space_auditor_add</li>
+                      <li>audit.user.space_auditor_remove</li>
+                      <li>audit.user.space_manager_add</li>
+                      <li>audit.user.space_manager_remove</li>
+                      <li>audit.user.space_developer_add</li>
+                      <li>audit.user.space_developer_remove</li>
+                      <li>audit.user.organization_auditor_add</li>
+                      <li>audit.user.organization_auditor_remove</li>
+                      <li>audit.user.organization_billing_manager_add</li>
+                      <li>audit.user.organization_billing_manager_remove</li>
+                      <li>audit.user.organization_manager_add</li>
+                      <li>audit.user.organization_manager_remove</li>
+                      <li>audit.user.organization_user_add</li>
+                      <li>audit.user.organization_user_remove</li>
+                      <li>blob.remove_orphan</li>
                   </ul>
                 </td>
                 <td>
@@ -340,6 +377,7 @@ Cookie: </pre>
                 </td>
                 <td>
                   <ul class="valid_values">
+                      <li>audit.app.build.create</li>
                       <li>audit.app.droplet.create</li>
                       <li>audit.app.droplet.delete</li>
                       <li>audit.app.droplet.download</li>
@@ -407,8 +445,26 @@ Cookie: </pre>
                 </td>
                 <td>
                   <ul class="example_values">
+                      <li>user1@example.com</li>
                   </ul>
                 </td>
+              </tr>
+              <tr class="">
+                  <td>
+                      <span class="name">actor_username</span>
+                  </td>
+                  <td>
+                      <span class="description">The username of the actor.</span>
+                  </td>
+                  <td>
+                      <ul class="valid_values">
+                      </ul>
+                  </td>
+                  <td>
+                      <ul class="example_values">
+                          <li>user1</li>
+                      </ul>
+                  </td>
               </tr>
               <tr class="">
                 <td>
@@ -450,6 +506,7 @@ Cookie: </pre>
                         <li>service_plan</li>
                         <li>service_plan_visibility</li>
                         <li>space</li>
+                        <li>user</li>
                         <li>user_provided_service_instance</li>
                   </ul>
                 </td>

@@ -1,0 +1,42 @@
+#!/bin/bash -e
+
+RUN_DIR=/var/vcap/sys/run/statsd_injector
+LOG_DIR=/var/vcap/sys/log/statsd_injector
+PIDFILE=$RUN_DIR/statsd_injector.pid
+
+mkdir -p $RUN_DIR
+mkdir -p $LOG_DIR
+
+case $1 in
+
+  start)
+    exec >>$LOG_DIR/statsd_injector.stdout.log \
+        2>>$LOG_DIR/statsd_injector.stderr.log
+
+    chown -R vcap:vcap $LOG_DIR
+
+    certs=/var/vcap/jobs/statsd_injector/certs/
+
+    chpst -u vcap:vcap /var/vcap/packages/statsd_injector/statsd-injector \
+        --statsd-host="<%= p("statsd_injector.statsd_host") %>" \
+        --statsd-port="<%= p("statsd_injector.statsd_port") %>" \
+        --metron-port="<%= p("statsd_injector.metron_port") %>" \
+        --ca="$certs/ca.crt" \
+        --cert="$certs/statsd_injector.crt" \
+        --key="$certs/statsd_injector.key" &
+
+    echo $! > $PIDFILE
+
+    ;;
+
+  stop)
+    kill "$(cat $PIDFILE)"
+
+    ;;
+
+  *)
+    echo "Usage: ctl {start|stop}"
+
+    ;;
+
+esac

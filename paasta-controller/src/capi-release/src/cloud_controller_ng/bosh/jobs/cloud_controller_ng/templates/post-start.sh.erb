@@ -16,7 +16,6 @@ tee_output_to_sys_log "cloud_controller_ng.$(basename "$0")"
 
 function install_buildpacks {
   <% if spec.bootstrap %>
-  echo "installation buildpack.........................<%=spec.bootstrap%>"
   pushd "${CC_PACKAGE_DIR}/cloud_controller_ng" > /dev/null
     chpst -u vcap:vcap bundle exec rake buildpacks:install
 
@@ -26,7 +25,7 @@ function install_buildpacks {
     fi
   popd > /dev/null
   <% else %>
-  echo "Skipping buildpack installation#####################################"
+  echo "Skipping buildpack installation"
   <% end %>
 }
 

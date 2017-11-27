@@ -2,7 +2,7 @@
 name: acceptance-tests
 
 dependencies:
-  - golang1.7
+  - golang1.8
 
 files:
  - acceptance-tests/**/*

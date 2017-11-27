@@ -7,8 +7,10 @@ import (
 	"strings"
 )
 
+//go:generate counterfeiter -o fakes/fake_signer.go . Signer
 type Signer interface {
 	Sign(string, string) string
+	SignForPut(string, string) string
 }
 
 type signer struct {
@@ -22,15 +24,18 @@ func NewSigner(secret string) Signer {
 }
 
 func (s *signer) Sign(expire, path string) string {
-	str := fmt.Sprintf("%s/read%s %s", expire, path, s.secret)
+	signature := generateSignature(fmt.Sprintf("%s/read%s %s", expire, path, s.secret))
+	return fmt.Sprintf("http://blobstore.service.cf.internal/read%s?md5=%s&expires=%s", path, signature, expire)
+}
 
-	h := md5.New()
-	h.Write([]byte(str))
+func (s *signer) SignForPut(expire, path string) string {
+	signature := generateSignature(fmt.Sprintf("%s/write%s %s", expire, path, s.secret))
+	return fmt.Sprintf("http://blobstore.service.cf.internal/write%s?md5=%s&expires=%s", path, signature, expire)
+}
 
-	base64Str := base64.StdEncoding.EncodeToString(h.Sum(nil))
-	finalMd5 := SanitizeString(base64Str)
-
-	return fmt.Sprintf("http://blobstore.service.cf.internal/read%s?md5=%s&expires=%s", path, finalMd5, expire)
+func generateSignature(str string) string {
+	md5sum := md5.Sum([]byte(str))
+	return SanitizeString(base64.StdEncoding.EncodeToString(md5sum[:]))
 }
 
 func SanitizeString(input string) string {

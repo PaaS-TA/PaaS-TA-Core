@@ -1,9 +1,19 @@
 #!/bin/bash -exu
 
-function main() {
-  bosh -t $BOSH_DIRECTOR download manifest $DEPLOYMENT_NAME manifest.yml
+preflight_check() {
+  set +x
+  test -n "${BOSH_DIRECTOR}"
+  test -n "${BOSH_CLIENT}"
+  test -n "${BOSH_CLIENT_SECRET}"
+  test -n "${BOSH_CA_CERT}"
+  test -n "${DEPLOYMENT_NAME}"
+  set -x
+}
 
-  bosh -n --color -t $BOSH_DIRECTOR -d manifest.yml run errand acceptance_tests
+function main() {
+  preflight_check
+  export BOSH_ENVIRONMENT="https://${BOSH_DIRECTOR}:25555"
+  bosh -n -d $DEPLOYMENT_NAME run-errand acceptance_tests
 }
 
 main

@@ -8,8 +8,7 @@ RSpec.describe ProcessesController, type: :controller do
     let(:user) { set_current_user(VCAP::CloudController::User.make) }
 
     before do
-      stub_readable_space_guids_for(user, space)
-      allow_user_read_access(user, space: space)
+      allow_user_read_access_for(user, spaces: [space])
     end
 
     it 'returns 200 and lists the processes' do
@@ -101,20 +100,8 @@ RSpec.describe ProcessesController, type: :controller do
       let!(:process2) { VCAP::CloudController::ProcessModel.make(app: app, type: 'peppa') }
       let!(:process3) { VCAP::CloudController::ProcessModel.make }
 
-      context 'admin' do
-        before { set_current_user_as_admin }
-
-        it 'returns 200 and lists all processes' do
-          get :index
-
-          response_guids = parsed_body['resources'].map { |r| r['guid'] }
-          expect(response.status).to eq(200)
-          expect(response_guids).to match_array([process1.guid, process2.guid, process3.guid])
-        end
-      end
-
-      context 'read only admin' do
-        before { set_current_user_as_admin_read_only }
+      context 'when the user has global read access' do
+        before { allow_user_global_read_access(user) }
 
         it 'returns 200 and lists all processes' do
           get :index
@@ -144,7 +131,7 @@ RSpec.describe ProcessesController, type: :controller do
 
           expect(response.status).to eq 400
           expect(response.body).to include 'BadQueryParameter'
-          expect(response.body).to include("Order by can only be 'created_at' or 'updated_at'")
+          expect(response.body).to include("Order by can only be: 'created_at', 'updated_at'")
         end
       end
 
@@ -167,7 +154,7 @@ RSpec.describe ProcessesController, type: :controller do
     let(:user) { set_current_user(VCAP::CloudController::User.make) }
 
     before do
-      allow_user_read_access(user, space: space)
+      allow_user_read_access_for(user, spaces: [space])
       allow_user_secret_access(user, space: space)
     end
 
@@ -277,7 +264,7 @@ RSpec.describe ProcessesController, type: :controller do
     let(:user) { set_current_user(VCAP::CloudController::User.make) }
 
     before do
-      allow_user_read_access(user, space: space)
+      allow_user_read_access_for(user, spaces: [space])
       allow_user_write_access(user, space: space)
     end
 
@@ -291,13 +278,56 @@ RSpec.describe ProcessesController, type: :controller do
       expect(parsed_body['guid']).to eq(process_type.guid)
     end
 
-    context 'when the provided request to update the port is an empty array' do
-      it 'update the model successfully' do
-        patch :update, { ports: [], health_check: { type: 'process' } }.to_json, { process_guid: process_type.guid, type: :json }
+    context 'accessed as an app sub resource' do
+      let(:app) { VCAP::CloudController::AppModel.make(space: space) }
+      let!(:process_type) { VCAP::CloudController::ProcessModel.make(:process, app: app) }
+      let!(:process_type2) { VCAP::CloudController::ProcessModel.make(:process, app: app) }
 
-        expect(parsed_body['ports']).to eq([])
-        expect(process_type.reload.ports).to eq([])
+      it 'updates the process and returns the correct things' do
+        expect(process_type.command).not_to eq('new command')
+
+        patch :update, req_body.to_json, { app_guid: app.guid, type: process_type.type }
+
+        expect(process_type.reload.command).to eq('new command')
         expect(response.status).to eq(200)
+        expect(parsed_body['guid']).to eq(process_type.guid)
+      end
+
+      context 'when the requested process does not belong to the provided app guid' do
+        it 'returns a 404' do
+          other_app = VCAP::CloudController::AppModel.make
+          other_process = VCAP::CloudController::ProcessModel.make(app: other_app, type: 'potato')
+
+          patch :update, req_body.to_json, { app_guid: app.guid, type: other_process.type }
+
+          expect(response.status).to eq 404
+          expect(response.body).to include 'ResourceNotFound'
+          expect(response.body).to include 'Process not found'
+        end
+      end
+
+      context 'when the app does not exist' do
+        it 'returns a 404' do
+          patch :update, req_body.to_json, { app_guid: 'made-up', type: process_type.type }
+
+          expect(response.status).to eq 404
+          expect(response.body).to include 'ResourceNotFound'
+          expect(response.body).to include 'App not found'
+        end
+      end
+
+      context 'when the user cannot read the app due to membership' do
+        before do
+          disallow_user_read_access(user, space: space)
+        end
+
+        it 'returns a 404' do
+          patch :update, req_body.to_json, { app_guid: app.guid, type: process_type.type }
+
+          expect(response.status).to eq 404
+          expect(response.body).to include 'ResourceNotFound'
+          expect(response.body).to include 'App not found'
+        end
       end
     end
 
@@ -352,7 +382,7 @@ RSpec.describe ProcessesController, type: :controller do
 
       context 'when the user can read but not write to the process due to membership' do
         before do
-          allow_user_read_access(user, space: space)
+          allow_user_read_access_for(user, spaces: [space])
           disallow_user_write_access(user, space: space)
         end
 
@@ -386,7 +416,7 @@ RSpec.describe ProcessesController, type: :controller do
     before do
       allow(index_stopper).to receive(:stop_index)
       allow(CloudController::DependencyLocator.instance).to receive(:index_stopper).and_return(index_stopper)
-      allow_user_read_access(user, space: space)
+      allow_user_read_access_for(user, spaces: [space])
       allow_user_write_access(user, space: space)
     end
 
@@ -484,7 +514,7 @@ RSpec.describe ProcessesController, type: :controller do
 
       context 'when the user can read but not write to the process due to membership' do
         before do
-          allow_user_read_access(user, space: space)
+          allow_user_read_access_for(user, spaces: [space])
           disallow_user_write_access(user, space: space)
         end
 
@@ -505,7 +535,7 @@ RSpec.describe ProcessesController, type: :controller do
     let(:user) { set_current_user(VCAP::CloudController::User.make) }
 
     before do
-      allow_user_read_access(user, space: space)
+      allow_user_read_access_for(user, spaces: [space])
       allow_user_write_access(user, space: space)
     end
 
@@ -577,7 +607,7 @@ RSpec.describe ProcessesController, type: :controller do
 
       context 'when the user can read but not write to the process due to membership' do
         before do
-          allow_user_read_access(user, space: space)
+          allow_user_read_access_for(user, spaces: [space])
           disallow_user_write_access(user, space: space)
         end
 
@@ -666,7 +696,7 @@ RSpec.describe ProcessesController, type: :controller do
 
       context 'when the user can read but cannot write to the process' do
         before do
-          allow_user_read_access(user, space: space)
+          allow_user_read_access_for(user, spaces: [space])
           disallow_user_write_access(user, space: space)
         end
 
@@ -699,13 +729,13 @@ RSpec.describe ProcessesController, type: :controller do
     let(:user) { set_current_user(VCAP::CloudController::User.make) }
 
     before do
-      allow_user_read_access(user, space: space)
+      allow_user_read_access_for(user, spaces: [space])
       CloudController::DependencyLocator.instance.register(:instances_reporters, instances_reporters)
       allow(instances_reporters).to receive(:stats_for_app).and_return(stats)
     end
 
     it 'returns the stats for all instances for the process' do
-      put :stats, { process_guid: process_type.guid }
+      get :stats, { process_guid: process_type.guid }
 
       expect(response.status).to eq(200)
       expect(parsed_body['resources'][0]['type']).to eq('potato')
@@ -713,7 +743,7 @@ RSpec.describe ProcessesController, type: :controller do
 
     context 'accessed as app subresource' do
       it 'returns the stats for all instances of specified type for all processes of an app' do
-        put :stats, { app_guid: app.guid, type: process_type.type }
+        get :stats, { app_guid: app.guid, type: process_type.type }
 
         expect(response.status).to eq(200)
         expect(parsed_body['resources'][0]['type']).to eq('potato')
@@ -725,7 +755,7 @@ RSpec.describe ProcessesController, type: :controller do
         end
 
         it 'raises 404 error' do
-          put :stats, { app_guid: app.guid, type: process_type.type }
+          get :stats, { app_guid: app.guid, type: process_type.type }
 
           expect(response.status).to eq(404)
           expect(response.body).to include('ResourceNotFound')
@@ -735,7 +765,7 @@ RSpec.describe ProcessesController, type: :controller do
 
       context 'when the app does not exist' do
         it 'raises a 404 error' do
-          put :stats, { app_guid: 'bogus-guid', type: process_type.type }
+          get :stats, { app_guid: 'bogus-guid', type: process_type.type }
 
           expect(response.status).to eq(404)
           expect(response.body).to include('ResourceNotFound')
@@ -745,7 +775,7 @@ RSpec.describe ProcessesController, type: :controller do
 
       context 'when process does not exist' do
         it 'raises a 404 error' do
-          put :stats, { app_guid: app.guid, type: 1234 }
+          get :stats, { app_guid: app.guid, type: 1234 }
 
           expect(response.status).to eq(404)
           expect(response.body).to include('ResourceNotFound')
@@ -768,7 +798,7 @@ RSpec.describe ProcessesController, type: :controller do
         before { set_current_user(user, scopes: ['cloud_controller.write']) }
 
         it 'raises an ApiError with a 403 code' do
-          put :stats, { process_guid: process_type.guid }
+          get :stats, { process_guid: process_type.guid }
 
           expect(response.status).to eq(403)
           expect(response.body).to include('NotAuthorized')
@@ -781,7 +811,7 @@ RSpec.describe ProcessesController, type: :controller do
         end
 
         it 'raises 404' do
-          put :stats, { process_guid: process_type.guid }
+          get :stats, { process_guid: process_type.guid }
 
           expect(response.status).to eq(404)
           expect(response.body).to include('ResourceNotFound')

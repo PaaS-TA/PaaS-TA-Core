@@ -100,7 +100,7 @@ var _ = Describe("Watcher", func() {
 		})
 
 		JustBeforeEach(func() {
-			nextEvent.Store(EventHolder{models.NewActualLRPCrashedEvent(actual)})
+			nextEvent.Store(EventHolder{models.NewActualLRPCrashedEvent(actual, actual)})
 		})
 
 		Context("and the application has the cc-app Domain", func() {
@@ -127,8 +127,8 @@ var _ = Describe("Watcher", func() {
 			BeforeEach(func() {
 				otherActual = makeActualLRP("other-process-guid", "instance-guid", 1, 3, 1, "", "")
 
-				event := EventHolder{models.NewActualLRPCrashedEvent(actual)}
-				otherEvent := EventHolder{models.NewActualLRPCrashedEvent(otherActual)}
+				event := EventHolder{models.NewActualLRPCrashedEvent(actual, actual)}
+				otherEvent := EventHolder{models.NewActualLRPCrashedEvent(otherActual, otherActual)}
 				events := []EventHolder{otherEvent, event}
 
 				eventSource.NextStub = func() (models.Event, error) {

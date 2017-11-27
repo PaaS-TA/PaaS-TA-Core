@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+
+GIT_HOOK_PATH=$1
+PRE_PUSH=${GIT_HOOK_PATH}/pre-push
+
+if [ ! -f ${PRE_PUSH} ]; then
+  echo "#!/bin/bash" > ${PRE_PUSH}
+  chmod +x ${PRE_PUSH}
+fi
+
+if grep -q 'git-hooks/pre-push' ${PRE_PUSH}; then
+  echo "pre-push already installed."
+else
+  echo >> ${PRE_PUSH}
+  echo './git-hooks/pre-push' >> ${PRE_PUSH}
+  echo "pre-push installed."
+fi

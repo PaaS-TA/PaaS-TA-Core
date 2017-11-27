@@ -1,6 +1,9 @@
 package config
 
-import "os"
+import (
+	"os"
+	"runtime"
+)
 
 func SetCreateFile(f func(string) (*os.File, error)) {
 	createFile = f
@@ -16,4 +19,12 @@ func SetSyncFile(f func(*os.File) error) {
 
 func ResetSyncFile() {
 	syncFile = syncFileFn
+}
+
+func SetGOOS(os string) {
+	goos = os
+}
+
+func ResetGOOS() {
+	goos = runtime.GOOS
 }

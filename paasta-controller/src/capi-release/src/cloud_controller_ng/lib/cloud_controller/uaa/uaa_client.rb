@@ -1,11 +1,12 @@
 module VCAP::CloudController
   class UaaClient
-    attr_reader :uaa_target, :client_id, :secret, :options
-    def initialize(uaa_target, client_id, secret, options={})
+    attr_reader :uaa_target, :client_id, :secret, :ca_file
+
+    def initialize(uaa_target:, client_id:, secret:, ca_file:)
       @uaa_target = uaa_target
-      @client_id = client_id
-      @secret = secret
-      @options = options
+      @client_id  = client_id
+      @secret     = secret
+      @ca_file    = ca_file
     end
 
     def scim
@@ -24,7 +25,7 @@ module VCAP::CloudController
 
     def token_info
       token_issuer.client_credentials_grant
-    rescue CF::UAA::NotFound => e
+    rescue CF::UAA::NotFound, CF::UAA::BadTarget, CF::UAA::BadResponse => e
       logger.error("UAA request for token failed: #{e.inspect}")
       raise UaaUnavailable.new
     end
@@ -32,24 +33,29 @@ module VCAP::CloudController
     def usernames_for_ids(user_ids)
       return {} unless user_ids.present?
       filter_string = user_ids.map { |user_id| %(id eq "#{user_id}") }.join(' or ')
-      results = scim.query(:user_id, filter: filter_string)
+      results       = scim.query(:user_id, filter: filter_string)
 
       results['resources'].each_with_object({}) do |resource, results_hash|
         results_hash[resource['id']] = resource['username']
         results_hash
       end
-    rescue UaaUnavailable, CF::UAA::TargetError
+    rescue UaaUnavailable, CF::UAA::UAAError => e
+      logger.error("Failed to retrieve usernames from UAA: #{e.inspect}")
       {}
     end
 
     def id_for_username(username)
       filter_string = %(username eq "#{username}")
-      results = scim.query(:user_id, filter: filter_string)
+      results       = scim.query(:user_id, filter: filter_string)
 
       user = results['resources'].first
       user && user['id']
     rescue CF::UAA::TargetError
       raise UaaEndpointDisabled
+    end
+
+    def info
+      CF::UAA::Info.new(uaa_target, uaa_connection_opts)
     end
 
     private
@@ -60,7 +66,8 @@ module VCAP::CloudController
 
     def uaa_connection_opts
       {
-        skip_ssl_validation: !!options[:skip_ssl_validation]
+        skip_ssl_validation: false,
+        ssl_ca_file:         ca_file
       }
     end
 

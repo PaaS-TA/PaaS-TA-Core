@@ -1,5 +1,5 @@
 require 'spec_helper'
-require 'messages/apps_list_message'
+require 'messages/apps/apps_list_message'
 
 module VCAP::CloudController
   RSpec.describe AppsListMessage do
@@ -86,6 +86,13 @@ module VCAP::CloudController
 
         expect(message).not_to be_valid
         expect(message.errors[:base]).to include("Unknown query parameter(s): 'foobar'")
+      end
+
+      describe 'order_by' do
+        it 'allows name' do
+          message = AppsListMessage.new(order_by: 'name')
+          expect(message).to be_valid
+        end
       end
 
       describe 'validations' do

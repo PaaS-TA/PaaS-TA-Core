@@ -1,7 +1,7 @@
 package main
 
 import (
-	"acceptance-tests/testing/iptables_agent/handlers"
+	"github.com/cloudfoundry-incubator/etcd-release/src/acceptance-tests/testing/iptables_agent/handlers"
 	"flag"
 	"fmt"
 	"log"

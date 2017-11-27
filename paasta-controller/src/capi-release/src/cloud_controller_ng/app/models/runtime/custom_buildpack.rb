@@ -1,3 +1,5 @@
+require 'utils/uri_utils'
+
 module VCAP::CloudController
   class CustomBuildpack < Struct.new(:url)
     def to_s
@@ -6,18 +8,6 @@ module VCAP::CloudController
 
     def to_json
       MultiJson.dump(url)
-    end
-
-    def valid?
-      @errors = []
-      unless url.is_uri?
-        @errors << "#{url} is not valid public url or a known buildpack name"
-      end
-      @errors.empty?
-    end
-
-    def errors
-      @errors || []
     end
 
     def staging_message

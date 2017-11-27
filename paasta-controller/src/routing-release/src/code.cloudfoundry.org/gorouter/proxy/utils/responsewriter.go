@@ -5,40 +5,7 @@ import (
 	"errors"
 	"net"
 	"net/http"
-	"reflect"
 )
-
-type Context interface {
-	Value(key interface{}) interface{}
-}
-
-func WithValue(parent Context, key, val interface{}) Context {
-	if key == nil {
-		panic("nil key")
-	}
-	if !reflect.TypeOf(key).Comparable() {
-		panic("key is not comparable")
-	}
-	return &valueCtx{parent, key, val}
-}
-
-type rootCtx struct{}
-
-func (c *rootCtx) Value(key interface{}) interface{} {
-	return nil
-}
-
-type valueCtx struct {
-	Context
-	key, val interface{}
-}
-
-func (c *valueCtx) Value(key interface{}) interface{} {
-	if c.key == key {
-		return c.val
-	}
-	return c.Context.Value(key)
-}
 
 type ProxyResponseWriter interface {
 	Header() http.Header
@@ -48,9 +15,9 @@ type ProxyResponseWriter interface {
 	Done()
 	Flush()
 	Status() int
+	SetStatus(status int)
 	Size() int
-	Context() Context
-	AddToContext(key, value interface{})
+	CloseNotify() <-chan bool
 }
 
 type proxyResponseWriter struct {
@@ -60,17 +27,22 @@ type proxyResponseWriter struct {
 
 	flusher http.Flusher
 	done    bool
-	context Context
 }
 
 func NewProxyResponseWriter(w http.ResponseWriter) *proxyResponseWriter {
 	proxyWriter := &proxyResponseWriter{
 		w:       w,
 		flusher: w.(http.Flusher),
-		context: &rootCtx{},
 	}
 
 	return proxyWriter
+}
+
+func (p *proxyResponseWriter) CloseNotify() <-chan bool {
+	if closeNotifier, ok := p.w.(http.CloseNotifier); ok {
+		return closeNotifier.CloseNotify()
+	}
+	return make(chan bool)
 }
 
 func (p *proxyResponseWriter) Header() http.Header {
@@ -103,6 +75,11 @@ func (p *proxyResponseWriter) WriteHeader(s int) {
 		return
 	}
 
+	// if Content-Type not in response, nil out to suppress Go's auto-detect
+	if _, ok := p.w.Header()["Content-Type"]; !ok {
+		p.w.Header()["Content-Type"] = nil
+	}
+
 	p.w.WriteHeader(s)
 
 	if p.status == 0 {
@@ -124,14 +101,12 @@ func (p *proxyResponseWriter) Status() int {
 	return p.status
 }
 
+// SetStatus should be used when the ResponseWriter has been hijacked
+// so WriteHeader is not valid but still needs to save a status code
+func (p *proxyResponseWriter) SetStatus(status int) {
+	p.status = status
+}
+
 func (p *proxyResponseWriter) Size() int {
 	return p.size
-}
-
-func (p *proxyResponseWriter) Context() Context {
-	return p.context
-}
-
-func (p *proxyResponseWriter) AddToContext(key, value interface{}) {
-	p.context = WithValue(p.context, key, value)
 }

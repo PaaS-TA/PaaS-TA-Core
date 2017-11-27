@@ -40,6 +40,11 @@ func TestBoot_time(t *testing.T) {
 	if v < 946652400 {
 		t.Errorf("Invalid Boottime, older than 2000-01-01")
 	}
+
+	v2, err := BootTime()
+	if v != v2 {
+		t.Errorf("cached boot time is different")
+	}
 }
 
 func TestUsers(t *testing.T) {
@@ -84,5 +89,28 @@ func TestUserStat_String(t *testing.T) {
 	e := `{"user":"user","terminal":"term","host":"host","started":100}`
 	if e != fmt.Sprintf("%v", v) {
 		t.Errorf("UserStat string is invalid: %v", v)
+	}
+}
+
+func TestHostGuid(t *testing.T) {
+	hi, err := Info()
+	if err != nil {
+		t.Error(err)
+	}
+	if hi.HostID == "" {
+		t.Error("Host id is empty")
+	} else {
+		t.Logf("Host id value: %v", hi.HostID)
+	}
+}
+
+func TestTemperatureStat_String(t *testing.T) {
+	v := TemperatureStat{
+		SensorKey:   "CPU",
+		Temperature: 1.1,
+	}
+	s := `{"sensorKey":"CPU","sensorTemperature":1.1}`
+	if s != fmt.Sprintf("%v", v) {
+		t.Errorf("TemperatureStat string is invalid")
 	}
 }

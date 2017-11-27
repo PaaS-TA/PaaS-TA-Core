@@ -4,7 +4,6 @@ import (
 	"github.com/cloudfoundry/dropsonde/dropsonde_unmarshaller"
 	"github.com/cloudfoundry/dropsonde/factories"
 	"github.com/cloudfoundry/dropsonde/metrics"
-	"github.com/cloudfoundry/loggregatorlib/loggertesthelper"
 	"github.com/cloudfoundry/sonde-go/events"
 
 	"github.com/gogo/protobuf/proto"
@@ -30,7 +29,7 @@ var _ = Describe("DropsondeUnmarshaller", func() {
 
 	Context("UnmarshallMessage", func() {
 		BeforeEach(func() {
-			unmarshaller = dropsonde_unmarshaller.NewDropsondeUnmarshaller(loggertesthelper.Logger())
+			unmarshaller = dropsonde_unmarshaller.NewDropsondeUnmarshaller()
 		})
 
 		It("unmarshalls bytes", func() {
@@ -58,7 +57,7 @@ var _ = Describe("DropsondeUnmarshaller", func() {
 			inputChan = make(chan []byte, 10)
 			outputChan = make(chan *events.Envelope, 10)
 			runComplete = make(chan struct{})
-			unmarshaller = dropsonde_unmarshaller.NewDropsondeUnmarshaller(loggertesthelper.Logger())
+			unmarshaller = dropsonde_unmarshaller.NewDropsondeUnmarshaller()
 
 			go func() {
 				unmarshaller.Run(inputChan, outputChan)
@@ -90,7 +89,7 @@ var _ = Describe("DropsondeUnmarshaller", func() {
 			inputChan = make(chan []byte, 1000)
 			outputChan = make(chan *events.Envelope, 1000)
 			runComplete = make(chan struct{})
-			unmarshaller = dropsonde_unmarshaller.NewDropsondeUnmarshaller(loggertesthelper.Logger())
+			unmarshaller = dropsonde_unmarshaller.NewDropsondeUnmarshaller()
 
 			go func() {
 				unmarshaller.Run(inputChan, outputChan)

@@ -54,8 +54,7 @@ module VCAP::CloudController
             name,
             client_attrs,
             service_instance.guid,
-            user.guid,
-            user_email,
+            UserAuditInfo.new(user_guid: user.guid, user_email: user_email),
             request_attrs,
           )
         end
@@ -495,7 +494,7 @@ module VCAP::CloudController
               end
 
               Timecop.freeze(now + 1.day) do
-                rehydrated_job = Delayed::Job.first(id: job_id).payload_object.handler.handler.handler
+                rehydrated_job = Delayed::Job.first(id: job_id).payload_object.handler.handler
                 expect(rehydrated_job.end_timestamp).to be_within(0.01).of(expected_end_timestamp)
               end
             end

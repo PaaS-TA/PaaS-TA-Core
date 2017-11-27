@@ -1,5 +1,5 @@
 require 'spec_helper'
-require 'messages/isolation_segment_relationship_org_message'
+require 'messages/isolation_segments/isolation_segment_relationship_org_message'
 
 module VCAP::CloudController
   RSpec.describe IsolationSegmentRelationshipOrgMessage do
@@ -76,7 +76,7 @@ module VCAP::CloudController
           let(:params) do
             {
               data: [
-                { 'guid' => 32.77 }
+                { guid: 32.77 }
               ]
             }
           end

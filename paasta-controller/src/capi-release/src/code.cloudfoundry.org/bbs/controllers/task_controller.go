@@ -4,9 +4,9 @@ import (
 	"time"
 
 	"code.cloudfoundry.org/auctioneer"
-	"code.cloudfoundry.org/bbs"
 	"code.cloudfoundry.org/bbs/db"
 	"code.cloudfoundry.org/bbs/models"
+	"code.cloudfoundry.org/bbs/serviceclient"
 	"code.cloudfoundry.org/bbs/taskworkpool"
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/rep"
@@ -16,7 +16,7 @@ type TaskController struct {
 	db                   db.TaskDB
 	taskCompletionClient taskworkpool.TaskCompletionClient
 	auctioneerClient     auctioneer.Client
-	serviceClient        bbs.ServiceClient
+	serviceClient        serviceclient.ServiceClient
 	repClientFactory     rep.ClientFactory
 }
 
@@ -24,7 +24,7 @@ func NewTaskController(
 	db db.TaskDB,
 	taskCompletionClient taskworkpool.TaskCompletionClient,
 	auctioneerClient auctioneer.Client,
-	serviceClient bbs.ServiceClient,
+	serviceClient serviceclient.ServiceClient,
 	repClientFactory rep.ClientFactory,
 ) *TaskController {
 	return &TaskController{
@@ -62,7 +62,7 @@ func (h *TaskController) DesireTask(logger lager.Logger, taskDefinition *models.
 
 	logger.Debug("start-task-auction-request")
 	taskStartRequest := auctioneer.NewTaskStartRequestFromModel(taskGuid, domain, taskDefinition)
-	err = h.auctioneerClient.RequestTaskAuctions([]*auctioneer.TaskStartRequest{&taskStartRequest})
+	err = h.auctioneerClient.RequestTaskAuctions(logger, []*auctioneer.TaskStartRequest{&taskStartRequest})
 	if err != nil {
 		logger.Error("failed-requesting-task-auction", err)
 		// The creation succeeded, the auction request error can be dropped
@@ -104,7 +104,11 @@ func (h *TaskController) CancelTask(logger lager.Logger, taskGuid string) error 
 	}
 	logger.Info("finished-check-cell-presence", lager.Data{"cell_id": cellID})
 
-	repClient := h.repClientFactory.CreateClient(cellPresence.RepAddress)
+	repClient, err := h.repClientFactory.CreateClient(cellPresence.RepAddress, cellPresence.RepUrl)
+	if err != nil {
+		logger.Error("create-rep-client-failed", err)
+		return err
+	}
 	logger.Info("start-rep-cancel-task", lager.Data{"task_guid": taskGuid})
 	repClient.CancelTask(taskGuid)
 	if err != nil {
@@ -199,7 +203,7 @@ func (h *TaskController) ConvergeTasks(
 
 	if len(tasksToAuction) > 0 {
 		logger.Debug("requesting-task-auctions", lager.Data{"num_tasks_to_auction": len(tasksToAuction)})
-		err = h.auctioneerClient.RequestTaskAuctions(tasksToAuction)
+		err = h.auctioneerClient.RequestTaskAuctions(logger, tasksToAuction)
 		if err != nil {
 			taskGuids := make([]string, len(tasksToAuction))
 			for i, task := range tasksToAuction {

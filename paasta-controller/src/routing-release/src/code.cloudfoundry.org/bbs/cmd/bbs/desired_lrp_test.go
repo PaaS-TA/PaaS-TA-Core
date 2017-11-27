@@ -27,7 +27,7 @@ var _ = Describe("DesiredLRP API", func() {
 	)
 
 	BeforeEach(func() {
-		bbsRunner = testrunner.New(bbsBinPath, bbsArgs)
+		bbsRunner = testrunner.New(bbsBinPath, bbsConfig)
 		bbsProcess = ginkgomon.Invoke(bbsRunner)
 		filter = models.DesiredLRPFilter{}
 		expectedDesiredLRPs = []*models.DesiredLRP{}
@@ -79,6 +79,27 @@ var _ = Describe("DesiredLRP API", func() {
 			It("returns only the desired lrps in the requested domain", func() {
 				for _, lrp := range desiredLRPs[domain] {
 					expectedDesiredLRPs = append(expectedDesiredLRPs, lrp)
+				}
+				Expect(actualDesiredLRPs).To(ConsistOf(expectedDesiredLRPs))
+			})
+		})
+
+		Context("when filtering by process guids", func() {
+			BeforeEach(func() {
+				guids := []string{
+					"guid-1-for-domain-1",
+					"guid-2-for-domain-2",
+				}
+
+				filter = models.DesiredLRPFilter{ProcessGuids: guids}
+			})
+
+			It("returns only the scheduling infos in the requested process guids", func() {
+				Expect(actualDesiredLRPs).To(HaveLen(2))
+
+				expectedDesiredLRPs := []*models.DesiredLRP{
+					desiredLRPs["domain-1"][1],
+					desiredLRPs["domain-2"][2],
 				}
 				Expect(actualDesiredLRPs).To(ConsistOf(expectedDesiredLRPs))
 			})
@@ -155,13 +176,35 @@ var _ = Describe("DesiredLRP API", func() {
 				Expect(schedulingInfos).To(ConsistOf(expectedSchedulingInfos))
 			})
 		})
+
+		Context("when filtering by process guids", func() {
+			BeforeEach(func() {
+				guids := []string{
+					"guid-1-for-domain-1",
+					"guid-2-for-domain-2",
+				}
+
+				filter = models.DesiredLRPFilter{ProcessGuids: guids}
+			})
+
+			It("returns only the scheduling infos in the requested process guids", func() {
+				Expect(schedulingInfos).To(HaveLen(2))
+
+				desiredLRP1 := desiredLRPs["domain-1"][1].DesiredLRPSchedulingInfo()
+				desiredLRP2 := desiredLRPs["domain-2"][2].DesiredLRPSchedulingInfo()
+				expectedSchedulingInfos := []*models.DesiredLRPSchedulingInfo{
+					&desiredLRP1,
+					&desiredLRP2,
+				}
+				Expect(schedulingInfos).To(ConsistOf(expectedSchedulingInfos))
+			})
+		})
 	})
 
 	Describe("DesireLRP", func() {
 		var (
 			desiredLRP *models.DesiredLRP
-
-			desireErr error
+			desireErr  error
 		)
 
 		BeforeEach(func() {
@@ -182,6 +225,11 @@ var _ = Describe("DesiredLRP API", func() {
 			Expect(persistedDesiredLRP.Instances).To(Equal(desiredLRP.Instances))
 			Expect(persistedDesiredLRP.DesiredLRPRunInfo(time.Unix(42, 0))).To(Equal(desiredLRP.DesiredLRPRunInfo(time.Unix(42, 0))))
 			Expect(persistedDesiredLRP.Action.RunAction.SuppressLogOutput).To(BeFalse())
+			Expect(persistedDesiredLRP.CertificateProperties).NotTo(BeNil())
+			Expect(persistedDesiredLRP.CertificateProperties.OrganizationalUnit).NotTo(BeEmpty())
+			Expect(persistedDesiredLRP.CertificateProperties.OrganizationalUnit).To(Equal(desiredLRP.CertificateProperties.OrganizationalUnit))
+			Expect(persistedDesiredLRP.ImageUsername).To(Equal(desiredLRP.ImageUsername))
+			Expect(persistedDesiredLRP.ImagePassword).To(Equal(desiredLRP.ImagePassword))
 		})
 
 		Context("when suppressing log output", func() {

@@ -4,21 +4,26 @@ import (
 	"sync"
 
 	"code.cloudfoundry.org/auctioneer"
-	"code.cloudfoundry.org/bbs"
 	"code.cloudfoundry.org/bbs/db"
 	"code.cloudfoundry.org/bbs/events"
 	"code.cloudfoundry.org/bbs/models"
+	"code.cloudfoundry.org/bbs/serviceclient"
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/workpool"
 )
+
+//go:generate counterfeiter -o fakes/fake_retirer.go . Retirer
+type Retirer interface {
+	RetireActualLRP(logger lager.Logger, key *models.ActualLRPKey) error
+}
 
 type LRPConvergenceController struct {
 	logger                 lager.Logger
 	db                     db.LRPDB
 	actualHub              events.Hub
 	auctioneerClient       auctioneer.Client
-	serviceClient          bbs.ServiceClient
-	retirer                ActualLRPRetirer
+	serviceClient          serviceclient.ServiceClient
+	retirer                Retirer
 	convergenceWorkersSize int
 }
 
@@ -27,8 +32,8 @@ func NewLRPConvergenceController(
 	db db.LRPDB,
 	actualHub events.Hub,
 	auctioneerClient auctioneer.Client,
-	serviceClient bbs.ServiceClient,
-	retirer ActualLRPRetirer,
+	serviceClient serviceclient.ServiceClient,
+	retirer Retirer,
 	convergenceWorkersSize int,
 ) *LRPConvergenceController {
 	return &LRPConvergenceController{
@@ -65,7 +70,12 @@ func (h *LRPConvergenceController) ConvergeLRPs(logger lager.Logger) error {
 	works := []func(){}
 	for _, key := range keysToRetire {
 		key := key
-		works = append(works, func() { h.retirer.RetireActualLRP(retireLogger, key.ProcessGuid, key.Index) })
+		works = append(works, func() {
+			err := h.retirer.RetireActualLRP(retireLogger, key)
+			if err != nil {
+				logger.Error("retiring-lrp-failed", err)
+			}
+		})
 	}
 
 	errChan := make(chan *models.Error, 1)
@@ -116,7 +126,7 @@ func (h *LRPConvergenceController) ConvergeLRPs(logger lager.Logger) error {
 	startLogger := logger.WithData(lager.Data{"start_requests_count": len(startRequests)})
 	if len(startRequests) > 0 {
 		startLogger.Debug("requesting-start-auctions")
-		err = h.auctioneerClient.RequestLRPAuctions(startRequests)
+		err = h.auctioneerClient.RequestLRPAuctions(logger, startRequests)
 		if err != nil {
 			startLogger.Error("failed-to-request-starts", err, lager.Data{"lrp_start_auctions": startRequests})
 		}

@@ -49,21 +49,23 @@ type ConsulCluster struct {
 }
 
 type Config struct {
-	DebugAddress                    string              `yaml:"debug_address"`
-	LogGuid                         string              `yaml:"log_guid"`
-	MetronConfig                    MetronConfig        `yaml:"metron_config"`
-	MaxTTL                          time.Duration       `yaml:"max_ttl"`
-	SystemDomain                    string              `yaml:"system_domain"`
-	MetricsReportingIntervalString  string              `yaml:"metrics_reporting_interval"`
-	MetricsReportingInterval        time.Duration       `yaml:"-"`
-	StatsdEndpoint                  string              `yaml:"statsd_endpoint"`
-	StatsdClientFlushIntervalString string              `yaml:"statsd_client_flush_interval"`
-	StatsdClientFlushInterval       time.Duration       `yaml:"-"`
-	OAuth                           OAuthConfig         `yaml:"oauth"`
-	RouterGroups                    models.RouterGroups `yaml:"router_groups"`
-	Etcd                            Etcd                `yaml:"etcd"`
-	SqlDB                           SqlDB               `yaml:"sqldb"`
-	ConsulCluster                   ConsulCluster       `yaml:"consul_cluster"`
+	DebugAddress                    string                    `yaml:"debug_address"`
+	LogGuid                         string                    `yaml:"log_guid"`
+	MetronConfig                    MetronConfig              `yaml:"metron_config"`
+	MaxTTL                          time.Duration             `yaml:"max_ttl"`
+	SystemDomain                    string                    `yaml:"system_domain"`
+	MetricsReportingIntervalString  string                    `yaml:"metrics_reporting_interval"`
+	MetricsReportingInterval        time.Duration             `yaml:"-"`
+	StatsdEndpoint                  string                    `yaml:"statsd_endpoint"`
+	StatsdClientFlushIntervalString string                    `yaml:"statsd_client_flush_interval"`
+	StatsdClientFlushInterval       time.Duration             `yaml:"-"`
+	OAuth                           OAuthConfig               `yaml:"oauth"`
+	RouterGroups                    models.RouterGroups       `yaml:"router_groups"`
+	Etcd                            Etcd                      `yaml:"etcd"`
+	SqlDB                           SqlDB                     `yaml:"sqldb"`
+	ConsulCluster                   ConsulCluster             `yaml:"consul_cluster"`
+	SkipConsulLock                  bool                      `yaml:"skip_consul_lock"`
+	Locket                          locket.ClientLocketConfig `yaml:"locket"`
 }
 
 func NewConfigFromFile(configFile string, authDisabled bool) (Config, error) {
@@ -103,7 +105,7 @@ func (cfg *Config) Initialize(file []byte, authDisabled bool) error {
 		return errors.New("Routing API requires TLS enabled to get OAuth token")
 	}
 	if cfg.ConsulCluster.LockTTL == 0 {
-		cfg.ConsulCluster.LockTTL = locket.LockTTL
+		cfg.ConsulCluster.LockTTL = locket.DefaultSessionTTL
 	}
 	if cfg.ConsulCluster.RetryInterval == 0 {
 		cfg.ConsulCluster.RetryInterval = locket.RetryInterval

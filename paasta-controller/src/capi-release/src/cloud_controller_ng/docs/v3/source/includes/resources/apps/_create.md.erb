@@ -1,0 +1,56 @@
+### Create an app
+
+```
+Example Request
+```
+
+```shell
+curl "https://api.example.org/v3/apps" \
+  -X POST \
+  -H "Authorization: bearer [token]" \
+  -H "Content-type: application/json" \
+  -d '{
+    "name": "my_app",
+    "relationships": {
+      "space": {
+        "data": {
+          "guid": "2f35885d-0c9d-4423-83ad-fd05066f8576"
+        }
+      }
+    }
+  }'
+```
+
+```
+Example Response
+```
+
+```http
+HTTP/1.1 201 Created
+Content-Type: application/json
+
+<%= yield_content :single_app %>
+```
+
+#### Definition
+`POST /v3/apps`
+
+#### Required Parameters
+
+Name | Type | Description
+---- | ---- | -----------
+**name** | _string_ | Name of the app.
+**space** | [_to-one relationship_](#to-one-relationships) | A relationship to a space.
+
+#### Optional Parameters
+
+Name | Type | Description | Default
+---- | ---- | ----------- | -------
+**environment_variables** | _object_ | Environment variables to be used for the App when running. | `{}`
+**lifecycle** | [_lifecycle object_](#the-lifecycle-object) | Provides the lifecycle object for the application. | [buildpack lifecycle](#buildpack-lifecycle-object)
+
+#### Permitted Roles
+ |
+--- | ---
+Space Developer |
+Admin |

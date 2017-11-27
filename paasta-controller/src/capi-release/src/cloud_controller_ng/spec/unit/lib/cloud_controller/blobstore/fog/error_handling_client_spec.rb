@@ -134,6 +134,19 @@ module CloudController
           }.to raise_error(BlobstoreError, 'error message')
         end
       end
+
+      describe '#files_for' do
+        let(:args) { 'some-args' }
+        before do
+          allow(wrapped_client).to receive(:files_for).with(args).and_raise(Excon::Errors::Error.new('error message'))
+        end
+
+        it 'handles errors and delegates to wrapped client' do
+          expect {
+            client.files_for(args)
+          }.to raise_error(BlobstoreError, 'error message')
+        end
+      end
     end
   end
 end

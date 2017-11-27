@@ -1,4 +1,0 @@
-jobs:
-  - name: postgres_z1
-    update:
-      serial: true

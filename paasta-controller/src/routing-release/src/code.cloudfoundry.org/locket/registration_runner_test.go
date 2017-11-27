@@ -292,7 +292,7 @@ var _ = Describe("Service Registration Unit Tests", func() {
 			agent.PassTTLReturns(fmt.Errorf("Invalid status: failed"))
 			clock.WaitForWatcherAndIncrement(5 * time.Second)
 			Eventually(agent.PassTTLCallCount).Should(Equal(2))
-			Eventually(agent.ServiceRegisterCallCount()).Should(Equal(2))
+			Eventually(agent.ServiceRegisterCallCount).Should(Equal(2))
 		})
 
 		Context("deregistering the service", func() {

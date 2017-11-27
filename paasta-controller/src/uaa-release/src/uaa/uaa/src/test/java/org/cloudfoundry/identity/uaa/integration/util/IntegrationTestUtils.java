@@ -15,15 +15,22 @@
 package org.cloudfoundry.identity.uaa.integration.util;
 
 import com.fasterxml.jackson.core.type.TypeReference;
+import org.apache.commons.httpclient.Header;
 import org.apache.commons.io.FileUtils;
+import org.apache.http.client.CookieStore;
 import org.apache.http.client.HttpClient;
+import org.apache.http.cookie.CookieSpec;
+import org.apache.http.impl.client.BasicCookieStore;
 import org.apache.http.impl.client.HttpClientBuilder;
+import org.apache.http.impl.cookie.BasicClientCookie;
+import org.apache.http.impl.cookie.BestMatchSpec;
 import org.cloudfoundry.identity.uaa.ServerRunning;
+import org.cloudfoundry.identity.uaa.account.UserInfoResponse;
 import org.cloudfoundry.identity.uaa.constants.OriginKeys;
 import org.cloudfoundry.identity.uaa.provider.AbstractXOAuthIdentityProviderDefinition;
 import org.cloudfoundry.identity.uaa.provider.IdentityProvider;
-import org.cloudfoundry.identity.uaa.provider.SamlIdentityProviderDefinition;
 import org.cloudfoundry.identity.uaa.provider.OIDCIdentityProviderDefinition;
+import org.cloudfoundry.identity.uaa.provider.SamlIdentityProviderDefinition;
 import org.cloudfoundry.identity.uaa.resources.SearchResults;
 import org.cloudfoundry.identity.uaa.scim.ScimGroup;
 import org.cloudfoundry.identity.uaa.scim.ScimGroupExternalMember;
@@ -49,6 +56,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.http.RequestEntity;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.client.ClientHttpResponse;
 import org.springframework.http.client.HttpComponentsClientHttpRequestFactory;
@@ -75,6 +83,7 @@ import java.io.File;
 import java.io.IOException;
 import java.net.Inet4Address;
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.net.UnknownHostException;
 import java.util.Arrays;
@@ -91,11 +100,15 @@ import java.util.stream.Collectors;
 
 import static org.cloudfoundry.identity.uaa.provider.ExternalIdentityProviderDefinition.USER_NAME_ATTRIBUTE_NAME;
 import static org.cloudfoundry.identity.uaa.security.web.CookieBasedCsrfTokenRepository.DEFAULT_CSRF_COOKIE_NAME;
+import static org.cloudfoundry.identity.uaa.util.UaaHttpRequestUtils.createRequestFactory;
 import static org.hamcrest.core.StringStartsWith.startsWith;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
+import static org.springframework.http.HttpHeaders.ACCEPT;
+import static org.springframework.http.HttpHeaders.AUTHORIZATION;
+import static org.springframework.http.MediaType.APPLICATION_JSON_VALUE;
 import static org.springframework.security.oauth2.common.util.OAuth2Utils.USER_OAUTH_APPROVAL;
 
 public class IntegrationTestUtils {
@@ -118,6 +131,24 @@ public class IntegrationTestUtils {
         assertEquals(HttpStatus.CREATED, result.getStatusCode());
 
         return user;
+    }
+
+    public static UserInfoResponse getUserInfo(String url, String token) throws URISyntaxException {
+        RestTemplate rest = new RestTemplate(createRequestFactory(true));
+        MultiValueMap<String,String> headers = new LinkedMultiValueMap<>();
+        headers.add(AUTHORIZATION, "Bearer "+token);
+        headers.add(ACCEPT, APPLICATION_JSON_VALUE);
+        RequestEntity<Void> request = new RequestEntity<>(headers, HttpMethod.GET, new URI(url+"/userinfo"));
+        return rest.exchange(request, UserInfoResponse.class).getBody();
+    }
+
+    public static void deleteZone(String baseUrl, String id, String adminToken) throws URISyntaxException {
+        RestTemplate rest = new RestTemplate(createRequestFactory(true));
+        MultiValueMap<String,String> headers = new LinkedMultiValueMap<>();
+        headers.add(AUTHORIZATION, "Bearer "+adminToken);
+        headers.add(ACCEPT, APPLICATION_JSON_VALUE);
+        RequestEntity<Void> request = new RequestEntity<>(headers, HttpMethod.DELETE, new URI(baseUrl+"/identity-zones/"+id));
+        rest.exchange(request, Void.class);
     }
 
     public static class RegexMatcher extends TypeSafeMatcher<String> {
@@ -217,9 +248,9 @@ public class IntegrationTestUtils {
     public static ScimUser updateUser(String token, String url, ScimUser user) {
         RestTemplate template = new RestTemplate();
         MultiValueMap<String,String> headers = new LinkedMultiValueMap<>();
-        headers.add("Accept", MediaType.APPLICATION_JSON_VALUE);
+        headers.add("Accept", APPLICATION_JSON_VALUE);
         headers.add("Authorization", "bearer " + token);
-        headers.add("Content-Type", MediaType.APPLICATION_JSON_VALUE);
+        headers.add("Content-Type", APPLICATION_JSON_VALUE);
         headers.add("If-Match", String.valueOf(user.getVersion()));
         HttpEntity getHeaders = new HttpEntity(user,headers);
         ResponseEntity<ScimUser> userInfoGet = template.exchange(
@@ -239,12 +270,40 @@ public class IntegrationTestUtils {
         return getUser(token, url, userId);
     }
 
+    public static ScimUser getUserByZone(String token, String url, String subdomain, String username) {
+        RestTemplate template = new RestTemplate();
+        MultiValueMap<String,String> headers = new LinkedMultiValueMap<>();
+        headers.add("Accept", APPLICATION_JSON_VALUE);
+        headers.add("Authorization", "bearer " + token);
+        headers.add("Content-Type", APPLICATION_JSON_VALUE);
+        headers.add("X-Identity-Zone-Subdomain", subdomain);
+        HttpEntity getHeaders = new HttpEntity(headers);
+        ResponseEntity<String> userInfoGet = template.exchange(
+            url+"/Users"
+                + "?filter=userName eq \"" + username + "\"",
+            HttpMethod.GET,
+            getHeaders,
+            String.class
+        );
+        ScimUser user = null;
+        if (userInfoGet.getStatusCode() == HttpStatus.OK) {
+
+            SearchResults<ScimUser> results = JsonUtils.readValue(userInfoGet.getBody(), SearchResults.class);
+            List<ScimUser> resources = (List) results.getResources();
+            if (resources.size() < 1) {
+                return null;
+            }
+            user = JsonUtils.readValue(JsonUtils.writeValueAsString(resources.get(0)), ScimUser.class);
+        }
+        return user;
+    }
+
     public static ScimUser getUser(String token, String url, String userId) {
         RestTemplate template = new RestTemplate();
         MultiValueMap<String,String> headers = new LinkedMultiValueMap<>();
-        headers.add("Accept", MediaType.APPLICATION_JSON_VALUE);
+        headers.add("Accept", APPLICATION_JSON_VALUE);
         headers.add("Authorization", "bearer " + token);
-        headers.add("Content-Type", MediaType.APPLICATION_JSON_VALUE);
+        headers.add("Content-Type", APPLICATION_JSON_VALUE);
         HttpEntity getHeaders = new HttpEntity(headers);
         ResponseEntity<ScimUser> userInfoGet = template.exchange(
             url+"/Users/"+userId,
@@ -264,9 +323,9 @@ public class IntegrationTestUtils {
     public static String getUserIdByField(String token, String url, String origin, String field, String fieldValue) {
         RestTemplate template = new RestTemplate();
         MultiValueMap<String,String> headers = new LinkedMultiValueMap<>();
-        headers.add("Accept", MediaType.APPLICATION_JSON_VALUE);
+        headers.add("Accept", APPLICATION_JSON_VALUE);
         headers.add("Authorization", "bearer " + token);
-        headers.add("Content-Type", MediaType.APPLICATION_JSON_VALUE);
+        headers.add("Content-Type", APPLICATION_JSON_VALUE);
         HttpEntity getHeaders = new HttpEntity(headers);
         ResponseEntity<String> userInfoGet = template.exchange(
                 url+"/Users"
@@ -297,9 +356,9 @@ public class IntegrationTestUtils {
 
         RestTemplate template = new RestTemplate();
         MultiValueMap<String,String> headers = new LinkedMultiValueMap<>();
-        headers.add("Accept", MediaType.APPLICATION_JSON_VALUE);
+        headers.add("Accept", APPLICATION_JSON_VALUE);
         headers.add("Authorization", "bearer " + zoneAdminToken);
-        headers.add("Content-Type", MediaType.APPLICATION_JSON_VALUE);
+        headers.add("Content-Type", APPLICATION_JSON_VALUE);
         HttpEntity deleteHeaders = new HttpEntity(headers);
         ResponseEntity<String> userDelete = template.exchange(
             url + "/Users/" + userId,
@@ -380,9 +439,9 @@ public class IntegrationTestUtils {
                                      String displayName) {
         RestTemplate template = new RestTemplate();
         MultiValueMap<String,String> headers = new LinkedMultiValueMap<>();
-        headers.add("Accept", MediaType.APPLICATION_JSON_VALUE);
+        headers.add("Accept", APPLICATION_JSON_VALUE);
         headers.add("Authorization", "bearer " + token);
-        headers.add("Content-Type", MediaType.APPLICATION_JSON_VALUE);
+        headers.add("Content-Type", APPLICATION_JSON_VALUE);
         if (StringUtils.hasText(zoneId)) {
             headers.add(IdentityZoneSwitchingFilter.HEADER, zoneId);
         }
@@ -407,9 +466,9 @@ public class IntegrationTestUtils {
         RestTemplate template = new RestTemplate();
         template.setErrorHandler(fiveHundredErrorHandler);
         MultiValueMap<String,String> headers = new LinkedMultiValueMap<>();
-        headers.add("Accept", MediaType.APPLICATION_JSON_VALUE);
+        headers.add("Accept", APPLICATION_JSON_VALUE);
         headers.add("Authorization", "bearer " + token);
-        headers.add("Content-Type", MediaType.APPLICATION_JSON_VALUE);
+        headers.add("Content-Type", APPLICATION_JSON_VALUE);
         if (StringUtils.hasText(zoneId)) {
             headers.add(IdentityZoneSwitchingFilter.HEADER, zoneId);
         }
@@ -429,10 +488,10 @@ public class IntegrationTestUtils {
                                         ScimGroup group) {
         RestTemplate template = new RestTemplate();
         MultiValueMap<String,String> headers = new LinkedMultiValueMap<>();
-        headers.add("Accept", MediaType.APPLICATION_JSON_VALUE);
+        headers.add("Accept", APPLICATION_JSON_VALUE);
         headers.add("Authorization", "bearer " + token);
         headers.add("If-Match", "*");
-        headers.add("Content-Type", MediaType.APPLICATION_JSON_VALUE);
+        headers.add("Content-Type", APPLICATION_JSON_VALUE);
         if (StringUtils.hasText(zoneId)) {
             headers.add(IdentityZoneSwitchingFilter.HEADER, zoneId);
         }
@@ -469,9 +528,9 @@ public class IntegrationTestUtils {
 
         RestTemplate template = new RestTemplate();
         MultiValueMap<String,String> headers = new LinkedMultiValueMap<>();
-        headers.add("Accept", MediaType.APPLICATION_JSON_VALUE);
+        headers.add("Accept", APPLICATION_JSON_VALUE);
         headers.add("Authorization", "bearer " + token);
-        headers.add("Content-Type", MediaType.APPLICATION_JSON_VALUE);
+        headers.add("Content-Type", APPLICATION_JSON_VALUE);
         if (StringUtils.hasText(zoneId)) {
             headers.add(IdentityZoneSwitchingFilter.HEADER, zoneId);
         }
@@ -524,11 +583,11 @@ public class IntegrationTestUtils {
 
         ResponseEntity<String> zoneGet = client.getForEntity(url + "/identity-zones/{id}", String.class, id);
         if (zoneGet.getStatusCode()==HttpStatus.OK) {
-        IdentityZone existing = JsonUtils.readValue(zoneGet.getBody(), IdentityZone.class);
-        existing.setSubdomain(subdomain);
-        existing.setConfig(config);
-        client.put(url + "/identity-zones/{id}", existing, id);
-        return existing;
+            IdentityZone existing = JsonUtils.readValue(zoneGet.getBody(), IdentityZone.class);
+            existing.setSubdomain(subdomain);
+            existing.setConfig(config);
+            client.put(url + "/identity-zones/{id}", existing, id);
+            return existing;
         }
         IdentityZone identityZone = fixtureIdentityZone(id, subdomain, config);
         ResponseEntity<IdentityZone> zone = client.postForEntity(url + "/identity-zones", identityZone, IdentityZone.class);
@@ -561,9 +620,9 @@ public class IntegrationTestUtils {
 
         RestTemplate template = new RestTemplate();
         MultiValueMap<String,String> headers = new LinkedMultiValueMap<>();
-        headers.add("Accept", MediaType.APPLICATION_JSON_VALUE);
+        headers.add("Accept", APPLICATION_JSON_VALUE);
         headers.add("Authorization", "bearer "+zoneAdminToken);
-        headers.add("Content-Type", MediaType.APPLICATION_JSON_VALUE);
+        headers.add("Content-Type", APPLICATION_JSON_VALUE);
         headers.add(IdentityZoneSwitchingFilter.HEADER, zoneId);
         HttpEntity getHeaders = new HttpEntity(JsonUtils.writeValueAsBytes(client), headers);
         ResponseEntity<String> clientCreate = template.exchange(
@@ -596,9 +655,9 @@ public class IntegrationTestUtils {
             }
         });
         MultiValueMap<String,String> headers = new LinkedMultiValueMap<>();
-        headers.add("Accept", MediaType.APPLICATION_JSON_VALUE);
+        headers.add("Accept", APPLICATION_JSON_VALUE);
         headers.add("Authorization", "bearer "+ adminToken);
-        headers.add("Content-Type", MediaType.APPLICATION_JSON_VALUE);
+        headers.add("Content-Type", APPLICATION_JSON_VALUE);
         if (StringUtils.hasText(switchToZoneId)) {
             headers.add(IdentityZoneSwitchingFilter.HEADER, switchToZoneId);
         }
@@ -662,9 +721,9 @@ public class IntegrationTestUtils {
                                                       String zoneId) {
         RestTemplate client = new RestTemplate();
         MultiValueMap<String, String> headers = new LinkedMultiValueMap<>();
-        headers.add("Accept", MediaType.APPLICATION_JSON_VALUE);
+        headers.add("Accept", APPLICATION_JSON_VALUE);
         headers.add("Authorization", "bearer " + zoneAdminToken);
-        headers.add("Content-Type", MediaType.APPLICATION_JSON_VALUE);
+        headers.add("Content-Type", APPLICATION_JSON_VALUE);
         headers.add(IdentityZoneSwitchingFilter.HEADER, zoneId);
         HttpEntity getHeaders = new HttpEntity(headers);
         ResponseEntity<String> providerGet = client.exchange(
@@ -738,9 +797,9 @@ public class IntegrationTestUtils {
         identityProvider.setIdentityZoneId(OriginKeys.UAA);
         OIDCIdentityProviderDefinition config = new OIDCIdentityProviderDefinition();
         config.addAttributeMapping(USER_NAME_ATTRIBUTE_NAME, "user_name");
-        config.setAuthUrl(new URL("https://oidc10.identity.cf-app.com/oauth/authorize"));
-        config.setTokenUrl(new URL("https://oidc10.identity.cf-app.com/oauth/token"));
-        config.setTokenKeyUrl(new URL("https://oidc10.identity.cf-app.com/token_key"));
+        config.setAuthUrl(new URL("https://oidc10.uaa-acceptance.cf-app.com/oauth/authorize"));
+        config.setTokenUrl(new URL("https://oidc10.uaa-acceptance.cf-app.com/oauth/token"));
+        config.setTokenKeyUrl(new URL("https://oidc10.uaa-acceptance.cf-app.com/token_key"));
         config.setShowLinkText(true);
         config.setLinkText("My OIDC Provider");
         config.setSkipSslValidation(true);
@@ -859,9 +918,9 @@ public class IntegrationTestUtils {
                                                           IdentityProvider provider) {
         RestTemplate client = new RestTemplate();
         MultiValueMap<String,String> headers = new LinkedMultiValueMap<>();
-        headers.add("Accept", MediaType.APPLICATION_JSON_VALUE);
+        headers.add("Accept", APPLICATION_JSON_VALUE);
         headers.add("Authorization", "bearer "+accessToken);
-        headers.add("Content-Type", MediaType.APPLICATION_JSON_VALUE);
+        headers.add("Content-Type", APPLICATION_JSON_VALUE);
         headers.add(IdentityZoneSwitchingFilter.HEADER, provider.getIdentityZoneId());
         List<IdentityProvider> existing = getProviders(accessToken, url, provider.getIdentityZoneId());
         if (existing!=null) {
@@ -1026,6 +1085,18 @@ public class IntegrationTestUtils {
                                             true);
     }
 
+    public static HttpHeaders getHeaders(CookieStore cookies) {
+        HttpHeaders headers = new HttpHeaders();
+
+        // TODO: should be able to handle just TEXT_HTML
+        headers.setAccept(Arrays.asList(MediaType.TEXT_HTML, MediaType.ALL));
+
+        for( org.apache.http.cookie.Cookie cookie : cookies.getCookies()) {
+            headers.add("Cookie", cookie.getName() + "=" + cookie.getValue());
+        }
+        return headers;
+    }
+
     public static Map<String,String> getAuthorizationCodeTokenMap(ServerRunning serverRunning,
                                                                   UaaTestAccounts testAccounts,
                                                                   String clientId,
@@ -1036,13 +1107,11 @@ public class IntegrationTestUtils {
                                                                   String jSessionId,
                                                                   String redirectUri,
                                                                   boolean callCheckToken) throws Exception {
+        BasicCookieStore cookies = new BasicCookieStore();
         // TODO Fix to use json API rather than HTML
-        HttpHeaders headers = new HttpHeaders();
         if (StringUtils.hasText(jSessionId)) {
-            headers.add("Cookie", "JSESSIONID="+jSessionId);
+            cookies.addCookie(new BasicClientCookie("JSESSIONID", jSessionId));
         }
-        // TODO: should be able to handle just TEXT_HTML
-        headers.setAccept(Arrays.asList(MediaType.TEXT_HTML, MediaType.ALL));
 
         String mystateid = "mystateid";
         ServerRunning.UriBuilder builder = serverRunning.buildUri("/oauth/authorize")
@@ -1058,7 +1127,7 @@ public class IntegrationTestUtils {
             serverRunning.createRestTemplate().exchange(
                 uri.toString(),
                 HttpMethod.GET,
-                new HttpEntity<>(null,headers),
+                new HttpEntity<>(null, getHeaders(cookies)),
                 Void.class
             );
 
@@ -1066,17 +1135,18 @@ public class IntegrationTestUtils {
         String location = result.getHeaders().getLocation().toString();
 
         if (result.getHeaders().containsKey("Set-Cookie")) {
-            for (String cookie : result.getHeaders().get("Set-Cookie")) {
-                assertNotNull("Expected cookie in " + result.getHeaders(), cookie);
-                headers.add("Cookie", cookie);
+            for (String header : result.getHeaders().get("Set-Cookie")) {
+                int nameLength = header.indexOf('=');
+                cookies.addCookie(new BasicClientCookie(header.substring(0, nameLength), header.substring(nameLength+1)));
             }
         }
 
-        ResponseEntity<String> response = serverRunning.getForString(location, headers);
+        ResponseEntity<String> response = serverRunning.getForString(location, getHeaders(cookies));
 
         if (response.getHeaders().containsKey("Set-Cookie")) {
             for (String cookie : response.getHeaders().get("Set-Cookie")) {
-                headers.add("Cookie", cookie);
+                int nameLength = cookie.indexOf('=');
+                cookies.addCookie(new BasicClientCookie(cookie.substring(0, nameLength), cookie.substring(nameLength+1)));
             }
         }
 
@@ -1093,22 +1163,28 @@ public class IntegrationTestUtils {
             formData.add(CookieBasedCsrfTokenRepository.DEFAULT_CSRF_COOKIE_NAME, csrf);
 
             // Should be redirected to the original URL, but now authenticated
-            result = serverRunning.postForResponse("/login.do", headers, formData);
+            result = serverRunning.postForResponse("/login.do", getHeaders(cookies), formData);
             assertEquals(HttpStatus.FOUND, result.getStatusCode());
 
-            headers.remove("Cookie");
+            cookies.clear();
             if (result.getHeaders().containsKey("Set-Cookie")) {
                 for (String cookie : result.getHeaders().get("Set-Cookie")) {
-                    headers.add("Cookie", cookie);
+                    int nameLength = cookie.indexOf('=');
+                    cookies.addCookie(new BasicClientCookie(cookie.substring(0, nameLength), cookie.substring(nameLength+1)));
                 }
             }
         }
 
         response = serverRunning.createRestTemplate().exchange(
-            result.getHeaders().getLocation().toString(),HttpMethod.GET, new HttpEntity<>(null,headers),
+            result.getHeaders().getLocation().toString(),HttpMethod.GET, new HttpEntity<>(null,getHeaders(cookies)),
             String.class);
 
-
+        if (response.getHeaders().containsKey("Set-Cookie")) {
+            for (String cookie : response.getHeaders().get("Set-Cookie")) {
+                int nameLength = cookie.indexOf('=');
+                cookies.addCookie(new BasicClientCookie(cookie.substring(0, nameLength), cookie.substring(nameLength+1)));
+            }
+        }
         if (response.getStatusCode() == HttpStatus.OK) {
             // The grant access page should be returned
             assertTrue(response.getBody().contains("<h1>Application Authorization</h1>"));
@@ -1116,7 +1192,7 @@ public class IntegrationTestUtils {
             formData.clear();
             formData.add(USER_OAUTH_APPROVAL, "true");
             formData.add(DEFAULT_CSRF_COOKIE_NAME, IntegrationTestUtils.extractCookieCsrf(response.getBody()));
-            result = serverRunning.postForResponse("/oauth/authorize", headers, formData);
+            result = serverRunning.postForResponse("/oauth/authorize", getHeaders(cookies), formData);
             assertEquals(HttpStatus.FOUND, result.getStatusCode());
             location = result.getHeaders().getLocation().toString();
         }
@@ -1150,6 +1226,7 @@ public class IntegrationTestUtils {
         Map<String, String> body = tokenResponse.getBody();
 
         formData = new LinkedMultiValueMap<>();
+        HttpHeaders headers = new HttpHeaders();
         headers.set("Authorization", testAccounts.getAuthorizationHeader(clientId, clientSecret));
         formData.add("token", accessToken.getValue());
 
@@ -1209,10 +1286,20 @@ public class IntegrationTestUtils {
     }
 
     public static void validateAccountChooserCookie(String baseUrl, WebDriver webDriver) {
+        List<String> cookies = getAccountChooserCookies(baseUrl, webDriver);
+        assertThat(cookies, Matchers.hasItem(startsWith("Saved-Account-")));
+    }
+
+    public static void validateUserLastLogon(ScimUser user, Long beforeTestTime, Long afterTestTime) {
+        Long userLastLogon = user.getLastLogonTime();
+        assertNotNull(userLastLogon);
+        assertTrue((userLastLogon > beforeTestTime) && (userLastLogon < afterTestTime));
+    }
+
+    public static List<String> getAccountChooserCookies(String baseUrl, WebDriver webDriver) {
         webDriver.get(baseUrl +"/logout.do");
         webDriver.get(baseUrl +"/login");
-        List<String> cookies = webDriver.manage().getCookies().stream().map(Cookie::getName).collect(Collectors.toList());
-        assertThat(cookies, Matchers.hasItem(startsWith("Saved-Account-")));
+        return webDriver.manage().getCookies().stream().map(Cookie::getName).collect(Collectors.toList());
     }
 
     public static class HttpRequestFactory extends HttpComponentsClientHttpRequestFactory {

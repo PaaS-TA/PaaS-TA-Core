@@ -44,6 +44,22 @@ module VCAP::CloudController
           result = result.merge(
             'docker_path' => droplet.docker_receipt_image,
           )
+
+          if droplet.docker_receipt_username.present?
+            result = result.merge(
+              'docker_user' => droplet.docker_receipt_username,
+              'docker_password' => droplet.docker_receipt_password,
+            )
+          end
+        end
+
+        if task.space.isolation_segment_model
+          if !task.space.isolation_segment_model.is_shared_segment?
+            result['isolation_segment'] = task.space.isolation_segment_model.name
+          end
+        elsif task.space.organization.default_isolation_segment_model &&
+          !task.space.organization.default_isolation_segment_model.is_shared_segment?
+          result['isolation_segment'] = task.space.organization.default_isolation_segment_model.name
         end
 
         result.to_json
@@ -59,9 +75,6 @@ module VCAP::CloudController
         logger.debug2("task environment: #{diego_envs.map { |e| e['name'] }}")
 
         diego_envs
-      end
-
-      def task_completion_callback(task)
       end
 
       def logger

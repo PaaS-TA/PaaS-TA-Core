@@ -2,8 +2,6 @@ require 'spec_helper'
 
 module VCAP::CloudController
   RSpec.describe Config do
-    let(:message_bus) { Config.message_bus }
-
     describe '.from_file' do
       it 'raises if the file does not exist' do
         expect {
@@ -55,20 +53,12 @@ module VCAP::CloudController
           expect(config[:users_can_select_backend]).to eq(true)
         end
 
-        it 'runs apps on the dea' do
-          expect(config[:default_to_diego_backend]).to eq(false)
-        end
-
         it 'sets a default value for min staging memory' do
           expect(config[:staging][:minimum_staging_memory_mb]).to eq(1024)
         end
 
         it 'sets a default value for min staging file descriptor limit' do
           expect(config[:staging][:minimum_staging_file_descriptor_limit]).to eq(16384)
-        end
-
-        it 'sets a default value for advertisement_timeout_in_seconds' do
-          expect(config[:dea_advertisement_timeout_in_seconds]).to eq(10)
         end
 
         it 'sets a default value for placement_top_stager_percentage' do
@@ -160,10 +150,6 @@ module VCAP::CloudController
             expect(config[:users_can_select_backend]).to eq(false)
           end
 
-          it 'runs apps on diego' do
-            expect(config[:default_to_diego_backend]).to eq(true)
-          end
-
           it 'preserves the enable allow ssh configuration from the file' do
             expect(config[:allow_app_ssh_access]).to eq(true)
           end
@@ -246,6 +232,7 @@ module VCAP::CloudController
             config_hash['staging']['auth']['user'] = 'f@t:%a'
             config_hash['staging']['auth']['password'] = 'm@/n!'
             config_hash['minimum_candidate_stagers'] = 0
+            config_hash['diego']['pid_limit'] = -5
 
             File.open(File.join(tmpdir, 'incorrect_overridden_config.yml'), 'w') do |f|
               YAML.dump(config_hash, f)
@@ -264,7 +251,11 @@ module VCAP::CloudController
             expect(config_from_file[:app_bits_upload_grace_period_in_seconds]).to eq(0)
           end
 
-          it 'URL-encodes staging auth as neccesary' do
+          it 'sets a negative "pid_limit" to 0' do
+            expect(config_from_file[:diego][:pid_limit]).to eq(0)
+          end
+
+          it 'URL-encodes staging auth as necessary' do
             expect(config_from_file[:staging][:auth][:user]).to eq('f%40t%3A%25a')
             expect(config_from_file[:staging][:auth][:password]).to eq('m%40%2Fn!')
           end
@@ -308,9 +299,9 @@ module VCAP::CloudController
               password: 'password',
             },
           },
-
           bits_service: { enabled: false },
           reserved_private_domains: File.join(Paths::FIXTURES, 'config/reserved_private_domains.dat'),
+          diego: {},
         }
       end
 
@@ -327,52 +318,27 @@ module VCAP::CloudController
       end
 
       it 'sets up the resource pool instance' do
-        Config.configure_components(@test_config.merge(resource_pool: { minimum_size: 9001, fog_connection: {} }))
+        Config.configure_components(@test_config.merge(resource_pool: { resource_directory_key: 'foo', minimum_size: 9001, fog_connection: {} }))
         expect(ResourcePool.instance.minimum_size).to eq(9001)
       end
 
       it 'creates the runners' do
-        expect(VCAP::CloudController::Runners).to receive(:new).with(
-          @test_config,
-          message_bus,
-          instance_of(Dea::Pool))
+        expect(VCAP::CloudController::Runners).to receive(:new).with(@test_config)
         Config.configure_components(@test_config)
-        Config.configure_components_depending_on_message_bus(message_bus)
+        Config.configure_runner_components
       end
 
       it 'creates the stagers' do
-        expect(VCAP::CloudController::Stagers).to receive(:new).with(
-          @test_config,
-          message_bus,
-          instance_of(Dea::Pool))
+        expect(VCAP::CloudController::Stagers).to receive(:new).with(@test_config)
         Config.configure_components(@test_config)
-        Config.configure_components_depending_on_message_bus(message_bus)
+        Config.configure_runner_components
       end
 
       it 'sets up the app manager' do
         expect(AppObserver).to receive(:configure).with(instance_of(VCAP::CloudController::Stagers), instance_of(VCAP::CloudController::Runners))
 
         Config.configure_components(@test_config)
-        Config.configure_components_depending_on_message_bus(message_bus)
-      end
-
-      it 'sets the dea client' do
-        Config.configure_components(@test_config)
-        Config.configure_components_depending_on_message_bus(message_bus)
-        expect(Dea::Client.config).to eq(@test_config)
-        expect(Dea::Client.message_bus).to eq(message_bus)
-
-        expect(message_bus).to receive(:subscribe).at_least(:once)
-        Dea::Client.dea_pool.register_subscriptions
-      end
-
-      it 'sets the legacy bulk' do
-        bulk_config = { bulk_api: { auth_user: 'user', auth_password: 'password' } }
-        Config.configure_components(@test_config.merge(bulk_config))
-        Config.configure_components_depending_on_message_bus(message_bus)
-        expect(LegacyBulk.config[:auth_user]).to eq('user')
-        expect(LegacyBulk.config[:auth_password]).to eq('password')
-        expect(LegacyBulk.message_bus).to eq(message_bus)
+        Config.configure_runner_components
       end
 
       it 'sets up the quota definition' do

@@ -34,10 +34,16 @@ module VCAP::CloudController
       end
 
       it 'includes bits_endpoint when bits service is enabled' do
-        TestConfig.override(bits_service: { enabled: true, public_endpoint: 'bits-service.example.com' })
+        TestConfig.override(bits_service: {
+          enabled: true,
+          public_endpoint: 'http://public-bits-service.example.com',
+          private_endpoint: 'http://private-bits-service.example.com',
+          username: 'some-username',
+          password: 'some-password',
+        })
         get '/v2/info'
         hash = MultiJson.load(last_response.body)
-        expect(hash['bits_endpoint']).to eq('bits-service.example.com')
+        expect(hash['bits_endpoint']).to eq('http://public-bits-service.example.com')
       end
 
       it 'does not include bits_service when bits service is not enabled' do
@@ -60,13 +66,6 @@ module VCAP::CloudController
         expect(hash['authorization_endpoint']).to eq('login_url')
       end
 
-      it 'includes the logging endpoint when configured' do
-        TestConfig.override(loggregator: { url: 'loggregator_url' })
-        get '/v2/info'
-        hash = MultiJson.load(last_response.body)
-        expect(hash['logging_endpoint']).to eq('loggregator_url')
-      end
-
       it 'includes the routing api endpoint when configured' do
         TestConfig.override(routing_api: { url: 'some_routing_api' })
         get '/v2/info'
@@ -74,18 +73,11 @@ module VCAP::CloudController
         expect(hash['routing_endpoint']).to eq('some_routing_api')
       end
 
-      it 'includes the doppler_logging_endpoint when enabled' do
-        TestConfig.override(doppler: { enabled: true, url: 'doppler_url' })
+      it 'includes the doppler_logging_endpoint' do
+        TestConfig.override(doppler: { url: 'doppler_url' })
         get '/v2/info'
         hash = MultiJson.load(last_response.body)
         expect(hash['doppler_logging_endpoint']).to eq('doppler_url')
-      end
-
-      it 'excludes the doppler_logging_endpoint when disabled' do
-        TestConfig.override(doppler: { enabled: false })
-        get '/v2/info'
-        hash = MultiJson.load(last_response.body)
-        expect(hash['doppler_logging_endpoint']).to be_nil
       end
 
       it 'includes cli version info when confgired' do

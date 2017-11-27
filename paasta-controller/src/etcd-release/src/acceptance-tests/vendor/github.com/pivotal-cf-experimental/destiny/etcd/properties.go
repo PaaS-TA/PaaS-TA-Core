@@ -21,7 +21,7 @@ type Properties struct {
 
 type PropertiesEtcd struct {
 	Cluster                         []PropertiesEtcdCluster `yaml:"cluster"`
-	Machines                        []string                `yaml:"machines"`
+	Machines                        []string                `yaml:"machines,omitempty"`
 	PeerRequireSSL                  bool                    `yaml:"peer_require_ssl"`
 	RequireSSL                      bool                    `yaml:"require_ssl"`
 	HeartbeatIntervalInMilliseconds int                     `yaml:"heartbeat_interval_in_milliseconds"`
@@ -34,6 +34,8 @@ type PropertiesEtcd struct {
 	PeerKey                         string                  `yaml:"peer_key"`
 	ServerCert                      string                  `yaml:"server_cert"`
 	ServerKey                       string                  `yaml:"server_key"`
+	ClientIP                        string                  `yaml:"client_ip,omitempty"`
+	PeerIP                          string                  `yaml:"peer_ip,omitempty"`
 }
 
 type PropertiesEtcdCluster struct {

@@ -1,9 +1,13 @@
 package sqldb_test
 
 import (
+	"database/sql"
 	"encoding/json"
+	"fmt"
 
 	"code.cloudfoundry.org/bbs/db/sqldb"
+	"code.cloudfoundry.org/bbs/db/sqldb/helpers"
+	"code.cloudfoundry.org/bbs/format"
 	"code.cloudfoundry.org/bbs/models"
 	"code.cloudfoundry.org/bbs/test_helpers"
 	. "github.com/onsi/ginkgo"
@@ -48,7 +52,7 @@ var _ = Describe("Version", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				queryStr := "UPDATE configurations SET value = ? WHERE id = ?"
-				_, err = db.Exec(sqldb.RebindForFlavor(queryStr, dbDriverName), versionJSON, sqldb.VersionID)
+				_, err = db.Exec(helpers.RebindForFlavor(queryStr, dbDriverName), versionJSON, sqldb.VersionID)
 				Expect(err).NotTo(HaveOccurred())
 			})
 
@@ -95,6 +99,23 @@ var _ = Describe("Version", func() {
 			})
 		})
 
+		Context("when the database is down", func() {
+			var (
+				sqlDB *sqldb.SQLDB
+			)
+
+			BeforeEach(func() {
+				db, err := sql.Open(dbDriverName, fmt.Sprintf("%sinvalid-db", dbBaseConnectionString))
+				Expect(err).NotTo(HaveOccurred())
+				sqlDB = sqldb.NewSQLDB(db, 5, 5, format.ENCRYPTED_PROTO, cryptor, fakeGUIDProvider, fakeClock, dbFlavor)
+			})
+
+			It("does not return an ErrResourceNotFound", func() {
+				_, err := sqlDB.Version(logger)
+				Expect(err).NotTo(MatchError(models.ErrResourceNotFound))
+			})
+		})
+
 		Context("when the version key does not exist", func() {
 			BeforeEach(func() {
 				_, err := db.Exec("DELETE FROM configurations")
@@ -111,7 +132,7 @@ var _ = Describe("Version", func() {
 		Context("when the version key is not valid json", func() {
 			It("returns a ErrDeserialize", func() {
 				queryStr := "UPDATE configurations SET value = '{{' WHERE id = ?"
-				_, err := db.Exec(sqldb.RebindForFlavor(queryStr, dbDriverName), sqldb.VersionID)
+				_, err := db.Exec(helpers.RebindForFlavor(queryStr, dbDriverName), sqldb.VersionID)
 				Expect(err).NotTo(HaveOccurred())
 
 				_, err = sqlDB.Version(logger)

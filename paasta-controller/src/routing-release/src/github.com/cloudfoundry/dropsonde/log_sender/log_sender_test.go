@@ -3,36 +3,32 @@ package log_sender_test
 import (
 	"bytes"
 	"errors"
-
-	"github.com/cloudfoundry/dropsonde/emitter/fake"
-	"github.com/cloudfoundry/dropsonde/log_sender"
-	"github.com/cloudfoundry/sonde-go/events"
-	"github.com/gogo/protobuf/proto"
-
-	"io"
+	"fmt"
 	"strings"
 	"time"
 
-	"github.com/cloudfoundry/dropsonde/metric_sender"
-	"github.com/cloudfoundry/dropsonde/metricbatcher"
-	"github.com/cloudfoundry/dropsonde/metrics"
-	"github.com/cloudfoundry/loggregatorlib/loggertesthelper"
+	. "github.com/apoydence/eachers"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+
+	"github.com/cloudfoundry/dropsonde/emitter/fake"
+	"github.com/cloudfoundry/dropsonde/log_sender"
+	"github.com/cloudfoundry/dropsonde/metrics"
+	"github.com/cloudfoundry/sonde-go/events"
 )
 
 var _ = Describe("LogSender", func() {
 	var (
-		emitter *fake.FakeEventEmitter
-		sender  *log_sender.LogSender
+		mockBatcher *mockMetricBatcher
+		emitter     *fake.FakeEventEmitter
+		sender      *log_sender.LogSender
 	)
 
 	BeforeEach(func() {
-		emitter = fake.NewFakeEventEmitter("origin")
-		metricSender := metric_sender.NewMetricSender(emitter)
-		batcher := metricbatcher.New(metricSender, time.Millisecond)
-		metrics.Initialize(metricSender, batcher)
-		sender = log_sender.NewLogSender(emitter, loggertesthelper.Logger())
+		mockBatcher = newMockMetricBatcher()
+		emitter = fake.NewFakeEventEmitter("test-origin")
+		metrics.Initialize(nil, mockBatcher)
+		sender = log_sender.NewLogSender(emitter)
 	})
 
 	AfterEach(func() {
@@ -40,6 +36,163 @@ var _ = Describe("LogSender", func() {
 		for !emitter.IsClosed() {
 			time.Sleep(10 * time.Millisecond)
 		}
+	})
+
+	Describe("LogMessage", func() {
+		It("sets the required properties", func() {
+			msg := []byte("custom-log-message")
+			msgType := events.LogMessage_OUT
+			now := time.Now().UnixNano()
+
+			err := sender.LogMessage(msg, msgType).Send()
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(emitter.GetEnvelopes()).To(HaveLen(1))
+			logMsg := emitter.GetEnvelopes()[0].LogMessage
+			Expect(logMsg.GetMessage()).To(Equal(msg))
+			Expect(logMsg.GetMessageType()).To(Equal(msgType))
+			Expect(logMsg.GetTimestamp()).To(BeNumerically("~", now, time.Second))
+		})
+
+		It("allows for log message timestamp to be overwritten", func() {
+			err := sender.LogMessage([]byte(""), events.LogMessage_OUT).
+				SetTimestamp(-123456).
+				Send()
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(emitter.GetEnvelopes()).To(HaveLen(1))
+			logMsg := emitter.GetEnvelopes()[0].LogMessage
+			Expect(logMsg.GetTimestamp()).To(Equal(int64(-123456)))
+		})
+
+		Context("tags", func() {
+			It("can add tags to AppLogs", func() {
+				msg := []byte("custom-log-message")
+				msgType := events.LogMessage_OUT
+				err := sender.LogMessage(msg, msgType).
+					SetTag("key", "value").
+					SetTag("key2", "value2").
+					Send()
+				Expect(err).ToNot(HaveOccurred())
+
+				Expect(emitter.GetEnvelopes()).To(HaveLen(1))
+				envelope := emitter.GetEnvelopes()[0]
+				Expect(envelope.GetTags()).To(HaveKeyWithValue("key", "value"))
+				Expect(envelope.GetTags()).To(HaveKeyWithValue("key2", "value2"))
+			})
+
+			It("doesn't allow tag keys over 256 characters", func() {
+				msg := []byte("custom-log-message")
+				msgType := events.LogMessage_OUT
+
+				tooLong := strings.Repeat("x", 257)
+				err := sender.LogMessage(msg, msgType).
+					SetTag(tooLong, "value").
+					Send()
+				Expect(err).To(HaveOccurred())
+			})
+
+			It("doesn't allow tag values over 256 characters", func() {
+				msg := []byte("custom-log-message")
+				msgType := events.LogMessage_OUT
+
+				tooLong := strings.Repeat("x", 257)
+				err := sender.LogMessage(msg, msgType).
+					SetTag("key", tooLong).
+					Send()
+				Expect(err).To(HaveOccurred())
+			})
+
+			It("counts the number of runes in the key instead of bytes", func() {
+				justRight := strings.Repeat("x", 255) + "Ω"
+				msg := []byte("custom-log-message")
+				msgType := events.LogMessage_OUT
+
+				err := sender.LogMessage(msg, msgType).
+					SetTag(justRight, "value").
+					Send()
+				Expect(err).ToNot(HaveOccurred())
+			})
+
+			It("counts the number of runes in the value instead of bytes", func() {
+				justRight := strings.Repeat("x", 255) + "Ω"
+				msg := []byte("custom-log-message")
+				msgType := events.LogMessage_OUT
+
+				err := sender.LogMessage(msg, msgType).
+					SetTag("key", justRight).
+					Send()
+				Expect(err).ToNot(HaveOccurred())
+			})
+
+			It("doesn't allow more than 10 tags", func() {
+				msg := []byte("custom-log-message")
+				msgType := events.LogMessage_OUT
+
+				c := sender.LogMessage(msg, msgType)
+				for i := 0; i < 11; i++ {
+					c = c.SetTag(fmt.Sprintf("key-%d", i), "value")
+				}
+				err := c.Send()
+				Expect(err).To(HaveOccurred())
+			})
+		})
+
+		It("sets envelope properties", func() {
+			now := time.Now().UnixNano()
+			err := sender.LogMessage([]byte(""), events.LogMessage_OUT).Send()
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(emitter.GetEnvelopes()).To(HaveLen(1))
+			envelope := emitter.GetEnvelopes()[0]
+			Expect(envelope.GetOrigin()).To(Equal("test-origin"))
+			Expect(envelope.GetEventType()).To(Equal(events.Envelope_LogMessage))
+			Expect(envelope.GetTimestamp()).To(BeNumerically("~", now, time.Second))
+		})
+
+		It("allows for setting AppId on the LogMessage", func() {
+			err := sender.LogMessage([]byte(""), events.LogMessage_OUT).
+				SetAppId("test-app-id").
+				Send()
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(emitter.GetEnvelopes()).To(HaveLen(1))
+			logMsg := emitter.GetEnvelopes()[0].LogMessage
+			Expect(logMsg.GetAppId()).To(Equal("test-app-id"))
+		})
+
+		It("allows for setting SourceType on the LogMessage", func() {
+			err := sender.LogMessage([]byte(""), events.LogMessage_OUT).
+				SetSourceType("0").
+				Send()
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(emitter.GetEnvelopes()).To(HaveLen(1))
+			logMsg := emitter.GetEnvelopes()[0].LogMessage
+			Expect(logMsg.GetSourceType()).To(Equal("0"))
+		})
+
+		It("allows for setting SourceInstance on the LogMessage", func() {
+			err := sender.LogMessage([]byte(""), events.LogMessage_OUT).
+				SetSourceInstance("App").
+				Send()
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(emitter.GetEnvelopes()).To(HaveLen(1))
+			logMsg := emitter.GetEnvelopes()[0].LogMessage
+			Expect(logMsg.GetSourceInstance()).To(Equal("App"))
+		})
+
+		It("increments a counter for log messages sent to emitter", func() {
+			c := sender.LogMessage([]byte(""), events.LogMessage_OUT)
+			Expect(c.Send()).To(Succeed())
+			Expect(c.Send()).To(Succeed())
+
+			Eventually(mockBatcher.BatchIncrementCounterInput).Should(BeCalled(
+				With("logSenderTotalMessagesRead"),
+				With("logSenderTotalMessagesRead"),
+			))
+		})
 	})
 
 	Describe("SendAppLog", func() {
@@ -61,7 +214,26 @@ var _ = Describe("LogSender", func() {
 			sender.SendAppLog("app-id", "custom-log-message", "App", "0")
 			sender.SendAppLog("app-id", "custom-log-message", "App", "0")
 
-			Eventually(emitter.GetEvents).Should(ContainElement(&events.CounterEvent{Name: proto.String("logSenderTotalMessagesRead"), Delta: proto.Uint64(2)}))
+			Eventually(mockBatcher.BatchIncrementCounterInput).Should(BeCalled(
+				With("logSenderTotalMessagesRead"),
+				With("logSenderTotalMessagesRead"),
+			))
+		})
+
+		It("emits counter metric on a timer", func() {
+			sender.SendAppLog("app-id", "custom-log-message", "App", "0")
+			Eventually(mockBatcher.BatchIncrementCounterInput).Should(BeCalled(
+				With("logSenderTotalMessagesRead"),
+			))
+
+			sender.SendAppLog("app-id", "custom-log-message", "App", "0")
+			Eventually(mockBatcher.BatchIncrementCounterInput).Should(BeCalled(
+				With("logSenderTotalMessagesRead"),
+			))
+		})
+
+		It("does not emit counter metrics when no logs are written", func() {
+			Consistently(emitter.GetEvents, 1).Should(HaveLen(0))
 		})
 	})
 
@@ -84,48 +256,14 @@ var _ = Describe("LogSender", func() {
 			sender.SendAppErrorLog("app-id", "custom-log-message", "App", "0")
 			sender.SendAppErrorLog("app-id", "custom-log-message", "App", "0")
 
-			Eventually(emitter.GetEvents).Should(ContainElement(&events.CounterEvent{Name: proto.String("logSenderTotalMessagesRead"), Delta: proto.Uint64(2)}))
-		})
-	})
-
-	Describe("counter emission", func() {
-		It("emits on a timer", func() {
-			sender.SendAppLog("app-id", "custom-log-message", "App", "0")
-			Eventually(emitter.GetEvents).Should(ContainElement(&events.CounterEvent{Name: proto.String("logSenderTotalMessagesRead"), Delta: proto.Uint64(1)}))
-
-			sender.SendAppLog("app-id", "custom-log-message", "App", "0")
-			Eventually(emitter.GetEvents).Should(ContainElement(&events.CounterEvent{Name: proto.String("logSenderTotalMessagesRead"), Delta: proto.Uint64(1)}))
-		})
-
-		It("does not emit when no logs are written", func() {
-			Consistently(emitter.GetEvents, 1).Should(HaveLen(0))
-		})
-	})
-
-	Context("when messages cannot be emitted", func() {
-		BeforeEach(func() {
-			emitter.ReturnError = errors.New("expected error")
-		})
-
-		Describe("SendAppLog", func() {
-			It("sends an error when log messages cannot be emitted", func() {
-				err := sender.SendAppLog("app-id", "custom-log-message", "App", "0")
-				Expect(err).To(HaveOccurred())
-			})
-
-		})
-
-		Describe("SendAppErrorLog", func() {
-			It("sends an error when log error messages cannot be emitted", func() {
-				err := sender.SendAppErrorLog("app-id", "custom-log-error-message", "App", "0")
-				Expect(err).To(HaveOccurred())
-			})
-
+			Eventually(mockBatcher.BatchIncrementCounterInput).Should(BeCalled(
+				With("logSenderTotalMessagesRead"),
+				With("logSenderTotalMessagesRead"),
+			))
 		})
 	})
 
 	Describe("ScanLogStream", func() {
-
 		It("sends lines from stream to emitter", func() {
 			buf := bytes.NewBufferString("line 1\nline 2\n")
 
@@ -156,27 +294,30 @@ var _ = Describe("LogSender", func() {
 			log := emitter.GetMessages()[0].Event.(*events.LogMessage)
 			Expect(log.GetMessageType()).To(Equal(events.LogMessage_OUT))
 			Expect(log.GetMessage()).To(BeEquivalentTo("one"))
-
-			loggerMessage := loggertesthelper.TestLoggerSink.LogContents()
-			Expect(loggerMessage).To(ContainSubstring("Read Error"))
 		})
 
 		It("stops when reader returns EOF", func() {
-			var reader infiniteReader
-			reader.stopChan = make(chan struct{})
+			reader := infiniteReader{
+				stopChan: make(chan struct{}),
+			}
 			doneChan := make(chan struct{})
 
 			go func() {
 				sender.ScanLogStream("someId", "app", "0", reader)
 				close(doneChan)
 			}()
+			go keepMockChansDrained(
+				reader.stopChan,
+				mockBatcher.BatchIncrementCounterCalled,
+				mockBatcher.BatchIncrementCounterInput,
+			)
 
 			Eventually(func() int { return len(emitter.GetMessages()) }).Should(BeNumerically(">", 1))
 			close(reader.stopChan)
 			Eventually(doneChan).Should(BeClosed())
 		})
 
-		PIt("drops over-length messages and resumes scanning", func() {
+		It("drops over-length messages and resumes scanning", func() {
 			// Scanner can't handle tokens over 64K
 			bigReader := strings.NewReader(strings.Repeat("x", 64*1024+1) + "\nsmall message\n")
 
@@ -186,7 +327,7 @@ var _ = Describe("LogSender", func() {
 				close(doneChan)
 			}()
 
-			Eventually(emitter.GetMessages).Should(HaveLen(4))
+			Eventually(func() int { return len(emitter.GetMessages()) }).Should(BeNumerically(">=", 3))
 
 			Eventually(doneChan).Should(BeClosed())
 
@@ -242,9 +383,6 @@ var _ = Describe("LogSender", func() {
 			log := emitter.GetMessages()[0].Event.(*events.LogMessage)
 			Expect(log.GetMessageType()).To(Equal(events.LogMessage_ERR))
 			Expect(log.GetMessage()).To(BeEquivalentTo("one"))
-
-			loggerMessage := loggertesthelper.TestLoggerSink.LogContents()
-			Expect(loggerMessage).To(ContainSubstring("Read Error"))
 		})
 
 		It("stops when reader returns EOF", func() {
@@ -256,12 +394,16 @@ var _ = Describe("LogSender", func() {
 				sender.ScanErrorLogStream("someId", "app", "0", reader)
 				close(doneChan)
 			}()
+			go keepMockChansDrained(
+				reader.stopChan,
+				mockBatcher.BatchIncrementCounterCalled,
+				mockBatcher.BatchIncrementCounterInput,
+			)
 
 			Eventually(func() int { return len(emitter.GetMessages()) }).Should(BeNumerically(">", 1))
 
 			close(reader.stopChan)
 			Eventually(doneChan).Should(BeClosed())
-
 		})
 
 		It("drops over-length messages and resumes scanning", func() {
@@ -290,48 +432,25 @@ var _ = Describe("LogSender", func() {
 			Expect(messages[1]).To(Equal("two"))
 		})
 	})
+
+	Context("when messages cannot be emitted", func() {
+		BeforeEach(func() {
+			emitter.ReturnError = errors.New("expected error")
+		})
+
+		Describe("SendAppLog", func() {
+			It("sends an error when log messages cannot be emitted", func() {
+				err := sender.SendAppLog("app-id", "custom-log-message", "App", "0")
+				Expect(err).To(HaveOccurred())
+			})
+
+		})
+
+		Describe("SendAppErrorLog", func() {
+			It("sends an error when log error messages cannot be emitted", func() {
+				err := sender.SendAppErrorLog("app-id", "custom-log-error-message", "App", "0")
+				Expect(err).To(HaveOccurred())
+			})
+		})
+	})
 })
-
-type fakeReader struct {
-	counter int
-}
-
-func (f *fakeReader) Read(p []byte) (int, error) {
-	f.counter++
-
-	switch f.counter {
-	case 1: // message
-		return copy(p, "one\n"), nil
-	case 2: // read error
-		return 0, errors.New("Read Error")
-	case 3: // message
-		return copy(p, "two\n"), nil
-	default: // eof
-		return 0, io.EOF
-	}
-}
-
-type infiniteReader struct {
-	stopChan chan struct{}
-}
-
-func (i infiniteReader) Read(p []byte) (int, error) {
-	select {
-	case <-i.stopChan:
-		return 0, io.EOF
-	default:
-	}
-
-	return copy(p, "hello\n"), nil
-}
-
-func getLogMessages(messages []fake.Message) []string {
-	var logMessages []string
-	for _, msg := range messages {
-		log, ok := msg.Event.(*events.LogMessage)
-		if ok {
-			logMessages = append(logMessages, string(log.GetMessage()))
-		}
-	}
-	return logMessages
-}

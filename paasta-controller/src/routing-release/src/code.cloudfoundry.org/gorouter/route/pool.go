@@ -7,6 +7,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/uber-go/zap"
+
 	"code.cloudfoundry.org/gorouter/config"
 	"code.cloudfoundry.org/routing-api/models"
 )
@@ -49,6 +51,7 @@ type Endpoint struct {
 	PrivateInstanceIndex string
 	ModificationTag      models.ModificationTag
 	Stats                *Stats
+	IsolationSegment     string
 }
 
 //go:generate counterfeiter -o fakes/fake_endpoint_iterator.go . EndpointIterator
@@ -78,8 +81,18 @@ type Pool struct {
 	nextIdx           int
 }
 
-func NewEndpoint(appId, host string, port uint16, privateInstanceId string, privateInstanceIndex string,
-	tags map[string]string, staleThresholdInSeconds int, routeServiceUrl string, modificationTag models.ModificationTag) *Endpoint {
+func NewEndpoint(
+	appId,
+	host string,
+	port uint16,
+	privateInstanceId string,
+	privateInstanceIndex string,
+	tags map[string]string,
+	staleThresholdInSeconds int,
+	routeServiceUrl string,
+	modificationTag models.ModificationTag,
+	isolationSegment string,
+) *Endpoint {
 	return &Endpoint{
 		ApplicationId:        appId,
 		addr:                 fmt.Sprintf("%s:%d", host, port),
@@ -90,6 +103,7 @@ func NewEndpoint(appId, host string, port uint16, privateInstanceId string, priv
 		RouteServiceUrl:      routeServiceUrl,
 		ModificationTag:      modificationTag,
 		Stats:                NewStats(),
+		IsolationSegment:     isolationSegment,
 	}
 }
 
@@ -114,21 +128,18 @@ func (p *Pool) Put(endpoint *Endpoint) bool {
 
 	e, found := p.index[endpoint.CanonicalAddr()]
 	if found {
-		if e.endpoint == endpoint {
-			return false
-		}
+		if e.endpoint != endpoint {
+			if !e.endpoint.ModificationTag.SucceededBy(&endpoint.ModificationTag) {
+				return false
+			}
 
-		// check modification tag
-		if !e.endpoint.ModificationTag.SucceededBy(&endpoint.ModificationTag) {
-			return false
-		}
+			oldEndpoint := e.endpoint
+			e.endpoint = endpoint
 
-		oldEndpoint := e.endpoint
-		e.endpoint = endpoint
-
-		if oldEndpoint.PrivateInstanceId != endpoint.PrivateInstanceId {
-			delete(p.index, oldEndpoint.PrivateInstanceId)
-			p.index[endpoint.PrivateInstanceId] = e
+			if oldEndpoint.PrivateInstanceId != endpoint.PrivateInstanceId {
+				delete(p.index, oldEndpoint.PrivateInstanceId)
+				p.index[endpoint.PrivateInstanceId] = e
+			}
 		}
 	} else {
 		e = &endpointElem{
@@ -293,14 +304,18 @@ func (e *endpointElem) failed() {
 
 func (e *Endpoint) MarshalJSON() ([]byte, error) {
 	var jsonObj struct {
-		Address         string `json:"address"`
-		TTL             int    `json:"ttl"`
-		RouteServiceUrl string `json:"route_service_url,omitempty"`
+		Address          string            `json:"address"`
+		TTL              int               `json:"ttl"`
+		RouteServiceUrl  string            `json:"route_service_url,omitempty"`
+		Tags             map[string]string `json:"tags"`
+		IsolationSegment string            `json:"isolation_segment,omitempty"`
 	}
 
 	jsonObj.Address = e.addr
 	jsonObj.RouteServiceUrl = e.RouteServiceUrl
 	jsonObj.TTL = int(e.staleThreshold.Seconds())
+	jsonObj.Tags = e.Tags
+	jsonObj.IsolationSegment = e.IsolationSegment
 	return json.Marshal(jsonObj)
 }
 
@@ -312,17 +327,12 @@ func (rm *Endpoint) Component() string {
 	return rm.Tags["component"]
 }
 
-func (e *Endpoint) ToLogData() interface{} {
-	return struct {
-		ApplicationId   string
-		Addr            string
-		Tags            map[string]string
-		RouteServiceUrl string
-	}{
-		e.ApplicationId,
-		e.addr,
-		e.Tags,
-		e.RouteServiceUrl,
+func (e *Endpoint) ToLogData() []zap.Field {
+	return []zap.Field{
+		zap.String("ApplicationId", e.ApplicationId),
+		zap.String("Addr", e.addr),
+		zap.Object("Tags", e.Tags),
+		zap.String("RouteServiceUrl", e.RouteServiceUrl),
 	}
 }
 

@@ -45,8 +45,34 @@ module VCAP::CloudController
     end
 
     describe 'Serialization' do
-      it { is_expected.to export_attributes :name, :free, :description, :service_guid, :extra, :unique_id, :public, :active }
-      it { is_expected.to import_attributes :name, :free, :description, :service_guid, :extra, :unique_id, :public }
+      it 'exports these attributes' do
+        is_expected.to export_attributes :name,
+                                         :free,
+                                         :description,
+                                         :service_guid,
+                                         :extra,
+                                         :unique_id,
+                                         :public,
+                                         :bindable,
+                                         :active,
+                                         :create_instance_schema,
+                                         :update_instance_schema,
+                                         :create_binding_schema
+      end
+
+      it 'imports these attributes' do
+        is_expected.to import_attributes :name,
+                                         :free,
+                                         :description,
+                                         :service_guid,
+                                         :extra,
+                                         :unique_id,
+                                         :public,
+                                         :bindable,
+                                         :create_instance_schema,
+                                         :update_instance_schema,
+                                         :create_binding_schema
+      end
     end
 
     describe '#save' do
@@ -171,6 +197,44 @@ module VCAP::CloudController
       end
     end
 
+    describe '.plan_ids_for_visible_service_instances' do
+      context 'when the service plans have service instances associated with them' do
+        let(:organization) { Organization.make }
+        let(:space) { Space.make(organization: organization) }
+        let(:other_space) { Space.make(organization: organization) }
+        let(:user) { User.make }
+        let(:broker) { ServiceBroker.make }
+        let(:service) { Service.make(service_broker: broker) }
+        let(:service_plan) { ServicePlan.make(service: service, public: true, active: true) }
+        let(:non_public_plan) { ServicePlan.make(service: service, public: false, active: true) }
+        let(:inactive_plan) { ServicePlan.make(service: service, public: true, active: false) }
+        let(:other_plan) { ServicePlan.make(service: service, public: true, active: true) }
+        let!(:service_instance) { ManagedServiceInstance.make(service_plan: service_plan, space: space) }
+        let!(:service_instance2) { ManagedServiceInstance.make(service_plan: non_public_plan, space: space) }
+        let!(:service_instance3) { ManagedServiceInstance.make(service_plan: inactive_plan, space: space) }
+        let!(:user_provided_service_instance) { UserProvidedServiceInstance.make(space: space) }
+        let!(:other_service_instance) { ManagedServiceInstance.make(service_plan: other_plan, space: other_space) }
+
+        before do
+          organization.add_user user
+          space.add_developer user
+        end
+
+        context 'when the service instances are in spaces that the user has a role in' do
+          it 'returns all plans regardless of active or public' do
+            expect(ServicePlan.plan_ids_for_visible_service_instances(user)).
+              to match_array([service_plan.id, non_public_plan.id, inactive_plan.id])
+          end
+        end
+
+        context 'when the service instances are in spaces that the user does NOT have a role in' do
+          it 'does not return service plans associated with that service instance' do
+            expect(ServicePlan.plan_ids_for_visible_service_instances(user)).not_to include(other_plan.id)
+          end
+        end
+      end
+    end
+
     describe '.organization_visible' do
       it 'returns plans that are visible to the organization' do
         hidden_private_plan = ServicePlan.make(public: false)
@@ -189,17 +253,81 @@ module VCAP::CloudController
       end
     end
 
-    describe '#bindable?' do
-      let(:service_plan) { ServicePlan.make(service: service) }
+    describe '.space_visible' do
+      it 'returns plans that are visible to the space' do
+        hidden_private_plan = ServicePlan.make(public: false)
+        visible_public_plan = ServicePlan.make(public: true)
+        visible_private_plan = ServicePlan.make(public: false)
+        inactive_public_plan = ServicePlan.make(public: true, active: false)
 
-      context 'when the service is bindable' do
-        let(:service) { Service.make(bindable: true) }
-        specify { expect(service_plan).to be_bindable }
+        organization = Organization.make
+        space = Space.make(organization: organization)
+        ServicePlanVisibility.make(organization: organization, service_plan: visible_private_plan)
+
+        space_scoped_broker1 = ServiceBroker.make(space: space)
+        space_scoped_broker1_service = Service.make(service_broker: space_scoped_broker1)
+        space_scoped_broker1_plan = ServicePlan.make(service: space_scoped_broker1_service)
+        space_scoped_broker1_plan_inactive = ServicePlan.make(service: space_scoped_broker1_service, active: false)
+
+        space_scoped_broker2 = ServiceBroker.make(space: Space.make)
+        space_scoped_broker2_service = Service.make(service_broker: space_scoped_broker2)
+        space_scoped_broker2_plan = ServicePlan.make(service: space_scoped_broker2_service)
+
+        visible = ServicePlan.space_visible(space).all
+        expect(visible).to include(visible_public_plan)
+        expect(visible).to include(visible_private_plan)
+        expect(visible).not_to include(hidden_private_plan)
+        expect(visible).not_to include(inactive_public_plan)
+
+        expect(visible).to include(space_scoped_broker1_plan)
+        expect(visible).not_to include(space_scoped_broker1_plan_inactive)
+        expect(visible).not_to include(space_scoped_broker2_plan)
+      end
+    end
+
+    describe '#bindable?' do
+      let(:service_plan) { ServicePlan.make(service: service, bindable: plan_bindable) }
+
+      context 'when the plan does not specify if it is bindable' do
+        let(:plan_bindable) { nil }
+
+        context 'and the service is bindable' do
+          let(:service) { Service.make(bindable: true) }
+          specify { expect(service_plan).to be_bindable }
+        end
+
+        context 'and the service is unbindable' do
+          let(:service) { Service.make(bindable: false) }
+          specify { expect(service_plan).not_to be_bindable }
+        end
       end
 
-      context 'when the service is unbindable' do
-        let(:service) { Service.make(bindable: false) }
-        specify { expect(service_plan).not_to be_bindable }
+      context 'when the plan is explicitly set to not be bindable' do
+        let(:plan_bindable) { false }
+
+        context 'and the service is bindable' do
+          let(:service) { Service.make(bindable: true) }
+          specify { expect(service_plan).not_to be_bindable }
+        end
+
+        context 'and the service is unbindable' do
+          let(:service) { Service.make(bindable: false) }
+          specify { expect(service_plan).not_to be_bindable }
+        end
+      end
+
+      context 'when the plan is explicitly set to be bindable' do
+        let(:plan_bindable) { true }
+
+        context 'and the service is bindable' do
+          let(:service) { Service.make(bindable: true) }
+          specify { expect(service_plan).to be_bindable }
+        end
+
+        context 'and the service is unbindable' do
+          let(:service) { Service.make(bindable: false) }
+          specify { expect(service_plan).to be_bindable }
+        end
       end
     end
 

@@ -29,9 +29,30 @@ module VCAP::CloudController
             }
           },
 
+          network_policy_v0: {
+            href: api_url_builder.build_url(path: '/networking/v0/external'),
+          },
+
+          network_policy_v1: {
+            href: api_url_builder.build_url(path: '/networking/v1/external'),
+          },
+
           uaa: {
             href: VCAP::CloudController::Config.config[:uaa][:url]
-          }
+          },
+
+          logging: {
+            href: VCAP::CloudController::Config.config[:doppler][:url]
+          },
+
+          app_ssh: {
+            href: VCAP::CloudController::Config.config[:info][:app_ssh_endpoint],
+            meta: {
+              host_key_fingerprint: VCAP::CloudController::Config.config[:info][:app_ssh_host_key_fingerprint],
+              oauth_client: VCAP::CloudController::Config.config[:info][:app_ssh_oauth_client]
+            }
+          },
+
         }
       }
 

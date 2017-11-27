@@ -20,10 +20,6 @@ func GetAppId(envelope *events.Envelope) string {
 
 	var event hasAppId
 	switch envelope.GetEventType() {
-	case events.Envelope_HttpStart:
-		event = envelope.GetHttpStart()
-	case events.Envelope_HttpStop:
-		event = envelope.GetHttpStop()
 	case events.Envelope_HttpStartStop:
 		event = envelope.GetHttpStartStop()
 	default:

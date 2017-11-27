@@ -5,7 +5,7 @@ templates:
   pre-start.erb: bin/pre-start
 
 packages:
-  - iptables-agent
+  - acceptance-tests
 
 properties: {}
 

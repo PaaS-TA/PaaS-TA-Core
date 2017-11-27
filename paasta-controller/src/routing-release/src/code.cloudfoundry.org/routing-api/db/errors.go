@@ -11,6 +11,7 @@ func (err DBError) Error() string {
 
 const (
 	KeyNotFound       = "KeyNotFound"
+	EtcdNotSupported  = "EtcdNotSupported"
 	NonUpdatableField = "NonUpdatableField"
 	UniqueField       = "UniqueField"
 )

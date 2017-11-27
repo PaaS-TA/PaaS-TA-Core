@@ -39,7 +39,7 @@ public class CreateDB  extends JdbcTestBase {
     @Parameters(name = "{index}: profile=[{0}]")
     public static Collection<Object[]> profiles() {
         return Arrays.asList(new Object[][]{
-            {"mysql,default"}, {"postgresql,default"}, {""},
+            {"sqlserver,default"}, {"mysql,default"}, {"postgresql,default"}, {""}
         });
     }
 
@@ -53,10 +53,5 @@ public class CreateDB  extends JdbcTestBase {
     @Test
     public void test() {
         System.out.println("DB Created:"+profile);
-    }
-
-    @Override
-    public void tearDown() throws Exception {
-        //no op - no clean up
     }
 }

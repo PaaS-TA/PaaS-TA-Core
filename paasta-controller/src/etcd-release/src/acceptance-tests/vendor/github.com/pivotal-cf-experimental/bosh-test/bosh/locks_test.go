@@ -56,12 +56,17 @@ var _ = Describe("locks", func() {
 		})
 
 		It("returns an error when Get request fails", func() {
+			var server *httptest.Server
+			server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				server.CloseClientConnections()
+			}))
+
 			client := bosh.NewClient(bosh.Config{
-				URL: "https://some-invalid-url.example.com",
+				URL: server.URL,
 			})
 
 			_, err := client.Locks()
-			Expect(err.Error()).To(ContainSubstring("no such host"))
+			Expect(err.Error()).To(ContainSubstring("EOF"))
 		})
 
 		It("returns an error when the status code is not 200", func() {

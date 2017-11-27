@@ -181,6 +181,44 @@ var _ = Describe("MetricBatcher", func() {
 		})
 	})
 
+	Describe("AddConsistentlyEmittedMetrics", func() {
+		It("emits zero values for consistenly emitted metrics", func() {
+			close(mockChainer.AddOutput.Ret0)
+
+			metricBatcher.AddConsistentlyEmittedMetrics("count1")
+			Eventually(mockChainer.AddInput).Should(BeCalled(With(uint64(0))))
+		})
+
+		It("continues to emit zero values for consistenly emitted metrics", func() {
+			close(mockChainer.AddOutput.Ret0)
+
+			metricBatcher.AddConsistentlyEmittedMetrics("count1")
+			metricBatcher.BatchAddCounter("count1", 2)
+			Eventually(mockChainer.AddInput).Should(BeCalled(With(uint64(2))))
+			Eventually(mockChainer.AddInput).Should(BeCalled(With(uint64(0))))
+		})
+
+		It("respects tags when emitting zero values", func() {
+			close(mockChainer.AddOutput.Ret0)
+
+			metricBatcher.AddConsistentlyEmittedMetrics("count1")
+			metricBatcher.BatchCounter("count1").SetTag("tag1", "value1").Add(3)
+			metricBatcher.BatchCounter("count1").SetTag("tag2", "value2").Add(5)
+
+			Eventually(mockChainer.SetTagInput).Should(BeCalled(With("tag1", "value1")))
+			Eventually(mockChainer.AddInput).Should(BeCalled(With(uint64(3))))
+
+			Eventually(mockChainer.SetTagInput).Should(BeCalled(With("tag2", "value2")))
+			Eventually(mockChainer.AddInput).Should(BeCalled(With(uint64(5))))
+
+			Eventually(mockChainer.SetTagInput).Should(BeCalled(With("tag1", "value1")))
+			Eventually(mockChainer.AddInput).Should(BeCalled(With(uint64(0))))
+
+			Eventually(mockChainer.SetTagInput).Should(BeCalled(With("tag2", "value2")))
+			Eventually(mockChainer.AddInput).Should(BeCalled(With(uint64(0))))
+		})
+	})
+
 	Describe("Reset", func() {
 		It("cancels any scheduled counter emission", func() {
 			metricBatcher.BatchAddCounter("count1", 2)

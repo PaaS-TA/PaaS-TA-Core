@@ -3,7 +3,7 @@ require 'actions/services/service_instance_delete'
 
 module VCAP::CloudController
   RSpec.describe ServiceInstanceDelete do
-    let(:event_repository) { Repositories::ServiceEventRepository.new(user: user, user_email: user_email) }
+    let(:event_repository) { Repositories::ServiceEventRepository.new(UserAuditInfo.new(user_guid: user.guid, user_email: user_email)) }
 
     subject(:service_instance_delete) { ServiceInstanceDelete.new(event_repository: event_repository) }
 
@@ -110,7 +110,7 @@ module VCAP::CloudController
           job = Delayed::Job.last
           expect(job).to be_a_fully_wrapped_job_of Jobs::Services::ServiceInstanceStateFetch
 
-          inner_job = job.payload_object.handler.job.job
+          inner_job = job.payload_object.handler.handler
           expect(inner_job.name).to eq 'service-instance-state-fetch'
           expect(inner_job.client_attrs).to eq service_instance.client.attrs
           expect(inner_job.service_instance_guid).to eq service_instance.guid

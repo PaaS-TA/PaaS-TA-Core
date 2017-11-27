@@ -156,7 +156,7 @@ var _ = Context("DeleteDeployment", func() {
 			})
 
 			err := client.DeleteDeployment("some-deployment-name")
-			Expect(err).To(MatchError(errors.New("bosh task failed with an errored status \"some-better-error-message\"")))
+			Expect(err).To(MatchError(`task error: 100 has occurred: some-better-error-message`))
 		})
 
 		It("should error on an error task status", func() {
@@ -187,7 +187,7 @@ var _ = Context("DeleteDeployment", func() {
 			})
 
 			err := client.DeleteDeployment("some-deployment-name")
-			Expect(err).To(MatchError(errors.New("bosh task failed with an error status \"some-better-error-message\"")))
+			Expect(err).To(MatchError(`task error: 100 has occurred: some-better-error-message`))
 		})
 
 		It("should error on a cancelled task status", func() {

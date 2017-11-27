@@ -4,5 +4,5 @@ name: consul-windows
 dependencies:
 
 files:
-- consul-windows/consul_0.7.0_windows_amd64.zip
+- consul-windows/consul_0.7.4_windows_amd64.zip
 - exiter.ps1

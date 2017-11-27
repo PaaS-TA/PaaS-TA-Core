@@ -2,12 +2,16 @@ require 'addressable/uri'
 
 module VCAP::CloudController::RestController
   class ObjectRenderer
+    attr_reader :object_transformer
+
     def initialize(eager_loader, serializer, opts)
       @eager_loader = eager_loader
       @serializer = serializer
 
       @max_inline_relations_depth = opts.fetch(:max_inline_relations_depth)
       @default_inline_relations_depth = 0
+
+      @object_transformer = opts[:object_transformer]
     end
 
     # Render an object to json, using export and security properties
@@ -35,18 +39,20 @@ module VCAP::CloudController::RestController
       eager_loaded_objects = @eager_loader.eager_load_dataset(
         obj.model.dataset,
         controller,
-        default_visibility_filter,
+        opts[:default_visibility_filter] || default_visibility_filter,
         opts[:additional_visibility_filters] || {},
         inline_relations_depth,
       )
 
       eager_loaded_object = eager_loaded_objects.where(id: obj.id).all.first
+      transform_opts = opts[:transform_opts] || {}
+      object_transformer.transform(eager_loaded_object, transform_opts) if object_transformer
 
       # The class of object and eager_loaded_object could be different
       # if they are part of STI. Attributes exported by the object
       # are the ones that are expected in the response.
       # (e.g. Domain vs SharedDomain < Domain)
-      export_attributes = obj.model.export_attrs
+      export_attributes = eager_loaded_object.export_attrs
       if obj.respond_to? :transient_attrs
         obj.transient_attrs.each { |attr| eager_loaded_object.send("#{attr}=", obj.send(attr)) }
         export_attributes += obj.transient_attrs
@@ -61,12 +67,20 @@ module VCAP::CloudController::RestController
       MultiJson.dump(hash, pretty: opts.fetch(:pretty, true))
     end
 
+    def render_json_with_read_privileges(controller, obj, opts)
+      render_json(controller, obj, opts.merge(default_visibility_filter: default_visibility_filter_with_read_privileges))
+    end
+
     private
 
     def default_visibility_filter
-      user = VCAP::CloudController::SecurityContext.current_user
-      admin = VCAP::CloudController::SecurityContext.admin? || VCAP::CloudController::SecurityContext.admin_read_only?
-      proc { |ds| ds.filter(ds.model.user_visibility(user, admin)) }
+      access_context = VCAP::CloudController::Security::AccessContext.new
+      proc { |ds| ds.filter(ds.model.user_visibility(access_context.user, access_context.admin_override)) }
+    end
+
+    def default_visibility_filter_with_read_privileges
+      access_context = VCAP::CloudController::Security::AccessContext.new
+      proc { |ds| ds.filter(ds.model.user_visibility_for_read(access_context.user, access_context.admin_override)) }
     end
   end
 end
