@@ -1,0 +1,4 @@
+release_versions:
+  diego: 0.1483.0
+  garden-runc: 0.4.0
+  etcd: 66

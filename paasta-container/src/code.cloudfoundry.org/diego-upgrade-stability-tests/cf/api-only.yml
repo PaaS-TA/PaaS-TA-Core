@@ -1,0 +1,73 @@
+name: cf-warden-api
+jobs:
+- name: consul_z1
+  instances: 0
+- name: consul_z2
+  instances: 0
+- name: nats_z1
+  instances: 1
+- name: nats_z2
+  instances: 0
+- name: etcd_z1
+  instances: 0
+- name: etcd_z2
+  instances: 0
+- name: stats_z1
+  instances: 0
+- name: nfs_z1
+  instances: 0
+- name: blobstore_z1
+  instances: 0
+- name: uaa_z1
+  instances: 0
+- name: uaa_z2
+  instances: 0
+- name: hm9000_z1
+  instances: 0
+- name: hm9000_z2
+  instances: 0
+- name: runner_z1
+  instances: 0
+- name: runner_z2
+  instances: 0
+- name: loggregator_z1
+  instances: 0
+- name: loggregator_z2
+  instances: 0
+- name: doppler_z1
+  instances: 0
+- name: doppler_z2
+  instances: 0
+- name: loggregator_trafficcontroller_z1
+  instances: 0
+- name: loggregator_trafficcontroller_z2
+  instances: 0
+- name: router_z1
+  instances: 0
+- name: router_z1
+  instances: 0
+- name: ha_proxy_z1
+  instances: 0
+- name: acceptance_tests
+  instances: 0
+- name: smoke_tests
+  instances: 0
+networks:
+- name: cf1
+  type: manual
+  subnets:
+  - cloud_properties: {}
+    gateway: 10.244.6.1
+    range: 10.244.6.0/24
+    reserved:
+    - 10.244.6.1
+    static: [10.244.6.2 - 10.244.6.20]
+- name: cf2
+  type: manual
+  subnets:
+  - cloud_properties: {}
+    gateway: 10.244.90.1
+    range: 10.244.90.0/24
+    reserved:
+    - 10.244.90.1
+    static: [10.244.90.2 - 10.244.90.20]

@@ -1,0 +1,89 @@
+<%=
+  conf_dir = "/var/vcap/jobs/#{p("diego.route_emitter.job_name")}/config"
+
+  nats_machines = nil
+  if_p('diego.route_emitter.nats.machines') do |ips|
+    nats_machines = ips.compact
+  end.else do
+    nats_machines = link('nats').instances.map { |instance| instance.address }
+  end
+
+  nats_port = nil
+  if_p('diego.route_emitter.nats.port') do |prop|
+    nats_port = prop
+  end.else do
+    nats_port = link('nats').p("nats.port")
+  end
+
+  nats_user = nil
+  if_p('diego.route_emitter.nats.user') do |prop|
+    nats_user = prop
+  end.else do
+    nats_user = link('nats').p("nats.user")
+  end
+
+  nats_password = nil
+  if_p('diego.route_emitter.nats.password') do |prop|
+    nats_password = prop
+  end.else do
+    nats_password = link('nats').p("nats.password")
+  end
+
+  config = {
+    nats_username: nats_user,
+    nats_password: nats_password,
+    nats_addresses: nats_machines.collect { |addr|
+      "#{addr}:#{nats_port}"
+    }.join(","),
+    consul_cluster: "http://127.0.0.1:8500",
+    sync_interval: "#{p("diego.route_emitter.sync_interval_in_seconds")}s",
+    debug_address: p("diego.route_emitter.debug_addr"),
+    dropsonde_port: p("diego.route_emitter.dropsonde_port"),
+    log_level: p("diego.route_emitter.log_level"),
+    healthcheck_address: p("diego.route_emitter.healthcheck_address"),
+  }
+
+  if p("diego.route_emitter.bbs.require_ssl")
+    config[:bbs_ca_cert_file] = "#{conf_dir}/certs/bbs/ca.crt"
+    config[:bbs_client_cert_file] = "#{conf_dir}/certs/bbs/client.crt"
+    config[:bbs_client_key_file] = "#{conf_dir}/certs/bbs/client.key"
+    config[:bbs_address] = "https://#{p("diego.route_emitter.bbs.api_location")}"
+  else
+    config[:bbs_address] = "http://#{p("diego.route_emitter.bbs.api_location")}"
+  end
+
+  if_p("diego.route_emitter.bbs.client_session_cache_size") do |value|
+    config[:bbs_client_session_cache_size] = value
+  end
+
+  if_p("diego.route_emitter.bbs.max_idle_conns_per_host") do |value|
+    config[:bbs_max_idle_conns_per_host] = value
+  end
+
+  if p("diego.route_emitter.local_mode")
+    config[:cell_id] = spec.id
+  end
+
+  config[:enable_tcp_emitter] = p("tcp.enabled")
+  config[:routing_api] = {}
+  if_p("routing_api.url") do |value|
+    config[:routing_api][:url] = value
+  end
+  if_p("routing_api.port") do |value|
+    config[:routing_api][:port] = value
+  end
+  if_p("routing_api.auth_enabled") do |value|
+    config[:routing_api][:auth_enabled] = value
+
+    if p("tcp.enabled") && value then
+      config[:oauth] = {}
+      config[:oauth][:uaa_url] = "https://" + p("uaa.hostname") + ":" + p("uaa.port").to_s
+      config[:oauth][:client_name] = p("uaa.client_name")
+      config[:oauth][:client_secret] = p("uaa.client_secret")
+      config[:oauth][:skip_cert_verify] = p("uaa.skip_cert_verify")
+      config[:oauth][:ca_certs] = "#{conf_dir}/certs/uaa/ca.crt"
+    end
+  end
+
+  config.to_json
+%>

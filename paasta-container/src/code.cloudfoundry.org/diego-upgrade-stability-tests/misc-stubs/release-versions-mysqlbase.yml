@@ -1,0 +1,4 @@
+release_versions:
+  diego: 1.0.0
+  garden-runc: 1.0.3
+  cflinuxfs2-rootfs: 1.40.0

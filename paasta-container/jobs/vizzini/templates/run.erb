@@ -1,0 +1,72 @@
+#!/bin/bash -l
+
+conf_dir=/var/vcap/jobs/vizzini/config
+log_dir=/var/vcap/sys/log/vizzini
+
+set -e -x
+
+export GOROOT=$(readlink -nf /var/vcap/packages/golang)
+export PATH=${GOROOT}/bin:${PATH}
+
+export GOPATH=/var/vcap/packages/vizzini
+export PATH=${GOPATH}/bin:${PATH}
+
+export CF_COLOR=false
+
+cd /var/vcap/packages/vizzini/src/code.cloudfoundry.org/vizzini
+
+exitstatus=0
+
+<% if p("vizzini.bbs.require_ssl") %>
+  bbs_sec_flags=" \
+   --bbs-client-cert=${conf_dir}/certs/bbs/client.crt \
+   --bbs-client-key=${conf_dir}/certs/bbs/client.key"
+
+  bbs_api_url="<%= "https://" + p("vizzini.bbs.api_location") %>"
+<% else %>
+  bbs_sec_flags=""
+  bbs_api_url="<%= "http://" + p("vizzini.bbs.api_location") %>"
+<% end %>
+
+nodes=<%= properties.vizzini.nodes %>
+verbose=<%= properties.vizzini.verbose %>
+routable_domain_suffix=<%= properties.vizzini.routable_domain_suffix %>
+ssh_proxy_address=<%= properties.vizzini.ssh.proxy_address  %>
+enable_declarative_healthcheck=<%= properties.enable_declarative_healthcheck %>
+<% if_p("vizzini.ssh.proxy_secret") do |proxy_secret| %>
+  ssh_proxy_secret_flag="--ssh-password=<%= proxy_secret %>"
+<% end %>
+
+go install github.com/onsi/ginkgo/ginkgo
+
+
+<% if_p("vizzini.eventually_timeout") do |eventually_timeout| %>
+  export DEFAULT_EVENTUALLY_TIMEOUT=<%= eventually_timeout %>
+<% end %>
+
+mkdir -p $log_dir
+
+ginkgo \
+  -nodes=${nodes} \
+  -v=${verbose} \
+  '-skip={LOCAL}' \
+  -randomizeAllSpecs \
+  -progress \
+  -trace \
+  -keepGoing \
+  -- \
+  ${bbs_sec_flags} \
+  --enable-declarative-healthcheck=${enable_declarative_healthcheck} \
+  --bbs-address=${bbs_api_url} \
+  --ssh-address=${ssh_proxy_address} \
+  <% Array(p("vizzini.rep.placement_tags")).each do |placement_tag| %> \
+  --rep-placement-tag=<%= placement_tag %> \
+  <% end %>\
+  ${ssh_proxy_secret_flag} \
+  --routable-domain-suffix=${routable_domain_suffix} \
+  2> >(tee -a $log_dir/vizzini.stderr.log) \
+  1> >(tee -a $log_dir/vizzini.stdout.log)
+
+echo "Vizzini Complete; exit status: $exitstatus"
+
+exit $exitstatus

@@ -1,0 +1,24 @@
+---
+jobs:
+- name: hm9000_z1
+  instances: 0
+- name: hm9000_z2
+  instances: 0
+- name: runner_z1
+  instances: 0
+- name: runner_z2
+  instances: 0
+- name: loggregator_trafficcontroller_z1
+  properties:
+    route_registrar:
+      routes:
+      - name: doppler
+        port: 8081
+        registration_interval: 5s
+        uris:
+        - doppler.bosh-lite.com
+properties:
+  cc:
+    default_to_diego_backend: true
+    diego:
+      temporary_local_staging: false

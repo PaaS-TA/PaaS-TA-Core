@@ -1,0 +1,7 @@
+jobs:
+- name: api_z1
+  instances: 0
+- name: api_z2
+  instances: 0
+- name: blobstore_z1
+  instances: 0

@@ -1,0 +1,76 @@
+---
+name: locket
+
+templates:
+  locket_ctl.erb: bin/locket_ctl
+  locket_as_vcap.erb: bin/locket_as_vcap
+  locket.json.erb: config/locket.json
+  locket_ca.crt.erb: config/certs/ca.crt
+  locket_server.crt.erb: config/certs/server.crt
+  locket_server.key.erb: config/certs/server.key
+  sql_ca.crt.erb: config/certs/sql/ca.crt
+  loggregator_ca.crt.erb: config/certs/loggregator/ca.crt
+  loggregator_client.crt.erb: config/certs/loggregator/client.crt
+  loggregator_client.key.erb: config/certs/loggregator/client.key
+
+packages:
+  - pid_utils
+  - locket
+
+properties:
+  tls.ca_cert:
+    description: "ca cert for locket server mutual auth tls"
+  tls.cert:
+    description: "server cert for locket server mutual auth tls"
+  tls.key:
+    description: "server key for locket server mutual auth tls"
+  database.max_open_connections:
+    description: "maximum number of open connections to the database"
+    default: 200
+  dropsonde_port:
+    description: "local metron agent's port"
+    default: 3457
+  diego.locket.listen_addr:
+    description: "address at which to serve API requests"
+    default: "0.0.0.0:8891"
+  diego.locket.debug_addr:
+    description: "address at which to serve debug info"
+    default: "127.0.0.1:17018"
+  diego.locket.log_level:
+    description: "Log level"
+    default: "info"
+  diego.locket.sql.db_host:
+    description: "Host for SQL backend"
+    default: ""
+  diego.locket.sql.db_port:
+    description: "Port for SQL backend"
+    default: ""
+  diego.locket.sql.db_schema:
+    description: "Database name to use for connecting to SQL backend"
+    default: ""
+  diego.locket.sql.db_username:
+    description: "Username to use for connecting to SQL backend"
+    default: ""
+  diego.locket.sql.db_password:
+    description: "Password to use for connecting to SQL backend"
+    default: ""
+  diego.locket.sql.db_driver:
+    description: "Database driver to use for SQL backend (for example: mysql,postgres)"
+    default: mysql
+  diego.locket.sql.require_ssl:
+    description: "Whether to require SSL for Locket communication to the SQL backend"
+    default: false
+  diego.locket.sql.ca_cert:
+    description: "Bundle of CA certificates for the Locket to verify the SQL server SSL certificate when connecting via SSL"
+  loggregator.use_v2_api:
+    description: "True to use local metron agent gRPC v2 api. False, to use UDP v1 api"
+    default: false
+  loggregator.v2_api_port:
+    description: "Local metron agent gRPC port"
+    default: 3458
+  loggregator.ca_cert:
+    description: "CA Cert used to communicate with local metron agent over gRPC"
+  loggregator.cert:
+    description: "Cert used to communicate with local metron agent over gRPC"
+  loggregator.key:
+    description: "Key used to communicate with local metron agent over gRPC"

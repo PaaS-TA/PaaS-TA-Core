@@ -1,0 +1,66 @@
+$ErrorActionPreference = "Stop";
+trap { $host.SetShouldExit(1) }
+
+$service_name="rep_windows"
+$log_dir="/var/vcap/sys/log/rep_windows"
+$logfile="${log_dir}/drain.log"
+$address="http://<%= p("diego.rep.enable_legacy_api_endpoints") ? p("diego.rep.listen_addr").sub(/^0\.0\.0\.0:/, "localhost:") : p("diego.rep.listen_addr_admin")%>"
+
+New-Item -ItemType "directory" -Force "${log_dir}" 2>&1 | `
+    Out-File -Append -Encoding utf8 -FilePath $logfile
+
+function evacuate {
+    try {
+        Invoke-WebRequest -UseBasicParsing -URI "${address}/evacuate" -Method "Post" 2>&1 | `
+            Out-File -Append -Encoding utf8 -FilePath $logfile
+    } catch {
+        return $false
+    }
+    return $true
+}
+
+function heartbeat {
+    try {
+        Invoke-WebRequest -UseBasicParsing -URI "${address}/ping" 2>&1 | `
+            Out-File -Append -Encoding utf8 -FilePath $logfile
+    } catch {
+        return $false
+    }
+    return $true
+}
+
+$svc = (Get-Service | Where { $_.Name -eq $service_name })
+if ($svc -eq $null) {
+    "$(Get-Date): service not found: '${service_name}'" | `
+        Out-File -Append -Encoding utf8 -FilePath $logfile
+    "0"
+    Exit 0
+}
+if ($svc.Status -ne 'Running') {
+    "$(Get-Date): service '${service_name}' not running" | `
+        Out-File -Append -Encoding utf8 -FilePath $logfile
+    "0"
+    Exit 0
+}
+
+$svc | Set-Service -StartupType Disabled
+"$(Get-Date): service '${service_name}' StartupType set to 'Disabled'" | `
+    Out-File -Append -Encoding utf8 -FilePath $logfile
+
+"$(Get-Date): drain triggered" | Out-File -Append -Encoding utf8 -FilePath $logfile
+if (evacuate) {
+    while (heartbeat) {
+        Start-Sleep -Seconds 5
+        "$(Get-Date): waiting" | Out-File -Append -Encoding utf8 -FilePath $logfile
+    }
+    # NOTE: rep invokes 'kill_and_wait' here
+} else {
+    Exit 1 # NOTE: matching behavior of 'rep' drain script
+}
+
+$svc | Set-Service -StartupType Automatic
+"$(Get-Date): service '${service_name}' StartupType set to 'Automatic'" | `
+    Out-File -Append -Encoding utf8 -FilePath $logfile
+
+"0"
+Exit 0

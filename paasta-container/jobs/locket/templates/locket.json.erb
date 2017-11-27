@@ -1,0 +1,72 @@
+<%=
+require 'uri'
+
+
+conf_dir = "/var/vcap/jobs/locket/config"
+tmp_dir = "/var/vcap/data/executor/tmp"
+log_dir = "/var/vcap/sys/log/locket"
+
+config = {
+  ca_file: "#{conf_dir}/certs/ca.crt",
+  cert_file: "#{conf_dir}/certs/server.crt",
+  consul_cluster: "http://127.0.0.1:8500",
+  debug_address: p("diego.locket.debug_addr"),
+  dropsonde_port: p("dropsonde_port"),
+  key_file: "#{conf_dir}/certs/server.key",
+  listen_address: p("diego.locket.listen_addr"),
+  log_level: p("diego.locket.log_level"),
+  max_open_database_connections: p("database.max_open_connections"),
+}
+
+def db_params
+  ['username', 'password', 'host', 'port', 'schema'].map {|name| "diego.locket.sql.db_#{name}"}
+end
+
+def param_exists? param
+  p(param) != ""
+end
+
+def connection_string_from_db_params
+  return "" unless db_params.any? {|p| param_exists?(p)}
+
+  unless db_params.all? {|p| param_exists?(p)}
+    raise "all of the following parameters must be specified #{db_params.join(",")}"
+  end
+
+  values = db_params.map {|param| p(param)}
+  # Note: order of the params is important here, it has to be username, password, host, port, schema in that order
+  driver = p("diego.locket.sql.db_driver")
+  case driver
+  when 'mysql'
+    sprintf "%s:%s@tcp(%s:%s)/%s", *values
+  when 'postgres'
+    sprintf "postgres://%s:%s@%s:%s/%s", *values
+  else
+    raise "unknown driver #{driver}"
+  end
+end
+
+connection_string = connection_string_from_db_params
+config[:database_connection_string] = connection_string
+config[:database_driver] = p("diego.locket.sql.db_driver")
+
+if p("diego.locket.sql.require_ssl")
+   config[:sql_ca_cert_file] = "#{conf_dir}/certs/sql/ca.crt"
+end
+
+config[:loggregator]={}
+config[:loggregator][:loggregator_use_v2_api] = p("loggregator.use_v2_api")
+if p("loggregator.use_v2_api") == true
+  config[:loggregator][:loggregator_api_port] = p("loggregator.v2_api_port")
+  config[:loggregator][:loggregator_ca_path] = "#{conf_dir}/certs/loggregator/ca.crt"
+  config[:loggregator][:loggregator_cert_path] = "#{conf_dir}/certs/loggregator/client.crt"
+  config[:loggregator][:loggregator_key_path] = "#{conf_dir}/certs/loggregator/client.key"
+  config[:loggregator][:loggregator_job_deployment] = spec.deployment
+  config[:loggregator][:loggregator_job_name] = spec.name
+  config[:loggregator][:loggregator_job_index] = spec.id
+  config[:loggregator][:loggregator_job_ip] = spec.address
+  config[:loggregator][:loggregator_job_origin] = "locket"
+end
+
+config.to_json
+%>

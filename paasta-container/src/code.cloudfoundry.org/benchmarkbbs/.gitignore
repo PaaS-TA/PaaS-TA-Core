@@ -1,0 +1,4 @@
+*.crt
+*.key
+config.json
+test-output.log

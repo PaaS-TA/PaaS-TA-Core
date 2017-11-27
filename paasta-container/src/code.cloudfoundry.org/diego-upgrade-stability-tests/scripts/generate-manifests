@@ -1,0 +1,170 @@
+#!/bin/bash
+
+set -e -x
+
+absolute_path() {
+  (cd $1 && pwd)
+}
+
+function usage() {
+  >&2 echo "
+  Usage: $0 -d DIEGO_RELEASE_DIR -c CF_RELEASE_DIR -o OVERRIDE_DOMAIN (-a -s)
+
+  -d diego release directory location
+  -c cf release directory location
+  -o override  domain
+  -s use sql
+  -a aws credentials directory"
+  exit 1
+}
+
+function generate_component_manifest() {
+  component=$1
+
+  ./scripts/generate-deployment-manifest \
+    -c $OUTPUT_DIR/cf.yml \
+    -i $CURRENT_DIR/${component}/iaas-settings.yml \
+    -p $CURRENT_DIR/property-overrides.yml \
+    -n $CURRENT_DIR/${component}/instance-count-overrides.yml \
+    -k manifest-generation/bosh-lite-stubs/persistent-disk-overrides.yml \
+    -v $RELEASE_VERSIONS_STUB \
+    ${GARDEN_RUNC_FLAG} \
+    ${SQL_FLAG} \
+    ${NO_ETCD_FLAG} \
+    > $TMP_DIR/${component}.yml
+
+  spiff merge $TMP_DIR/${component}.yml $CURRENT_DIR/${component}/deployment-name.yml $CURRENT_DIR/stubs/disable_reuse_compilation_vms.yml $CF_RELEASE_VERSION_STUB > $OUTPUT_DIR/${component}.yml
+
+  echo "Created manifest for ${component}: ${OUTPUT_DIR}/${component}.yml"
+}
+
+scripts_path=$(absolute_path `dirname $0`)
+
+DEPLOYING_Z0=false
+CURRENT_DIR=$(absolute_path $scripts_path/..)
+CF_RELEASE_VERSION_STUB=""
+
+SQL_FLAG=""
+NO_ETCD_FLAG=""
+GARDEN_RUNC_FLAG='-g'
+while getopts "d:c:o:rxsa:z" opt; do
+  case $opt in
+    z)
+      DEPLOYING_Z0=true
+      ;;
+    d)
+      DIEGO_RELEASE_DIR=$OPTARG
+      ;;
+    c)
+      CF_RELEASE_DIR=$OPTARG
+      ;;
+    a)
+      AWS_STUBS_DIR=$OPTARG
+      ;;
+    o)
+      OVERRIDE_DOMAIN=$OPTARG
+      echo 'Overriding  with ${OVERRIDE_DOMAIN}'
+      ;;
+    x)
+      # temporarily adding -x before its behavior becomes the default and we can remove this
+      # -x (for now) says to not deploy the etcd database
+      NO_ETCD_FLAG='-x'
+      ;;
+    s)
+      echo 'Using manifest-generation/bosh-lite-stubs/mysql/diego-sql.yml for diego release'
+      SQL_FLAG="-s manifest-generation/bosh-lite-stubs/mysql/diego-sql.yml"
+      ;;
+    \?)
+      echo no dawg >&2
+      ;;
+  esac
+done
+
+RELEASE_VERSIONS_STUB=$DIEGO_RELEASE_DIR/manifest-generation/bosh-lite-stubs/release-versions.yml
+
+if [ $DEPLOYING_Z0 = 'true' ]; then
+    if [ "x$SQL_FLAG" != 'x' ]; then
+        RELEASE_VERSIONS_STUB=$CURRENT_DIR/misc-stubs/release-versions-mysqlbase.yml
+        CF_RELEASE_VERSION_STUB=$CURRENT_DIR/misc-stubs/mysql-v0-cf-release-version.yml
+    else
+        RELEASE_VERSIONS_STUB=$CURRENT_DIR/misc-stubs/release-versions.yml
+        CF_RELEASE_VERSION_STUB=$CURRENT_DIR/misc-stubs/etcd-v0-cf-release-version.yml
+    fi
+fi
+
+OUTPUT_DIR=$CURRENT_DIR/manifests
+TMP_DIR=`mktemp -d -t upgrade-stable-manifests.XXXXXXXXXXXX`
+
+echo DIEGO_RELEASE_DIR=$DIEGO_RELEASE_DIR
+echo CF_RELEASE_DIR=$CF_RELEASE_DIR
+echo AWS_STUBS_DIR=$AWS_STUBS_DIR
+
+if [ ! -d "${DIEGO_RELEASE_DIR}" ]; then
+  >&2 echo "Diego Release Directory '${DIEGO_RELEASE_DIR}' is not a directory"
+  usage
+fi
+
+if [ ! -d "${CF_RELEASE_DIR}" ]; then
+  >&2 echo "CF Release Directory '${CF_RELEASE_DIR}' is not a directory"
+  usage
+fi
+
+if [ ! -d "${AWS_STUBS_DIR}" ]; then
+  >&2 echo "AWS Stubs Directory '${AWS_STUBS_DIR}' is not a directory"
+fi
+
+mkdir -p $OUTPUT_DIR
+
+pushd $CF_RELEASE_DIR > /dev/null
+  BOSH_RELEASES_DIR=$PWD/.. ./scripts/generate-bosh-lite-dev-manifest \
+    ${CURRENT_DIR}/misc-stubs/diego-default.yml \
+    ${AWS_STUBS_DIR}/dusts/blobstore.yml \
+    ${AWS_STUBS_DIR}/aws-keys.yml \
+    ${CURRENT_DIR}/cf/no-api.yml \
+    ${CURRENT_DIR}/stubs/disable_reuse_compilation_vms.yml \
+    ${CURRENT_DIR}/stubs/deploy_postgres_serially.yml \
+    ${CURRENT_DIR}/stubs/add_uaa_saml_certs.yml \
+		${CURRENT_DIR}/cf/consul-certs.yml \
+    ${CF_RELEASE_VERSION_STUB}
+
+  spiff merge bosh-lite/deployments/cf.yml > $TMP_DIR/cf.yml
+  ${CURRENT_DIR}/scripts/add_ha_proxy_resource_pool_to_cf_manifest.rb $TMP_DIR/cf.yml $OUTPUT_DIR/cf.yml
+  rm $TMP_DIR/cf.yml
+
+  # mysql-release requires cf.yml to exist in
+  # `workspace/cf-release/deployments/cf.yml'. `workspace/cf-release' could be
+  # different from $CF_RELEASE_DIR if we are deploying V0
+  if [ $DEPLOYING_Z0 == 'true' ]; then
+      mkdir -p ../cf-release/bosh-lite/deployments
+      cp -f $OUTPUT_DIR/cf.yml ../cf-release/bosh-lite/deployments/cf.yml
+  fi
+
+  BOSH_RELEASES_DIR=$PWD/.. ./scripts/generate-bosh-lite-dev-manifest \
+    ${CURRENT_DIR}/misc-stubs/diego-default.yml \
+    ${AWS_STUBS_DIR}/dusts/blobstore.yml \
+    ${AWS_STUBS_DIR}/aws-keys.yml \
+    ${CURRENT_DIR}/cf/api-only.yml \
+    ${CURRENT_DIR}/stubs/disable_reuse_compilation_vms.yml \
+    ${CURRENT_DIR}/stubs/deploy_postgres_serially.yml \
+    ${CURRENT_DIR}/stubs/add_uaa_saml_certs.yml \
+		${CURRENT_DIR}/cf/consul-certs.yml \
+    ${CF_RELEASE_VERSION_STUB}
+
+  spiff merge bosh-lite/deployments/cf.yml > $OUTPUT_DIR/cf-api.yml
+
+  ${CURRENT_DIR}/scripts/add_cf_properties_to_api_manifest.rb $OUTPUT_DIR/cf.yml $OUTPUT_DIR/cf-api.yml
+popd > /dev/null
+
+pushd $DIEGO_RELEASE_DIR > /dev/null
+  generate_component_manifest database
+  generate_component_manifest brain-and-pals
+  generate_component_manifest cell1
+  generate_component_manifest cell2
+popd > /dev/null
+
+if [ ! -z ${OVERRIDE_DOMAIN} ]; then
+  pushd manifests > /dev/null
+    grep -rl bosh-lite.com . | xargs sed -i".bak" "s/bosh-lite\.com/$OVERRIDE_DOMAIN/g"
+    rm *.bak
+  popd > /dev/null
+fi
